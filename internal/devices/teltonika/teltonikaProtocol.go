@@ -43,11 +43,12 @@ func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Wr
 		var packet TeltonikaAvlDataPacket
 
 		// header
-		zeroByte, err := reader.ReadByte()
+		var headerZeros uint32
+		err := binary.Read(reader, binary.BigEndian, &headerZeros)
 		if err != nil {
 			return err
 		}
-		if zeroByte != 0x0000 {
+		if headerZeros != 0x0000 {
 			return errs.ErrTeltonikaInvalidDataPacket
 		}
 
@@ -57,7 +58,7 @@ func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Wr
 		// 	return err
 		// }
 		// dataLen := uint8(dataLenByte) // should read max dataLen bytes from now in this iteration
-		reader.Discard(1) // discard data length
+		reader.Discard(4) // discard data length
 
 		// codec id
 		err = binary.Read(reader, binary.BigEndian, &packet.CodecID)
@@ -109,7 +110,8 @@ func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Wr
 		}
 
 		// write ack
-		err = binary.Write(writer, binary.BigEndian, endNumRecords)
+		err = binary.Write(writer, binary.BigEndian, int32(endNumRecords))
+		writer.Flush()
 		if err != nil {
 			logger.Error("failed to write ack for incoming data")
 			logger.Error(err.Error())
@@ -208,7 +210,7 @@ func (t *TeltonikaProtocol) read2BProperties(reader *bufio.Reader) (map[Teltonik
 }
 
 func (t *TeltonikaProtocol) read4BProperties(reader *bufio.Reader) (map[TeltonikaIOProperty]uint32, error) {
-	propertyMap, err := t.readNByteProperties(1, reader)
+	propertyMap, err := t.readNByteProperties(4, reader)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +224,7 @@ func (t *TeltonikaProtocol) read4BProperties(reader *bufio.Reader) (map[Teltonik
 }
 
 func (t *TeltonikaProtocol) read8BProperties(reader *bufio.Reader) (map[TeltonikaIOProperty]uint64, error) {
-	propertyMap, err := t.readNByteProperties(1, reader)
+	propertyMap, err := t.readNByteProperties(8, reader)
 	if err != nil {
 		return nil, err
 	}

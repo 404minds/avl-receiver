@@ -63,7 +63,7 @@ func makeJsonStore(deviceIdentifier string) store.Store {
 	return &store.JsonLinesStore{
 		File:        file,
 		ProcessChan: make(chan interface{}),
-		CloseChan:   make(chan bool),
+		CloseChan:   make(chan bool, 200),
 	}
 }
 

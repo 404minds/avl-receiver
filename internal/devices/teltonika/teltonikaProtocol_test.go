@@ -38,6 +38,50 @@ func TestTeltonikaLogin(t *testing.T) {
 }
 
 func TestDataPacketParsing(t *testing.T) {
+	buf, _ := hex.DecodeString("00000000000000A608030000013FEB40E0B2000F0EC760209A6B000062000006000000170A010002000300B300B4004501F00150041503C80008B50012B6000A423024180000CD0386CE0001431057440000044600000112C700000000F10000601A4800000000014E00000000000000000000013F14A1D1CE000F0EB790209A778000AB010C0500000000000000000000013F1498A63A000F0EB790209A77800095010C0400000000000000000300003390")
+	randBytes := make([]byte, 100)
+	rand.Read(randBytes)
+	buf = append(buf, randBytes...)
+	reader := bufio.NewReader(bytes.NewReader(buf))
+
+	var writeBuffer bytes.Buffer
+	writer := bufio.NewWriter(&writeBuffer)
+	storeProcessChan := make(chan interface{}, 200)
+
+	teltonika := TeltonikaProtocol{Imei: "something"}
+
+	teltonika.ConsumeStream(reader, writer, storeProcessChan)
+
+	assert.Equal(t, []byte{0x00, 0x00, 0x00, 0x03}, writeBuffer.Bytes(), "Incorrect ack from consume data")
+
+	assert.Len(t, storeProcessChan, 3, "Incorrect number of records sent to store")
+
+	firstRecord := (<-storeProcessChan).(TeltonikaRecord)
+	assert.Equal(t, firstRecord.IMEI, "something", "Incorrect IMEI")
+	assert.Equal(t, firstRecord.Record.Priority, uint8(0), "Incorrect priority")
+	assert.Equal(t, firstRecord.Record.Timestamp, uint64(1374041465010), "Incorrect timestamp")
+	assert.NotNil(t, firstRecord.Record.GPSElement, "Incorrect gps element")
+	assert.NotNil(t, firstRecord.Record.IOElement, "Incorrect gps element")
+	assert.Equal(t, firstRecord.Record.IOElement.EventID, uint8(0), "Incorrect event id")
+	assert.Equal(t, firstRecord.Record.IOElement.NumProperties, uint8(23), "Incorrect number of IO elements")
+
+	secondRecord := (<-storeProcessChan).(TeltonikaRecord)
+	assert.Equal(t, secondRecord.IMEI, "something", "Incorrect IMEI")
+	assert.Equal(t, secondRecord.Record.Priority, uint8(0), "Incorrect priority")
+	assert.Equal(t, secondRecord.Record.Timestamp, uint64(1370440716750), "Incorrect timestamp")
+	assert.NotNil(t, secondRecord.Record.GPSElement, "Incorrect gps element")
+	assert.NotNil(t, secondRecord.Record.IOElement, "Incorrect gps element")
+	assert.Equal(t, secondRecord.Record.IOElement.EventID, uint8(0), "Incorrect event id")
+	assert.Equal(t, secondRecord.Record.IOElement.NumProperties, uint8(0), "Incorrect number of IO elements")
+
+	thirdRecord := (<-storeProcessChan).(TeltonikaRecord)
+	assert.Equal(t, thirdRecord.IMEI, "something", "Incorrect IMEI")
+	assert.Equal(t, thirdRecord.Record.Priority, uint8(0), "Incorrect priority")
+	assert.Equal(t, thirdRecord.Record.Timestamp, uint64(1370440115770), "Incorrect timestamp")
+	assert.NotNil(t, thirdRecord.Record.GPSElement, "Incorrect gps element")
+	assert.NotNil(t, thirdRecord.Record.IOElement, "Incorrect gps element")
+	assert.Equal(t, thirdRecord.Record.IOElement.EventID, uint8(0), "Incorrect event id")
+	assert.Equal(t, thirdRecord.Record.IOElement.NumProperties, uint8(0), "Incorrect number of IO elements")
 }
 
 func TestGpsParsing(t *testing.T) {
@@ -160,6 +204,149 @@ func TestIOElementParsing(t *testing.T) {
 			assert.Equal(t, expected.Properties2B, ioElement.Properties2B, "incorrect 2B properties")
 			assert.Equal(t, expected.Properties4B, ioElement.Properties4B, "incorrect 4B properties")
 			assert.Equal(t, expected.Properties8B, ioElement.Properties8B, "incorrect 8B properties")
+		}
+	}
+}
+
+func Test1BIOElementParsing(t *testing.T) {
+	type testCase struct {
+		Bytes    string
+		Expected map[TeltonikaIOProperty]uint8
+	}
+
+	testCases := []testCase{
+		{
+			Bytes: "0A010002000300B300B4004501F00150041503C800",
+			Expected: map[TeltonikaIOProperty]uint8{
+				DigitalInput1:  0,
+				DigitalInput2:  0,
+				DigitalInput3:  0,
+				DigitalOutput1: 0,
+				DigitalOutput2: 0,
+				GPSPower:       1,
+				MovementSensor: 1,
+				WorkingMode:    4,
+				GSMSignal:      3,
+				SleepMode:      0,
+			},
+		},
+		{
+			Bytes:    "00",
+			Expected: map[TeltonikaIOProperty]uint8{},
+		},
+	}
+
+	teltonika := TeltonikaProtocol{Imei: "generic-imei"}
+	for _, testCase := range testCases {
+		buf, _ := hex.DecodeString(testCase.Bytes)
+		reader := bufio.NewReader(bytes.NewReader(buf))
+
+		ioElement, err := teltonika.read1BProperties(reader)
+		if assert.NoError(t, err, "read1BProperties failed") {
+			assert.Equal(t, testCase.Expected, ioElement, "incorrect 1B properties")
+		}
+	}
+}
+
+func Test2BIOElementParsing(t *testing.T) {
+	type testCase struct {
+		Bytes    string
+		Expected map[TeltonikaIOProperty]uint16
+	}
+
+	testCases := []testCase{
+		{
+			Bytes: "08B50012B6000A423024180000CD0386CE0001431057440000",
+			Expected: map[TeltonikaIOProperty]uint16{
+				GPSPDOP:         18,
+				GPSHDOP:         10,
+				ExternalVoltage: 12324,
+				Speed:           0,
+				CellID:          902,
+				AreaCode:        1,
+				BatteryVoltage:  4183,
+				BatteryCurrent:  0,
+			},
+		},
+		{
+			Bytes:    "00",
+			Expected: map[TeltonikaIOProperty]uint16{},
+		},
+	}
+
+	teltonika := TeltonikaProtocol{Imei: "generic-imei"}
+	for _, testCase := range testCases {
+		buf, _ := hex.DecodeString(testCase.Bytes)
+		reader := bufio.NewReader(bytes.NewReader(buf))
+
+		ioElement, err := teltonika.read2BProperties(reader)
+		if assert.NoError(t, err, "read2BProperties failed") {
+			assert.Equal(t, testCase.Expected, ioElement, "incorrect 2B properties")
+		}
+	}
+}
+
+func Test4BIOElementParsing(t *testing.T) {
+	type testCase struct {
+		Bytes    string
+		Expected map[TeltonikaIOProperty]uint32
+	}
+
+	testCases := []testCase{
+		{
+			Bytes: "044600000112C700000000F10000601A4800000000",
+			Expected: map[TeltonikaIOProperty]uint32{
+				PCBTemperature:    274,
+				OdometerValue:     0,
+				GSMOperator:       24602,
+				DallasTemperature: 0,
+			},
+		},
+		{
+			Bytes:    "00",
+			Expected: map[TeltonikaIOProperty]uint32{},
+		},
+	}
+
+	teltonika := TeltonikaProtocol{Imei: "generic-imei"}
+	for _, testCase := range testCases {
+		buf, _ := hex.DecodeString(testCase.Bytes)
+		reader := bufio.NewReader(bytes.NewReader(buf))
+
+		ioElement, err := teltonika.read4BProperties(reader)
+		if assert.NoError(t, err, "read4BProperties failed") {
+			assert.Equal(t, testCase.Expected, ioElement, "incorrect 4B properties")
+		}
+	}
+}
+
+func Test16BIOElementParsing(t *testing.T) {
+	type testCase struct {
+		Bytes    string
+		Expected map[TeltonikaIOProperty]uint64
+	}
+
+	testCases := []testCase{
+		{
+			Bytes: "014E0000000000000000",
+			Expected: map[TeltonikaIOProperty]uint64{
+				IButtonID: 0,
+			},
+		},
+		{
+			Bytes:    "00",
+			Expected: map[TeltonikaIOProperty]uint64{},
+		},
+	}
+
+	teltonika := TeltonikaProtocol{Imei: "generic-imei"}
+	for _, testCase := range testCases {
+		buf, _ := hex.DecodeString(testCase.Bytes)
+		reader := bufio.NewReader(bytes.NewReader(buf))
+
+		ioElement, err := teltonika.read8BProperties(reader)
+		if assert.NoError(t, err, "read8BProperties failed") {
+			assert.Equal(t, testCase.Expected, ioElement, "incorrect 8B properties")
 		}
 	}
 }
