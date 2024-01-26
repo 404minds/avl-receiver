@@ -12,6 +12,7 @@ require (
 )
 
 require (
+	github.com/snksoft/crc v1.1.0
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/multierr v1.10.0 // indirect
 )

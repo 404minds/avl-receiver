@@ -22,6 +22,10 @@ func (s *JsonLinesStore) GetProcessChan() chan interface{} {
 	return s.ProcessChan
 }
 
+func (s *JsonLinesStore) GetCloseChan() chan bool {
+	return s.CloseChan
+}
+
 func (s *JsonLinesStore) Process() error {
 	for {
 		select {
@@ -33,7 +37,7 @@ func (s *JsonLinesStore) Process() error {
 					logger.Error("failed to write Teltonika record to file", zap.String("imei", record.IMEI))
 					logger.Error(err.Error())
 				}
-				fmt.Fprintln(s.File, b)
+				fmt.Fprintln(s.File, string(b))
 				s.File.Sync()
 			default:
 				logger.Error("invalid data type received to write to file")

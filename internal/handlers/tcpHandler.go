@@ -25,8 +25,6 @@ type tcpHandler struct {
 func (t *tcpHandler) HandleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	logger.Sugar().Infof("New connection from %s", conn.RemoteAddr().String())
-
 	reader := bufio.NewReader(conn)
 
 	deviceProtocol, ack, err := t.attemptDeviceLogin(reader)
@@ -38,6 +36,9 @@ func (t *tcpHandler) HandleConnection(conn net.Conn) {
 
 	t.connToProtocolMap[conn.RemoteAddr().String()] = deviceProtocol
 	dataStore := makeJsonStore(deviceProtocol.GetDeviceIdentifier())
+	go dataStore.Process()
+	defer func() { dataStore.GetCloseChan() <- true }()
+
 	t.connToStoreMap[conn.RemoteAddr().String()] = dataStore
 	conn.Write(ack)
 
@@ -62,7 +63,7 @@ func makeJsonStore(deviceIdentifier string) store.Store {
 
 	return &store.JsonLinesStore{
 		File:        file,
-		ProcessChan: make(chan interface{}),
+		ProcessChan: make(chan interface{}, 200),
 		CloseChan:   make(chan bool, 200),
 	}
 }
@@ -76,6 +77,7 @@ func (t *tcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DevicePro
 			continue // try another device
 		} else {
 			// discard bytes consumed by login to since we already have a final protocol that worked
+			logger.Sugar().Infof("Device identified to be of type %s with identifier %s", deviceType.String(), protocol.GetDeviceIdentifier())
 			if _, err := reader.Discard(bytesConsumed); err != nil {
 				return nil, nil, err
 			}
