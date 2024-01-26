@@ -4,8 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"io"
 
-	// "github.com/404minds/avl-receiver/internal/devices"
+	"github.com/404minds/avl-receiver/internal/crc"
 	errs "github.com/404minds/avl-receiver/internal/errors"
 	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
 )
@@ -40,8 +41,6 @@ func (t *TeltonikaProtocol) Login(reader *bufio.Reader) (ack []byte, bytesConsum
 
 func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Writer, storeProcessChan chan interface{}) error {
 	for {
-		var packet TeltonikaAvlDataPacket
-
 		// header
 		var headerZeros uint32
 		err := binary.Read(reader, binary.BigEndian, &headerZeros)
@@ -52,56 +51,38 @@ func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Wr
 			return errs.ErrTeltonikaInvalidDataPacket
 		}
 
-		// // data length
-		// dataLenByte, err := reader.ReadByte()
-		// if err != nil {
-		// 	return err
-		// }
-		// dataLen := uint8(dataLenByte) // should read max dataLen bytes from now in this iteration
-		reader.Discard(4) // discard data length
-
-		// codec id
-		err = binary.Read(reader, binary.BigEndian, &packet.CodecID)
+		// data length
+		var dataLen uint32
+		err = binary.Read(reader, binary.BigEndian, &dataLen)
 		if err != nil {
 			return err
 		}
 
-		// number of data
-		err = binary.Read(reader, binary.BigEndian, &packet.NumberOfData)
+		dataBytes := make([]byte, dataLen)
+		_, err = io.ReadFull(reader, dataBytes)
 		if err != nil {
-			return err
-		}
-
-		for i := uint8(0); i < packet.NumberOfData; i++ {
-			record, err := t.readSingleRecord(reader)
-			if err != nil {
-				return err
-			}
-			packet.Data = append(packet.Data, *record)
-		}
-
-		// num records at the end
-		endNumRecords, err := reader.ReadByte()
-		if err != nil {
-			return err
-		}
-		if endNumRecords != packet.NumberOfData {
 			return errs.ErrTeltonikaInvalidDataPacket
+		}
+		dataReader := bufio.NewReader(bytes.NewReader(dataBytes))
+
+		parsedPacket, err := t.parseDataToRecord(dataReader)
+		if err != nil {
+			return err
 		}
 
 		// crc
-		err = binary.Read(reader, binary.BigEndian, &packet.CRC)
+		err = binary.Read(reader, binary.BigEndian, &parsedPacket.CRC)
 		if err != nil {
-			return err
+			return errs.ErrTeltonikaInvalidDataPacket
 		}
 
 		// validate crc
-		valid := packet.ValidateCrc()
+		valid := t.ValidateCrc(dataBytes, parsedPacket.CRC)
 		if !valid {
 			return errs.ErrTeltonikaBadCrc
 		}
 
-		for _, record := range packet.Data {
+		for _, record := range parsedPacket.Data {
 			r := TeltonikaRecord{
 				Record: record,
 				IMEI:   t.Imei,
@@ -110,7 +91,7 @@ func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Wr
 		}
 
 		// write ack
-		err = binary.Write(writer, binary.BigEndian, int32(endNumRecords))
+		err = binary.Write(writer, binary.BigEndian, int32(len(parsedPacket.Data)))
 		writer.Flush()
 		if err != nil {
 			logger.Error("failed to write ack for incoming data")
@@ -118,6 +99,41 @@ func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Wr
 			return err
 		}
 	}
+}
+
+func (t *TeltonikaProtocol) parseDataToRecord(reader *bufio.Reader) (*TeltonikaAvlDataPacket, error) {
+	var packet TeltonikaAvlDataPacket
+
+	// coded id
+	codedIdBytes, err := reader.ReadByte()
+	packet.CodecID = uint8(codedIdBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	// number of data
+	err = binary.Read(reader, binary.BigEndian, &packet.NumberOfData)
+	if err != nil {
+		return nil, err
+	}
+
+	// parse each record
+	for i := uint8(0); i < packet.NumberOfData; i++ {
+		record, err := t.readSingleRecord(reader)
+		if err != nil {
+			return nil, err
+		}
+		packet.Data = append(packet.Data, *record)
+	}
+
+	endNumRecords, err := reader.ReadByte()
+	if err != nil {
+		return nil, err
+	}
+	if endNumRecords != packet.NumberOfData {
+		return nil, errs.ErrTeltonikaInvalidDataPacket
+	}
+	return &packet, nil
 }
 
 func (t *TeltonikaProtocol) readSingleRecord(reader *bufio.Reader) (*TeltonikaAvlRecord, error) {
@@ -336,4 +352,9 @@ func (t *TeltonikaProtocol) peekImei(reader *bufio.Reader) (imei string, bytesCo
 func (t *TeltonikaProtocol) isImeiAuthorized(imei string) bool {
 	logger.Sugar().Infof("IMEI %s is authorized", imei)
 	return true
+}
+
+func (t *TeltonikaProtocol) ValidateCrc(data []byte, expectedCrc uint32) bool {
+	calculatedCrc := crc.Crc16_IBM(data)
+	return uint32(calculatedCrc) == expectedCrc
 }

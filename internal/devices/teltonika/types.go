@@ -1,29 +1,22 @@
 package teltonika
 
-// import "github.com/sigurn/crc16"
-
 type TeltonikaRecord struct {
-	IMEI   string `json:"imei"`
+	IMEI   string             `json:"imei"`
 	Record TeltonikaAvlRecord `json:"record"`
 }
 
 type TeltonikaAvlDataPacket struct {
-	CodecID      uint8 `json:"codec_id"`
-	NumberOfData uint8 `json:"number_of_data"`
+	CodecID      uint8                `json:"codec_id"`
+	NumberOfData uint8                `json:"number_of_data"`
 	Data         []TeltonikaAvlRecord `json:"data"`
-	CRC          uint32 `json:"crc"`
-}
-
-func (t *TeltonikaAvlDataPacket) ValidateCrc() bool {
-	// TODO: implement crc validation using polynomial 0xA001
-	return true
+	CRC          uint32               `json:"crc"`
 }
 
 type TeltonikaAvlRecord struct {
-	Timestamp  uint64 `json:"timestamp"`
-	Priority   uint8 `json:"priority"`
+	Timestamp  uint64              `json:"timestamp"`
+	Priority   uint8               `json:"priority"`
 	GPSElement TeltonikaGpsElement `json:"gps_element"`
-	IOElement  TeltonikaIOElement `json:"io_element"`
+	IOElement  TeltonikaIOElement  `json:"io_element"`
 }
 
 type TeltonikaGpsElement struct {
@@ -31,7 +24,7 @@ type TeltonikaGpsElement struct {
 	Latitude   uint32 `json:"latitude"`
 	Altitude   uint16 `json:"altitude"`
 	Angle      uint16 `json:"angle"`
-	Satellites uint8 `json:"satellites"`
+	Satellites uint8  `json:"satellites"`
 	Speed      uint16 `json:"speed"`
 }
 
@@ -39,7 +32,7 @@ type TeltonikaIOElement struct {
 	EventID       uint8 `json:"event_id"`
 	NumProperties uint8 `json:"num_properties"`
 
-	Properties1B map[TeltonikaIOProperty]uint8 `json:"properties_1b"`
+	Properties1B map[TeltonikaIOProperty]uint8  `json:"properties_1b"`
 	Properties2B map[TeltonikaIOProperty]uint16 `json:"properties_2b"`
 	Properties4B map[TeltonikaIOProperty]uint32 `json:"properties_4b"`
 	Properties8B map[TeltonikaIOProperty]uint64 `json:"properties_8b"`

@@ -55,11 +55,12 @@ func (t *tcpHandler) HandleConnection(conn net.Conn) {
 }
 
 func makeJsonStore(deviceIdentifier string) store.Store {
-	file, err := os.OpenFile(deviceIdentifier+".json", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.CreateTemp("", deviceIdentifier+".json")
 	if err != nil {
 		logger.Error("failed to open file to store data")
 		logger.Panic(err.Error())
 	}
+	logger.Sugar().Infof("[deviceId: %s] Created json file store at %s", deviceIdentifier, file.Name())
 
 	return &store.JsonLinesStore{
 		File:        file,
