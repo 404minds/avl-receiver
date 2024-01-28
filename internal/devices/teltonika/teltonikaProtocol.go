@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 
 	"github.com/404minds/avl-receiver/internal/crc"
@@ -40,14 +41,14 @@ func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Wr
 		err := t.consumeMessage(reader, storeProcessChan, writer)
 		if err != nil {
 			logger.Sugar().Error("failed to consume message", err)
-			return err
+			return fmt.Errorf("failed to consume message %w", err)
 		}
 	}
 }
 
-func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessChan chan interface{}, writer *bufio.Writer) error {
+func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessChan chan interface{}, writer *bufio.Writer) (err error) {
 	var headerZeros uint32
-	err := binary.Read(reader, binary.BigEndian, &headerZeros)
+	err = binary.Read(reader, binary.BigEndian, &headerZeros)
 	if err != nil {
 		return err
 	}
@@ -64,7 +65,7 @@ func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessCha
 	dataBytes := make([]byte, dataLen)
 	_, err = io.ReadFull(reader, dataBytes)
 	if err != nil {
-		return errs.ErrTeltonikaInvalidDataPacket
+		return fmt.Errorf("failed to read data bytes: %w", err)
 	}
 	dataReader := bufio.NewReader(bytes.NewReader(dataBytes))
 
@@ -75,7 +76,7 @@ func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessCha
 
 	err = binary.Read(reader, binary.BigEndian, &parsedPacket.CRC)
 	if err != nil {
-		return errs.ErrTeltonikaInvalidDataPacket
+		return fmt.Errorf("failed to read crc: %w", err)
 	}
 
 	valid := t.ValidateCrc(dataBytes, parsedPacket.CRC)
@@ -93,11 +94,14 @@ func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessCha
 	logger.Sugar().Infof("stored %d records", len(parsedPacket.Data))
 
 	err = binary.Write(writer, binary.BigEndian, int32(len(parsedPacket.Data)))
-	writer.Flush()
 	if err != nil {
-		logger.Error("failed to write ack for incoming data")
-		logger.Error(err.Error())
-		return err
+		logger.Sugar().Error("failed to write ack for incoming data", err)
+		return fmt.Errorf("failed to write ack for incoming data: %w", err)
+	}
+	err = writer.Flush()
+	if err != nil {
+		logger.Sugar().Error("failed to flush ack for incoming data", err)
+		return fmt.Errorf("failed to flush ack for incoming data: %w", err)
 	}
 	return nil
 }
@@ -170,9 +174,8 @@ func (t *TeltonikaProtocol) readSingleRecord(reader *bufio.Reader) (*TeltonikaAv
 	return &record, nil
 }
 
-func (t *TeltonikaProtocol) parseIOElements(reader *bufio.Reader) (*TeltonikaIOElement, error) {
-	var ioElement TeltonikaIOElement
-	var err error
+func (t *TeltonikaProtocol) parseIOElements(reader *bufio.Reader) (ioElement *TeltonikaIOElement, err error) {
+	ioElement = &TeltonikaIOElement{}
 
 	// eventId
 	err = binary.Read(reader, binary.BigEndian, &ioElement.EventID)
@@ -195,7 +198,7 @@ func (t *TeltonikaProtocol) parseIOElements(reader *bufio.Reader) (*TeltonikaIOE
 		return nil, errs.ErrTeltonikaInvalidDataPacket
 	}
 
-	return &ioElement, nil
+	return
 }
 
 func (t *TeltonikaProtocol) read1BProperties(reader *bufio.Reader) (map[TeltonikaIOProperty]uint8, error) {
@@ -292,40 +295,40 @@ func (t *TeltonikaProtocol) parseGpsElement(reader *bufio.Reader) (gpsElement Te
 	// longitude
 	err = binary.Read(reader, binary.BigEndian, &gpsElement.Longitude)
 	if err != nil {
-		return gpsElement, err
+		return
 	}
 
 	// latitude
 	err = binary.Read(reader, binary.BigEndian, &gpsElement.Latitude)
 	if err != nil {
-		return gpsElement, err
+		return
 	}
 
 	// altitude
 	err = binary.Read(reader, binary.BigEndian, &gpsElement.Altitude)
 	if err != nil {
-		return gpsElement, err
+		return
 	}
 
 	// angle
 	err = binary.Read(reader, binary.BigEndian, &gpsElement.Angle)
 	if err != nil {
-		return gpsElement, err
+		return
 	}
 
 	// satellites
 	err = binary.Read(reader, binary.BigEndian, &gpsElement.Satellites)
 	if err != nil {
-		return gpsElement, err
+		return
 	}
 
 	// speed
 	err = binary.Read(reader, binary.BigEndian, &gpsElement.Speed)
 	if err != nil {
-		return gpsElement, err
+		return
 	}
 
-	return gpsElement, nil
+	return
 }
 
 func (t *TeltonikaProtocol) peekImei(reader *bufio.Reader) (imei string, bytesConsumed int, e error) {

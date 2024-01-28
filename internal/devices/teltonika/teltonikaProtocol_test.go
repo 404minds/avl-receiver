@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,9 +40,6 @@ func TestTeltonikaLogin(t *testing.T) {
 
 func TestDataPacketParsing(t *testing.T) {
 	buf, _ := hex.DecodeString("00000000000000A608030000013FEB40E0B2000F0EC760209A6B000062000006000000170A010002000300B300B4004501F00150041503C80008B50012B6000A423024180000CD0386CE0001431057440000044600000112C700000000F10000601A4800000000014E00000000000000000000013F14A1D1CE000F0EB790209A778000AB010C0500000000000000000000013F1498A63A000F0EB790209A77800095010C0400000000000000000300003390")
-	randBytes := make([]byte, 100)
-	rand.Read(randBytes)
-	buf = append(buf, randBytes...)
 	reader := bufio.NewReader(bytes.NewReader(buf))
 
 	var writeBuffer bytes.Buffer
@@ -50,7 +48,8 @@ func TestDataPacketParsing(t *testing.T) {
 
 	teltonika := TeltonikaProtocol{Imei: "something"}
 
-	teltonika.ConsumeStream(reader, writer, storeProcessChan)
+	err := teltonika.ConsumeStream(reader, writer, storeProcessChan)
+	assert.ErrorIs(t, err, io.EOF)
 
 	assert.Equal(t, []byte{0x00, 0x00, 0x00, 0x03}, writeBuffer.Bytes(), "Incorrect ack from consume data")
 
