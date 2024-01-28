@@ -17,10 +17,6 @@ type TeltonikaProtocol struct {
 	Imei string
 }
 
-// func (t *TeltonikaProtocol) GetDeviceType() devices.AVLDeviceType {
-// 	return devices.Teltonika
-// }
-
 func (t *TeltonikaProtocol) GetDeviceIdentifier() string {
 	return t.Imei
 }
@@ -41,64 +37,69 @@ func (t *TeltonikaProtocol) Login(reader *bufio.Reader) (ack []byte, bytesConsum
 
 func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Writer, storeProcessChan chan interface{}) error {
 	for {
-		// header
-		var headerZeros uint32
-		err := binary.Read(reader, binary.BigEndian, &headerZeros)
+		err := t.consumeMessage(reader, storeProcessChan, writer)
 		if err != nil {
-			return err
-		}
-		if headerZeros != 0x0000 {
-			return errs.ErrTeltonikaInvalidDataPacket
-		}
-
-		// data length
-		var dataLen uint32
-		err = binary.Read(reader, binary.BigEndian, &dataLen)
-		if err != nil {
-			return err
-		}
-
-		dataBytes := make([]byte, dataLen)
-		_, err = io.ReadFull(reader, dataBytes)
-		if err != nil {
-			return errs.ErrTeltonikaInvalidDataPacket
-		}
-		dataReader := bufio.NewReader(bytes.NewReader(dataBytes))
-
-		parsedPacket, err := t.parseDataToRecord(dataReader)
-		if err != nil {
-			return err
-		}
-
-		// crc
-		err = binary.Read(reader, binary.BigEndian, &parsedPacket.CRC)
-		if err != nil {
-			return errs.ErrTeltonikaInvalidDataPacket
-		}
-
-		// validate crc
-		valid := t.ValidateCrc(dataBytes, parsedPacket.CRC)
-		if !valid {
-			return errs.ErrTeltonikaBadCrc
-		}
-
-		for _, record := range parsedPacket.Data {
-			r := TeltonikaRecord{
-				Record: record,
-				IMEI:   t.Imei,
-			}
-			storeProcessChan <- r
-		}
-
-		// write ack
-		err = binary.Write(writer, binary.BigEndian, int32(len(parsedPacket.Data)))
-		writer.Flush()
-		if err != nil {
-			logger.Error("failed to write ack for incoming data")
-			logger.Error(err.Error())
+			logger.Sugar().Error("failed to consume message", err)
 			return err
 		}
 	}
+}
+
+func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessChan chan interface{}, writer *bufio.Writer) error {
+	var headerZeros uint32
+	err := binary.Read(reader, binary.BigEndian, &headerZeros)
+	if err != nil {
+		return err
+	}
+	if headerZeros != 0x0000 {
+		return errs.ErrTeltonikaInvalidDataPacket
+	}
+
+	var dataLen uint32
+	err = binary.Read(reader, binary.BigEndian, &dataLen)
+	if err != nil {
+		return err
+	}
+
+	dataBytes := make([]byte, dataLen)
+	_, err = io.ReadFull(reader, dataBytes)
+	if err != nil {
+		return errs.ErrTeltonikaInvalidDataPacket
+	}
+	dataReader := bufio.NewReader(bytes.NewReader(dataBytes))
+
+	parsedPacket, err := t.parseDataToRecord(dataReader)
+	if err != nil {
+		return err
+	}
+
+	err = binary.Read(reader, binary.BigEndian, &parsedPacket.CRC)
+	if err != nil {
+		return errs.ErrTeltonikaInvalidDataPacket
+	}
+
+	valid := t.ValidateCrc(dataBytes, parsedPacket.CRC)
+	if !valid {
+		return errs.ErrTeltonikaBadCrc
+	}
+
+	for _, record := range parsedPacket.Data {
+		r := TeltonikaRecord{
+			Record: record,
+			IMEI:   t.Imei,
+		}
+		storeProcessChan <- r
+	}
+	logger.Sugar().Infof("stored %d records", len(parsedPacket.Data))
+
+	err = binary.Write(writer, binary.BigEndian, int32(len(parsedPacket.Data)))
+	writer.Flush()
+	if err != nil {
+		logger.Error("failed to write ack for incoming data")
+		logger.Error(err.Error())
+		return err
+	}
+	return nil
 }
 
 func (t *TeltonikaProtocol) parseDataToRecord(reader *bufio.Reader) (*TeltonikaAvlDataPacket, error) {
@@ -355,6 +356,6 @@ func (t *TeltonikaProtocol) isImeiAuthorized(imei string) bool {
 }
 
 func (t *TeltonikaProtocol) ValidateCrc(data []byte, expectedCrc uint32) bool {
-	calculatedCrc := crc.Crc16_IBM(data)
+	calculatedCrc := crc.Crc_Teltonika(data)
 	return uint32(calculatedCrc) == expectedCrc
 }
