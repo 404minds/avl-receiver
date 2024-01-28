@@ -29,8 +29,7 @@ func (t *tcpHandler) HandleConnection(conn net.Conn) {
 
 	deviceProtocol, ack, err := t.attemptDeviceLogin(reader)
 	if err != nil {
-		logger.Error("Failed to connect device")
-		logger.Error(err.Error())
+		logger.Sugar().Errorf("failed to identify device %s", err)
 		return
 	}
 
@@ -72,14 +71,17 @@ func makeJsonStore(deviceIdentifier string) store.Store {
 func (t *tcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DeviceProtocol, []byte, error) {
 	for _, deviceType := range t.registeredDeviceTypes {
 		protocol := deviceType.GetProtocol()
-		ack, bytesConsumed, err := protocol.Login(reader)
+		ack, bytesConsumed, bytesToSkip, err := protocol.Login(reader)
 
 		if err != nil {
-			continue // try another device
+			if err != io.EOF {
+				continue // try another device
+			} else {
+				return nil, nil, err
+			}
 		} else {
-			// discard bytes consumed by login to since we already have a final protocol that worked
-			logger.Sugar().Infof("Device identified to be of type %s with identifier %s", deviceType.String(), protocol.GetDeviceIdentifier())
-			if _, err := reader.Discard(bytesConsumed); err != nil {
+			logger.Sugar().Infof("Device identified to be of type %s with identifier %s, bytes consumed %d, bytes to skip %d", deviceType.String(), protocol.GetDeviceIdentifier(), bytesConsumed, bytesToSkip)
+			if _, err := reader.Discard(bytesToSkip); err != nil {
 				return nil, nil, err
 			}
 			return protocol, ack, nil

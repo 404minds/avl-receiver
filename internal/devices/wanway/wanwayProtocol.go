@@ -23,11 +23,11 @@ func (p *WanwayProtocol) GetDeviceIdentifier() string {
 	return p.Imei
 }
 
-func (p *WanwayProtocol) Login(reader *bufio.Reader) (ack []byte, bytesConsumed int, e error) {
+func (p *WanwayProtocol) Login(reader *bufio.Reader) (ack []byte, bytesConsumed int, byteToSkip int, e error) {
 	if !p.IsWanwayHeader(reader) {
-		return nil, 0, errs.ErrNotWanwayDevice
+		return nil, 0, 0, errs.ErrNotWanwayDevice
 	}
-	return nil, 0, nil
+	return nil, 0, 0, nil
 }
 
 func (p *WanwayProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Writer, storeProcessChan chan interface{}) error {
@@ -41,7 +41,6 @@ func (p *WanwayProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Write
 			return err
 		}
 	}
-	return nil
 }
 
 func (p *WanwayProtocol) sendResponse(parsedPacket *WanwayPacket, writer *bufio.Writer) (err error) {

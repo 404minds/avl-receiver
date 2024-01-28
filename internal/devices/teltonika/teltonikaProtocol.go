@@ -22,26 +22,29 @@ func (t *TeltonikaProtocol) GetDeviceIdentifier() string {
 	return t.Imei
 }
 
-func (t *TeltonikaProtocol) Login(reader *bufio.Reader) (ack []byte, bytesConsumed int, e error) {
-	imei, bytesConsumed, err := t.peekImei(reader)
+func (t *TeltonikaProtocol) Login(reader *bufio.Reader) (ack []byte, bytesConsumed int, bytesToSkip int, e error) {
+	imei, bytesToSkip, err := t.peekImei(reader)
 	if err != nil {
-		return nil, bytesConsumed, err
+		return nil, 0, bytesToSkip, err
 	}
 	if !t.isImeiAuthorized(imei) {
-		return nil, bytesConsumed, errs.ErrTeltonikaUnauthorizedDevice
+		return nil, 0, bytesToSkip, errs.ErrTeltonikaUnauthorizedDevice
 	}
 
 	t.Imei = imei // maybe store this in redis if stream consume happens in a different process
 
-	return []byte{0x01}, bytesConsumed, nil
+	return []byte{0x01}, 0, bytesToSkip, nil
 }
 
 func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Writer, storeProcessChan chan interface{}) error {
 	for {
 		err := t.consumeMessage(reader, storeProcessChan, writer)
 		if err != nil {
-			logger.Sugar().Error("failed to consume message", err)
-			return fmt.Errorf("failed to consume message %w", err)
+			if err != io.EOF {
+				logger.Sugar().Error("failed to consume message", err)
+				return fmt.Errorf("failed to consume message %w", err)
+			}
+			return err
 		}
 	}
 }
