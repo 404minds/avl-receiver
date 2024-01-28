@@ -82,13 +82,8 @@ func (p *WanwayProtocol) sendResponse(parsedPacket *WanwayPacket, writer *bufio.
 			StopBits:                parsedPacket.StopBits,
 		}
 		_, err := writer.Write(responsePacket.ToBytes())
-		if err != nil {
-			panic(err)
-		}
-		err = writer.Flush()
-		if err != nil {
-			panic(err)
-		}
+		checkErr(err)
+		checkErr(writer.Flush())
 	} else {
 		return nil
 	}
@@ -108,41 +103,24 @@ func (p *WanwayProtocol) parseWanwayPacket(reader *bufio.Reader) (packet *Wanway
 	packet = &WanwayPacket{}
 
 	// start bit
-	err = binary.Read(reader, binary.BigEndian, &packet.StartBit)
-	if err != nil {
-		panic(err)
-	}
+	checkErr(binary.Read(reader, binary.BigEndian, &packet.StartBit))
 
 	// packet length
-	err = binary.Read(reader, binary.BigEndian, &packet.PacketLength)
-	if err != nil {
-		panic(err)
-	}
+	checkErr(binary.Read(reader, binary.BigEndian, &packet.PacketLength))
 
 	// packet data
 	packetData := make([]byte, packet.PacketLength-2) // 2 for crc
 	_, err = io.ReadFull(reader, packetData)
-	if err != nil {
-		panic(err)
-	}
+	checkErr(err)
 
 	// packet data to packet
-	err = p.parsePacketData(bufio.NewReader(bytes.NewReader(packetData)), packet)
-	if err != nil {
-		panic(err)
-	}
+	checkErr(p.parsePacketData(bufio.NewReader(bytes.NewReader(packetData)), packet))
 
 	// crc
-	err = binary.Read(reader, binary.BigEndian, &packet.Crc)
-	if err != nil {
-		panic(err)
-	}
+	checkErr(binary.Read(reader, binary.BigEndian, &packet.Crc))
 
 	// stop bits
-	err = binary.Read(reader, binary.BigEndian, &packet.StopBits)
-	if err != nil {
-		panic(err)
-	}
+	checkErr(binary.Read(reader, binary.BigEndian, &packet.StopBits))
 
 	if packet.StopBits != 0x0d0a {
 		panic(err)
@@ -190,6 +168,9 @@ func (p *WanwayProtocol) parsePacketInformation(reader *bufio.Reader, messageTyp
 	if messageType == MSG_LoginInformation {
 		parsedInfo, err := p.parseLoginInformation(reader)
 		return parsedInfo, err
+	} else if messageType == MSG_PositioningData {
+		parsedInfo, err := p.parsePositioningData(reader)
+		return parsedInfo, err
 	} else {
 		return nil, errs.ErrWanwayInvalidPacket
 	}
@@ -227,6 +208,84 @@ func (p *WanwayProtocol) parseLoginInformation(reader *bufio.Reader) (interface{
 	loginInfo.Timezone = time.FixedZone("", int(zoneOffset)*(hours*60*60+minutes*60))
 
 	return &loginInfo, nil
+}
+
+func (p *WanwayProtocol) parsePositioningData(reader *bufio.Reader) (positionInfo interface{}, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+			if err != io.EOF {
+				err = errs.ErrWanwayInvalidPacket
+			}
+		}
+	}()
+
+	var parsed WanwayPositioningInformation
+
+	gpsInfo, err := p.parseGPSInformation(reader)
+	checkErr(err)
+	parsed.GPSInfo = gpsInfo
+
+	lbsInfo, err := p.parseLBSInformation(reader)
+	checkErr(err)
+	parsed.LBSInfo = lbsInfo
+
+	// ACC
+	checkErr(binary.Read(reader, binary.BigEndian, &parsed.ACC))
+
+	// data reporting mode
+	checkErr(binary.Read(reader, binary.BigEndian, &parsed.DataReportingMode))
+
+	// mileage statistics
+	checkErr(binary.Read(reader, binary.BigEndian, &parsed.MileageStatistics))
+	return &parsed, nil
+}
+
+func checkErr(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (p *WanwayProtocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo WanwayGPSInformation, err error) {
+	year, err := reader.ReadByte()
+	checkErr(err)
+
+	month, err := reader.ReadByte()
+	checkErr(err)
+
+	day, err := reader.ReadByte()
+	checkErr(err)
+
+	hour, err := reader.ReadByte()
+	checkErr(err)
+
+	minute, err := reader.ReadByte()
+	checkErr(err)
+
+	second, err := reader.ReadByte()
+	checkErr(err)
+
+	gpsInfo.Timestamp = time.Date(int(year), time.Month(month), int(day), int(hour), int(minute), int(second), 0, p.LoginInformation.Timezone)
+
+	x, err := reader.ReadByte()
+	checkErr(err)
+	gpsInfo.GPSInfoLength = x >> 4
+	gpsInfo.NumberOfSatellites = x & 0x0f
+
+	return
+}
+
+func (p *WanwayProtocol) parseLBSInformation(reader *bufio.Reader) (lbsInfo WanwayLBSInformation, err error) {
+	// MCC
+	checkErr(binary.Read(reader, binary.BigEndian, &lbsInfo.MCC))
+	// MNC
+	checkErr(binary.Read(reader, binary.BigEndian, &lbsInfo.MNC))
+	// LAC
+	checkErr(binary.Read(reader, binary.BigEndian, &lbsInfo.LAC))
+	// cell id
+	checkErr(binary.Read(reader, binary.BigEndian, &lbsInfo.CellID))
+	return
 }
 
 func (p *WanwayProtocol) IsWanwayHeader(reader *bufio.Reader) bool {

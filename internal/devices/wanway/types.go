@@ -22,6 +22,32 @@ type WanwayLoginInformation struct {
 	Timezone     *time.Location
 }
 
+type WanwayPositioningInformation struct {
+	GPSInfo           WanwayGPSInformation
+	LBSInfo           WanwayLBSInformation
+	ACC               byte
+	DataReportingMode byte
+	RealtimeGPSPassUp byte
+	MileageStatistics uint32
+}
+
+type WanwayGPSInformation struct {
+	Timestamp          time.Time
+	GPSInfoLength      uint8
+	NumberOfSatellites uint8
+	Latitude           uint32
+	Longitude          uint32
+	Speed              uint8 // gpsSpeed
+	Course             uint16
+}
+
+type WanwayLBSInformation struct {
+	MCC    uint16 // mobile country code
+	MNC    uint8  // mobile network code
+	LAC    uint16 // location area code
+	CellID [3]byte
+}
+
 type ResponsePacket struct {
 	StartBit                uint16
 	PacketLength            int8
@@ -46,7 +72,7 @@ type WanwayMessageType byte
 
 const (
 	MSG_LoginInformation        WanwayMessageType = 0x01
-	MSG_PositioningData                           = 0x022
+	MSG_PositioningData                           = 0x22
 	MSG_StatusInformation                         = 0x13
 	MSG_StringInformation                         = 0x21
 	MSG_LBSInformation                            = 0x22
