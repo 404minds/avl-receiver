@@ -22,18 +22,18 @@ func (t *TeltonikaProtocol) GetDeviceIdentifier() string {
 	return t.Imei
 }
 
-func (t *TeltonikaProtocol) Login(reader *bufio.Reader) (ack []byte, bytesConsumed int, bytesToSkip int, e error) {
+func (t *TeltonikaProtocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip int, e error) {
 	imei, bytesToSkip, err := t.peekImei(reader)
 	if err != nil {
-		return nil, 0, bytesToSkip, err
+		return nil, bytesToSkip, err
 	}
 	if !t.isImeiAuthorized(imei) {
-		return nil, 0, bytesToSkip, errs.ErrTeltonikaUnauthorizedDevice
+		return nil, bytesToSkip, errs.ErrTeltonikaUnauthorizedDevice
 	}
 
 	t.Imei = imei // maybe store this in redis if stream consume happens in a different process
 
-	return []byte{0x01}, 0, bytesToSkip, nil
+	return []byte{0x01}, bytesToSkip, nil
 }
 
 func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Writer, storeProcessChan chan interface{}) error {
@@ -341,6 +341,9 @@ func (t *TeltonikaProtocol) peekImei(reader *bufio.Reader) (imei string, bytesCo
 	}
 
 	imeiLen := binary.BigEndian.Uint16(imeiLenBytes)
+	if imeiLen != 15 {
+		return "", 0, errs.ErrNotTeltonikaDevice
+	}
 	err = binary.Read(bytes.NewReader(imeiLenBytes), binary.BigEndian, &imeiLen)
 	if err != nil {
 		return "", 0, err

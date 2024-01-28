@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -29,7 +30,7 @@ func (t *tcpHandler) HandleConnection(conn net.Conn) {
 
 	deviceProtocol, ack, err := t.attemptDeviceLogin(reader)
 	if err != nil {
-		logger.Sugar().Errorf("failed to identify device %s", err)
+		logger.Sugar().Errorf("failed to identify device from %s : %s", conn.RemoteAddr().String(), err)
 		return
 	}
 
@@ -54,7 +55,7 @@ func (t *tcpHandler) HandleConnection(conn net.Conn) {
 }
 
 func makeJsonStore(deviceIdentifier string) store.Store {
-	file, err := os.CreateTemp("", deviceIdentifier+".json")
+	file, err := os.CreateTemp("", deviceIdentifier+"-*.json")
 	if err != nil {
 		logger.Error("failed to open file to store data")
 		logger.Panic(err.Error())
@@ -71,16 +72,16 @@ func makeJsonStore(deviceIdentifier string) store.Store {
 func (t *tcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DeviceProtocol, []byte, error) {
 	for _, deviceType := range t.registeredDeviceTypes {
 		protocol := deviceType.GetProtocol()
-		ack, bytesConsumed, bytesToSkip, err := protocol.Login(reader)
+		ack, bytesToSkip, err := protocol.Login(reader)
 
 		if err != nil {
-			if err != io.EOF {
+			if errors.Is(err, errs.ErrUnknownDeviceType) {
 				continue // try another device
 			} else {
 				return nil, nil, err
 			}
 		} else {
-			logger.Sugar().Infof("Device identified to be of type %s with identifier %s, bytes consumed %d, bytes to skip %d", deviceType.String(), protocol.GetDeviceIdentifier(), bytesConsumed, bytesToSkip)
+			logger.Sugar().Infof("Device identified to be of type %s with identifier %s, bytes to skip %d", deviceType.String(), protocol.GetDeviceIdentifier(), bytesToSkip)
 			if _, err := reader.Discard(bytesToSkip); err != nil {
 				return nil, nil, err
 			}

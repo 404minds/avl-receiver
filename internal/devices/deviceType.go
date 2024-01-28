@@ -14,7 +14,7 @@ const (
 )
 
 func (t AVLDeviceType) String() string {
-	return [...]string{"Teltonika"}[t-1]
+	return [...]string{"Teltonika", "Wanway"}[t-1]
 }
 
 func (t AVLDeviceType) GetProtocol() DeviceProtocol {
