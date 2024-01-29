@@ -56,7 +56,7 @@ func TestParseWanwaypacket(t *testing.T) {
 	typeIdentifier := "0518"
 	timezone := "4dd8"
 	informationNumber := "0001"
-	crc := "cb97"
+	crc := "1cde"
 	stopBits := "0d0a"
 
 	data, _ := hex.DecodeString(startBit + packetLength + messageType + imei + typeIdentifier + timezone + informationNumber + crc + stopBits)
@@ -71,7 +71,7 @@ func TestParseWanwaypacket(t *testing.T) {
 		assert.Equal(t, int8(17), packet.PacketLength, "packet length should match")
 		assert.Equal(t, MSG_LoginInformation, packet.MessageType, "message type should match")
 		assert.Equal(t, uint16(0x0001), packet.InformationSerialNumber, "information serial number should match")
-		assert.Equal(t, uint16(0xcb97), packet.Crc, "crc should match")
+		assert.Equal(t, uint16(0x1cde), packet.Crc, "crc should match")
 
 		if assert.IsType(t, &WanwayLoginInformation{}, packet.Information, "packet information should be of type WanwayLoginInformation") {
 			loginInfo := packet.Information.(*WanwayLoginInformation)
@@ -89,7 +89,7 @@ func TestWanwayLoginMessage(t *testing.T) {
 	typeIdentifier := "0518"
 	timezone := "4dd8"
 	informationNumber := "0001"
-	crc := "cb97"
+	crc := "1cde"
 	stopBits := "0d0a"
 
 	loginmsg, _ := hex.DecodeString(startBit + packetLength + messageType + imei + typeIdentifier + timezone + informationNumber + crc + stopBits)

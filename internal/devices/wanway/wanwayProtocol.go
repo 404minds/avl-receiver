@@ -128,10 +128,11 @@ func (p *WanwayProtocol) parseWanwayPacket(reader *bufio.Reader) (packet *Wanway
 
 	// validate crc
 	expectedCrc := crc.Crc_Wanway(append([]byte{byte(packet.PacketLength)}, packetData...))
+	logger.Sugar().Infof("crc is %x", expectedCrc)
 	if expectedCrc != packet.Crc {
 		// TODO: fix issues with crc validation
-		return
-		// return nil, errs.ErrWanwayBadCrc
+		// return
+		return nil, errs.ErrWanwayBadCrc
 	}
 	return
 }
