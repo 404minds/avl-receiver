@@ -1,8 +1,9 @@
 package crc
 
 import (
-	"encoding/hex"
-	"strconv"
+	"bytes"
+	"encoding/binary"
+	"io"
 )
 
 var teltonika_crc_table = [256]uint16{
@@ -84,13 +85,16 @@ var wanway_crc_table = [256]uint16{
 }
 
 func Crc_Wanway(buf []byte) uint16 {
-
 	var crc uint16 = 0xFFFF
-	length := len(buf)
+	reader := bytes.NewReader(buf)
 
-	for counter := 0; counter < length; counter += 2 {
-		a, _ := strconv.ParseInt(hex.EncodeToString(buf[counter:counter+2]), 16, 16)
-		crc = uint16(crc>>8) ^ uint16(wanway_crc_table[((crc)^uint16(a))&0xff])
+	for {
+		var b uint16
+		err := binary.Read(reader, binary.BigEndian, &b)
+		if err == io.EOF {
+			break
+		}
+		crc = uint16(crc>>8) ^ uint16(wanway_crc_table[((crc)^uint16(b))&0xff])
 	}
 
 	return crc ^ 0xffff
