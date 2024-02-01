@@ -137,10 +137,10 @@ func (p *WanwayProtocol) parseWanwayPacket(reader *bufio.Reader) (packet *Wanway
 func (p *WanwayProtocol) parsePacketData(reader *bufio.Reader, packet *WanwayPacket) error {
 	protocolNumByte, err := reader.ReadByte()
 	msgType := WanwayMessageTypeFromId(protocolNumByte)
-	if msgType == nil {
+	if msgType == MSG_Invalid {
 		return errs.ErrWanwayInvalidPacket
 	}
-	packet.MessageType = *msgType
+	packet.MessageType = msgType
 
 	packetInfoBytes := make([]byte, packet.PacketLength-5) // 2 for info serial number, 2 for crc, 1 for msgType
 	bytesRead, err := io.ReadFull(reader, packetInfoBytes)
@@ -260,6 +260,8 @@ func (p *WanwayProtocol) parseAlarmData(reader *bufio.Reader) (alarmInfo WanwayA
 
 	alarmInfo.StatusInformation, err = p.parseStatusInformation(reader)
 	checkErr(err)
+
+	return
 }
 
 func checkErr(err error) {
