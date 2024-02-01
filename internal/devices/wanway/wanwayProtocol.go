@@ -128,10 +128,7 @@ func (p *WanwayProtocol) parseWanwayPacket(reader *bufio.Reader) (packet *Wanway
 
 	// validate crc
 	expectedCrc := crc.Crc_Wanway(append([]byte{byte(packet.PacketLength)}, packetData...))
-	logger.Sugar().Infof("crc is %x", expectedCrc)
 	if expectedCrc != packet.Crc {
-		// TODO: fix issues with crc validation
-		// return
 		return nil, errs.ErrWanwayBadCrc
 	}
 	return
@@ -171,6 +168,9 @@ func (p *WanwayProtocol) parsePacketInformation(reader *bufio.Reader, messageTyp
 		return parsedInfo, err
 	} else if messageType == MSG_PositioningData {
 		parsedInfo, err := p.parsePositioningData(reader)
+		return parsedInfo, err
+	} else if messageType == MSG_AlarmData {
+		parsedInfo, err := p.parseAlarmData(reader)
 		return parsedInfo, err
 	} else {
 		return nil, errs.ErrWanwayInvalidPacket
@@ -242,6 +242,26 @@ func (p *WanwayProtocol) parsePositioningData(reader *bufio.Reader) (positionInf
 	return &parsed, nil
 }
 
+func (p *WanwayProtocol) parseAlarmData(reader *bufio.Reader) (alarmInfo WanwayAlarmInformation, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+			if err != io.EOF {
+				err = errs.ErrWanwayInvalidPacket
+			}
+		}
+	}()
+
+	alarmInfo.GpsInformation, err = p.parseGPSInformation(reader)
+	checkErr(err)
+
+	alarmInfo.LBSInformation, err = p.parseLBSInformation(reader)
+	checkErr(err)
+
+	alarmInfo.StatusInformation, err = p.parseStatusInformation(reader)
+	checkErr(err)
+}
+
 func checkErr(err error) {
 	if err != nil {
 		panic(err)
@@ -249,6 +269,30 @@ func checkErr(err error) {
 }
 
 func (p *WanwayProtocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo WanwayGPSInformation, err error) {
+	timestamp, err := p.parseTimestamp(reader)
+	checkErr(err)
+	gpsInfo.Timestamp = timestamp
+
+	x, err := reader.ReadByte()
+	checkErr(err)
+	gpsInfo.GPSInfoLength = x >> 4
+	gpsInfo.NumberOfSatellites = x & 0x0f
+
+	// latitude
+	checkErr(binary.Read(reader, binary.BigEndian, &gpsInfo.Latitude))
+	// longitude
+	checkErr(binary.Read(reader, binary.BigEndian, &gpsInfo.Longitude))
+	// speed
+	checkErr(binary.Read(reader, binary.BigEndian, &gpsInfo.Speed))
+
+	// TODO: parse the 16-bit course to detailed fields
+	// course/heading
+	checkErr(binary.Read(reader, binary.BigEndian, &gpsInfo.Course))
+
+	return
+}
+
+func (p *WanwayProtocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time, err error) {
 	year, err := reader.ReadByte()
 	checkErr(err)
 
@@ -267,13 +311,7 @@ func (p *WanwayProtocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo Wanw
 	second, err := reader.ReadByte()
 	checkErr(err)
 
-	gpsInfo.Timestamp = time.Date(int(year), time.Month(month), int(day), int(hour), int(minute), int(second), 0, p.LoginInformation.Timezone)
-
-	x, err := reader.ReadByte()
-	checkErr(err)
-	gpsInfo.GPSInfoLength = x >> 4
-	gpsInfo.NumberOfSatellites = x & 0x0f
-
+	timestamp = time.Date(int(year), time.Month(month), int(day), int(hour), int(minute), int(second), 0, p.LoginInformation.Timezone)
 	return
 }
 
@@ -287,6 +325,38 @@ func (p *WanwayProtocol) parseLBSInformation(reader *bufio.Reader) (lbsInfo Wanw
 	// cell id
 	checkErr(binary.Read(reader, binary.BigEndian, &lbsInfo.CellID))
 	return
+}
+
+func (p *WanwayProtocol) parseStatusInformation(reader *bufio.Reader) (statusInfo WanwayStatusInformation, err error) {
+	// terminal information content
+	terminalInfoByte, err := reader.ReadByte()
+	checkErr(err)
+	terminalInfo, err := p.parseTerminalInfoFromByte(terminalInfoByte)
+	checkErr(err)
+	statusInfo.TerminalInformation = terminalInfo
+
+	// voltage level
+	checkErr(binary.Read(reader, binary.BigEndian, &statusInfo.VoltageLevel))
+	// GSM signal strength
+	checkErr(binary.Read(reader, binary.BigEndian, &statusInfo.GSMSignalStrength))
+	// alarm status
+	checkErr(binary.Read(reader, binary.BigEndian, &statusInfo.AlarmStatus))
+	return
+}
+
+func (p *WanwayProtocol) parseTerminalInfoFromByte(terminalInfoByte byte) (WanwayTerminalInformation, error) {
+	var terminalInfo WanwayTerminalInformation
+	terminalInfo.OilElectricityConnected = terminalInfoByte&0x80 == 0x80    // bit 7
+	terminalInfo.GPSSignalAvailable = terminalInfoByte&0x40 == 0x40         // bit 6
+	terminalInfo.AlarmType = WanwayAlarmTypeFromId(terminalInfoByte & 0x38) // bit 3, 4, 5
+	terminalInfo.Charging = terminalInfoByte&0x10 == 0x08                   // bit 2
+	terminalInfo.ACCHigh = terminalInfoByte&0x20 == 0x02                    // bit 1
+	terminalInfo.Armed = terminalInfoByte&0x01 == 0x01                      // bit 0
+
+	if terminalInfo.AlarmType == AL_Invalid {
+		return terminalInfo, errs.ErrWanwayInvalidAlarmType
+	}
+	return terminalInfo, nil
 }
 
 func (p *WanwayProtocol) IsWanwayHeader(reader *bufio.Reader) bool {
