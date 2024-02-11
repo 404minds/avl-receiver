@@ -1,6 +1,6 @@
 # avl-receiver
 
-AVL = automatic vehicle receiver
+AVL = automatic vehicle locator
 
 This tool hosts a tcp server to which supported AVL devices can connect and communicate.
 
