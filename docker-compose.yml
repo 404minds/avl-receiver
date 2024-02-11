@@ -1,0 +1,10 @@
+services:
+  avl-receiver:
+    build:
+      context: .
+    image: avl-receiver
+    container_name: avl-receiver
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./data:/data

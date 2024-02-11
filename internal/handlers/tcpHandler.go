@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path"
 
 	devices "github.com/404minds/avl-receiver/internal/devices"
 	errs "github.com/404minds/avl-receiver/internal/errors"
@@ -21,6 +22,7 @@ type tcpHandler struct {
 	connToProtocolMap     map[string]devices.DeviceProtocol // make this an LRU cache to evict stale connections
 	registeredDeviceTypes []devices.AVLDeviceType
 	connToStoreMap        map[string]store.Store
+	dataDir               string
 }
 
 func (t *tcpHandler) HandleConnection(conn net.Conn) {
@@ -35,7 +37,7 @@ func (t *tcpHandler) HandleConnection(conn net.Conn) {
 	}
 
 	t.connToProtocolMap[conn.RemoteAddr().String()] = deviceProtocol
-	dataStore := makeJsonStore(deviceProtocol.GetDeviceIdentifier())
+	dataStore := makeJsonStore(t.dataDir, deviceProtocol.GetDeviceIdentifier())
 	go dataStore.Process()
 	defer func() { dataStore.GetCloseChan() <- true }()
 
@@ -54,8 +56,8 @@ func (t *tcpHandler) HandleConnection(conn net.Conn) {
 	}
 }
 
-func makeJsonStore(deviceIdentifier string) store.Store {
-	file, err := os.CreateTemp("", deviceIdentifier+"-*.json")
+func makeJsonStore(datadir string, deviceIdentifier string) store.Store {
+	file, err := os.OpenFile(path.Join(datadir, deviceIdentifier+".json"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		logger.Error("failed to open file to store data")
 		logger.Panic(err.Error())

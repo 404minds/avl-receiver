@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net"
+	"os"
 
 	"github.com/404minds/avl-receiver/internal/handlers"
 	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
@@ -14,11 +14,16 @@ var logger = configuredLogger.Logger
 
 func main() {
 	var port = flag.Int("port", 9000, "Port to listen on")
+	var dataDir = flag.String("datadir", "", "Directory to store incoming data")
 	flag.Parse()
 
-	if port == nil {
-		log.Panic("Port not specified")
+	if *dataDir == "" || *port == 0 {
+		fmt.Fprintln(os.Stderr, "Usage:")
+		flag.PrintDefaults()
+		os.Exit(1)
 	}
+
+	tcpHandler := handlers.NewTcpHandler(*dataDir)
 
 	listener, err := net.Listen("tcp4", fmt.Sprintf(":%d", *port))
 	if err != nil {
@@ -38,6 +43,6 @@ func main() {
 		}
 		logger.Sugar().Infof("New connection from %s", conn.RemoteAddr().String())
 
-		go handlers.TcpHandler.HandleConnection(conn)
+		go tcpHandler.HandleConnection(conn)
 	}
 }

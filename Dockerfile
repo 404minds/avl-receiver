@@ -19,7 +19,7 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /avl-receiver
 COPY --from=builder /avl-receiver/avl-receiver .
 
-CMD ["./avl-receiver", "-port", "9000"]
+CMD ["./avl-receiver", "-port", "9000", "-datadir", "/data"]
 
 EXPOSE 9000
 
