@@ -92,8 +92,8 @@ func TestGpsParsing(t *testing.T) {
 		{
 			Bytes: "0F0EC760209A6B0000620000060000",
 			Expected: TeltonikaGpsElement{
-				Longitude:  252626784,
-				Latitude:   546990848,
+				Longitude:  25.2626784,
+				Latitude:   54.6990848,
 				Altitude:   98,
 				Angle:      0,
 				Satellites: 6,
@@ -103,8 +103,8 @@ func TestGpsParsing(t *testing.T) {
 		{
 			Bytes: "0F0EB790209A778000AB010C050000",
 			Expected: TeltonikaGpsElement{
-				Longitude:  252622736,
-				Latitude:   546994048,
+				Longitude:  25.2622736,
+				Latitude:   54.6994048,
 				Altitude:   171,
 				Angle:      268,
 				Satellites: 5,

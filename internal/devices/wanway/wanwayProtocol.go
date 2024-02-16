@@ -16,7 +16,7 @@ import (
 var logger = configuredLogger.Logger
 
 type WanwayProtocol struct {
-	LoginInformation *WanwayLoginInformation
+	LoginInformation *WanwayLoginData
 }
 
 func (p *WanwayProtocol) GetDeviceIdentifier() string {
@@ -34,8 +34,8 @@ func (p *WanwayProtocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int
 		logger.Sugar().Error("failed to parse wanway packet ", err)
 		return nil, 0, err
 	}
-	if packet.MessageType == MSG_LoginInformation {
-		p.LoginInformation = packet.Information.(*WanwayLoginInformation)
+	if packet.MessageType == MSG_LoginData {
+		p.LoginInformation = packet.Information.(*WanwayLoginData)
 
 		var byteBuffer bytes.Buffer
 		var writer = bufio.NewWriter(&byteBuffer)
@@ -72,7 +72,7 @@ func (p *WanwayProtocol) sendResponse(parsedPacket *WanwayPacket, writer *bufio.
 		}
 	}()
 
-	if parsedPacket.MessageType == MSG_LoginInformation {
+	if parsedPacket.MessageType == MSG_LoginData {
 		responsePacket := ResponsePacket{
 			StartBit:                parsedPacket.StartBit,
 			PacketLength:            parsedPacket.PacketLength,
@@ -138,8 +138,15 @@ func (p *WanwayProtocol) parsePacketData(reader *bufio.Reader, packet *WanwayPac
 	protocolNumByte, err := reader.ReadByte()
 	msgType := WanwayMessageTypeFromId(protocolNumByte)
 	if msgType == MSG_Invalid {
+		logger.Sugar().Errorf("Invalid message type: %x", protocolNumByte)
+		remainingData, err := p.consumePacket(reader)
+		if err != nil {
+			return err
+		}
+		logger.Sugar().Errorln("Invalid message type: ", hex.Dump(remainingData))
 		return errs.ErrWanwayInvalidPacket
 	}
+
 	packet.MessageType = msgType
 
 	packetInfoBytes := make([]byte, packet.PacketLength-5) // 2 for info serial number, 2 for crc, 1 for msgType
@@ -162,8 +169,25 @@ func (p *WanwayProtocol) parsePacketData(reader *bufio.Reader, packet *WanwayPac
 	return nil
 }
 
+func (p *WanwayProtocol) consumePacket(reader *bufio.Reader) ([]byte, error) {
+	data := make([]byte, 0)
+	term := []byte{0x0d, 0x0a}
+
+	for {
+		b, err := reader.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		data = append(data, b)
+		if bytes.HasSuffix(data, term) {
+			break
+		}
+	}
+	return data, nil
+}
+
 func (p *WanwayProtocol) parsePacketInformation(reader *bufio.Reader, messageType WanwayMessageType) (interface{}, error) {
-	if messageType == MSG_LoginInformation {
+	if messageType == MSG_LoginData {
 		parsedInfo, err := p.parseLoginInformation(reader)
 		return parsedInfo, err
 	} else if messageType == MSG_PositioningData {
@@ -172,13 +196,16 @@ func (p *WanwayProtocol) parsePacketInformation(reader *bufio.Reader, messageTyp
 	} else if messageType == MSG_AlarmData {
 		parsedInfo, err := p.parseAlarmData(reader)
 		return parsedInfo, err
+	} else if messageType == MSG_HeartbeatData {
+		parsedInfo, err := p.parsehHeartbeatData(reader)
+		return parsedInfo, err
 	} else {
 		return nil, errs.ErrWanwayInvalidPacket
 	}
 }
 
 func (p *WanwayProtocol) parseLoginInformation(reader *bufio.Reader) (interface{}, error) {
-	var loginInfo WanwayLoginInformation
+	var loginInfo WanwayLoginData
 
 	var imeiBytes [8]byte
 	err := binary.Read(reader, binary.BigEndian, &imeiBytes)
@@ -232,10 +259,15 @@ func (p *WanwayProtocol) parsePositioningData(reader *bufio.Reader) (positionInf
 	parsed.LBSInfo = lbsInfo
 
 	// ACC
-	checkErr(binary.Read(reader, binary.BigEndian, &parsed.ACC))
+	var b byte
+	checkErr(binary.Read(reader, binary.BigEndian, &b))
+	parsed.ACCHigh = b == 0x01 // 00 is low, 01 is high
 
 	// data reporting mode
 	checkErr(binary.Read(reader, binary.BigEndian, &parsed.DataReportingMode))
+
+	checkErr(binary.Read(reader, binary.BigEndian, &b))
+	parsed.GPSRealTime = b == 0x00 // 00 is realtime, 01 is re-upload
 
 	// mileage statistics
 	checkErr(binary.Read(reader, binary.BigEndian, &parsed.MileageStatistics))
@@ -264,6 +296,38 @@ func (p *WanwayProtocol) parseAlarmData(reader *bufio.Reader) (alarmInfo WanwayA
 	return
 }
 
+func (p *WanwayProtocol) parsehHeartbeatData(reader *bufio.Reader) (heartbeat WanwayHeartbeatData, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+			if err != io.EOF {
+				err = errs.ErrWanwayInvalidPacket
+			}
+		}
+	}()
+
+	var b byte
+	checkErr(binary.Read(reader, binary.BigEndian, &b))
+
+	heartbeat.TerminalInformation, err = p.parseTerminalInfoFromByte(b)
+	checkErr(err)
+
+	checkErr(binary.Read(reader, binary.BigEndian, &b))
+	heartbeat.BatteryLevel = WanwayBatteryLevelFromByte(b)
+	if heartbeat.BatteryLevel == VL_Invalid {
+		return heartbeat, errs.ErrWanwayInvalidVoltageLevel
+	}
+
+	checkErr(binary.Read(reader, binary.BigEndian, &b))
+	heartbeat.GSMSignalStrength = WanwayGSMSignalStrengthFromByte(b)
+	if heartbeat.GSMSignalStrength == GSM_Invalid {
+		return heartbeat, errs.ErrWanwayInvalidGSMSignalStrength
+	}
+
+	checkErr(binary.Read(reader, binary.BigEndian, &heartbeat.ExtendedPortStatus))
+	return
+}
+
 func checkErr(err error) {
 	if err != nil {
 		panic(err)
@@ -280,17 +344,37 @@ func (p *WanwayProtocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo Wanw
 	gpsInfo.GPSInfoLength = x >> 4
 	gpsInfo.NumberOfSatellites = x & 0x0f
 
+	var i32 uint32
 	// latitude
-	checkErr(binary.Read(reader, binary.BigEndian, &gpsInfo.Latitude))
+	checkErr(binary.Read(reader, binary.BigEndian, &i32))
+	gpsInfo.Latitude = float32(i32) / 1800000
+
 	// longitude
-	checkErr(binary.Read(reader, binary.BigEndian, &gpsInfo.Longitude))
+	checkErr(binary.Read(reader, binary.BigEndian, &i32))
+	gpsInfo.Longitude = float32(i32) / 1800000
+
 	// speed
 	checkErr(binary.Read(reader, binary.BigEndian, &gpsInfo.Speed))
 
 	// TODO: parse the 16-bit course to detailed fields
 	// course/heading
-	checkErr(binary.Read(reader, binary.BigEndian, &gpsInfo.Course))
+	var courseValue uint16
+	checkErr(binary.Read(reader, binary.BigEndian, &courseValue))
+	gpsInfo.Course = p.parseGpsCourse(courseValue)
 
+	return
+}
+
+func (p *WanwayProtocol) parseGpsCourse(courseValue uint16) (course WanwayGPSCourse) {
+	b1 := byte(courseValue >> 8)
+
+	course.IsRealtime = b1&0x20 == 0x00     // byte 1, bit 5 is 0
+	course.IsDifferential = b1&0x20 == 0x20 // byte 1, bit 5 is 1
+	course.Positioned = b1&0x10 == 0x10     // byte 1, bit 4 is 0
+	course.Longitude = b1&0x08 == 0x08      // byte 1, bit 3 is 0
+	course.Latitude = b1&0x04 == 0x04       // byte 1, bit 2 is 0
+
+	course.Degree = courseValue & 0x03ff // byte 1 (bit 1, 0), byte 2
 	return
 }
 
@@ -330,17 +414,28 @@ func (p *WanwayProtocol) parseLBSInformation(reader *bufio.Reader) (lbsInfo Wanw
 }
 
 func (p *WanwayProtocol) parseStatusInformation(reader *bufio.Reader) (statusInfo WanwayStatusInformation, err error) {
+	var b byte
+
 	// terminal information content
-	terminalInfoByte, err := reader.ReadByte()
+	checkErr(binary.Read(reader, binary.BigEndian, &b))
+	statusInfo.TerminalInformation, err = p.parseTerminalInfoFromByte(b)
 	checkErr(err)
-	terminalInfo, err := p.parseTerminalInfoFromByte(terminalInfoByte)
-	checkErr(err)
-	statusInfo.TerminalInformation = terminalInfo
 
 	// voltage level
-	checkErr(binary.Read(reader, binary.BigEndian, &statusInfo.VoltageLevel))
+	checkErr(binary.Read(reader, binary.BigEndian, &b))
+	statusInfo.BatteryLevel = WanwayBatteryLevelFromByte(b)
+	if statusInfo.BatteryLevel == VL_Invalid {
+		return statusInfo, errs.ErrWanwayInvalidAlarmType
+	}
+
 	// GSM signal strength
+	checkErr(binary.Read(reader, binary.BigEndian, &b))
+	statusInfo.GSMSignalStrength = WanwayGSMSignalStrengthFromByte(b)
 	checkErr(binary.Read(reader, binary.BigEndian, &statusInfo.GSMSignalStrength))
+	if statusInfo.GSMSignalStrength == GSM_Invalid {
+		return statusInfo, errs.ErrWanwayInvalidGSMSignalStrength
+	}
+
 	// alarm status
 	checkErr(binary.Read(reader, binary.BigEndian, &statusInfo.AlarmStatus))
 	return

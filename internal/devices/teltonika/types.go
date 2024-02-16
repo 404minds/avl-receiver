@@ -20,8 +20,8 @@ type TeltonikaAvlRecord struct {
 }
 
 type TeltonikaGpsElement struct {
-	Longitude  uint32 `json:"longitude"`
-	Latitude   uint32 `json:"latitude"`
+	Longitude  float32 `json:"longitude"`
+	Latitude   float32 `json:"latitude"`
 	Altitude   uint16 `json:"altitude"`
 	Angle      uint16 `json:"angle"`
 	Satellites uint8  `json:"satellites"`

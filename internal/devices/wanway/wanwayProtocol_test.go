@@ -22,8 +22,8 @@ func TestParseLoginInformation(t *testing.T) {
 	parsedInfo, err := p.parseLoginInformation(reader)
 
 	if assert.NoError(t, err, "parseLoginInformation should succeed") {
-		if assert.IsType(t, &WanwayLoginInformation{}, parsedInfo, "loginInfo should be of type WanwayLoginInformation") {
-			loginInfo := parsedInfo.(*WanwayLoginInformation)
+		if assert.IsType(t, &WanwayLoginData{}, parsedInfo, "loginInfo should be of type WanwayLoginInformation") {
+			loginInfo := parsedInfo.(*WanwayLoginData)
 			assert.Equal(t, "123456789012345", loginInfo.TerminalID, "imei number should match")
 			assert.Equal(t, time.FixedZone("", -(12*60*60+45*60)), loginInfo.Timezone, "timezone should match")
 		}
@@ -69,12 +69,12 @@ func TestParseWanwaypacket(t *testing.T) {
 		assert.Equal(t, uint16(0x7878), packet.StartBit, "start bit should match")
 		assert.Equal(t, uint16(0x0d0a), packet.StopBits, "start bit should match")
 		assert.Equal(t, int8(17), packet.PacketLength, "packet length should match")
-		assert.Equal(t, MSG_LoginInformation, packet.MessageType, "message type should match")
+		assert.Equal(t, MSG_LoginData, packet.MessageType, "message type should match")
 		assert.Equal(t, uint16(0x0001), packet.InformationSerialNumber, "information serial number should match")
 		assert.Equal(t, uint16(0xe2c0), packet.Crc, "crc should match")
 
-		if assert.IsType(t, &WanwayLoginInformation{}, packet.Information, "packet information should be of type WanwayLoginInformation") {
-			loginInfo := packet.Information.(*WanwayLoginInformation)
+		if assert.IsType(t, &WanwayLoginData{}, packet.Information, "packet information should be of type WanwayLoginInformation") {
+			loginInfo := packet.Information.(*WanwayLoginData)
 			assert.Equal(t, "123456789012345", loginInfo.TerminalID, "imei number should match")
 			assert.Equal(t, time.FixedZone("", -(12*60*60+45*60)), loginInfo.Timezone, "timezone should match")
 		}

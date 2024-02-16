@@ -296,16 +296,19 @@ func (t *TeltonikaProtocol) readNByteProperties(n int, reader *bufio.Reader) (ma
 
 func (t *TeltonikaProtocol) parseGpsElement(reader *bufio.Reader) (gpsElement TeltonikaGpsElement, err error) {
 	// longitude
-	err = binary.Read(reader, binary.BigEndian, &gpsElement.Longitude)
+	var i32 uint32
+	err = binary.Read(reader, binary.BigEndian, &i32)
 	if err != nil {
 		return
 	}
+	gpsElement.Longitude = float32(i32) / 10000000
 
 	// latitude
-	err = binary.Read(reader, binary.BigEndian, &gpsElement.Latitude)
+	err = binary.Read(reader, binary.BigEndian, &i32)
 	if err != nil {
 		return
 	}
+	gpsElement.Latitude = float32(i32) / 10000000
 
 	// altitude
 	err = binary.Read(reader, binary.BigEndian, &gpsElement.Altitude)
