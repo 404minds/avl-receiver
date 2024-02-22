@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"testing"
 
+	"github.com/404minds/avl-receiver/internal/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -44,7 +46,7 @@ func TestDataPacketParsing(t *testing.T) {
 
 	var writeBuffer bytes.Buffer
 	writer := bufio.NewWriter(&writeBuffer)
-	storeProcessChan := make(chan interface{}, 200)
+	storeProcessChan := make(chan types.DeviceStatus, 200)
 
 	teltonika := TeltonikaProtocol{Imei: "something"}
 
@@ -55,7 +57,10 @@ func TestDataPacketParsing(t *testing.T) {
 
 	assert.Len(t, storeProcessChan, 3, "Incorrect number of records sent to store")
 
-	firstRecord := (<-storeProcessChan).(TeltonikaRecord)
+	var entry types.DeviceStatus = <-storeProcessChan
+	var firstRecord TeltonikaRecord
+	json.Unmarshal(entry.GetTeltonikaPacket().GetRawData(), &firstRecord)
+
 	assert.Equal(t, firstRecord.IMEI, "something", "Incorrect IMEI")
 	assert.Equal(t, firstRecord.Record.Priority, uint8(0), "Incorrect priority")
 	assert.Equal(t, firstRecord.Record.Timestamp, uint64(1374041465010), "Incorrect timestamp")
@@ -64,7 +69,10 @@ func TestDataPacketParsing(t *testing.T) {
 	assert.Equal(t, firstRecord.Record.IOElement.EventID, uint8(0), "Incorrect event id")
 	assert.Equal(t, firstRecord.Record.IOElement.NumProperties, uint8(23), "Incorrect number of IO elements")
 
-	secondRecord := (<-storeProcessChan).(TeltonikaRecord)
+	entry = <-storeProcessChan
+	var secondRecord TeltonikaRecord
+	json.Unmarshal(entry.GetTeltonikaPacket().GetRawData(), &secondRecord)
+
 	assert.Equal(t, secondRecord.IMEI, "something", "Incorrect IMEI")
 	assert.Equal(t, secondRecord.Record.Priority, uint8(0), "Incorrect priority")
 	assert.Equal(t, secondRecord.Record.Timestamp, uint64(1370440716750), "Incorrect timestamp")
@@ -73,7 +81,10 @@ func TestDataPacketParsing(t *testing.T) {
 	assert.Equal(t, secondRecord.Record.IOElement.EventID, uint8(0), "Incorrect event id")
 	assert.Equal(t, secondRecord.Record.IOElement.NumProperties, uint8(0), "Incorrect number of IO elements")
 
-	thirdRecord := (<-storeProcessChan).(TeltonikaRecord)
+	entry = <-storeProcessChan
+	var thirdRecord TeltonikaRecord
+	json.Unmarshal(entry.GetTeltonikaPacket().GetRawData(), &thirdRecord)
+
 	assert.Equal(t, thirdRecord.IMEI, "something", "Incorrect IMEI")
 	assert.Equal(t, thirdRecord.Record.Priority, uint8(0), "Incorrect priority")
 	assert.Equal(t, thirdRecord.Record.Timestamp, uint64(1370440115770), "Incorrect timestamp")

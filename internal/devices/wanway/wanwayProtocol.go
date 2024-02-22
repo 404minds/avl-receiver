@@ -46,7 +46,7 @@ func (p *WanwayProtocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int
 			return nil, 0, err
 		}
 
-		return byteBuffer.Bytes(), 0, nil
+		return byteBuffer.Bytes(), int(packet.PacketLength) + 5, nil
 	} else {
 		return nil, 0, errs.ErrWanwayInvalidLoginInfo
 	}

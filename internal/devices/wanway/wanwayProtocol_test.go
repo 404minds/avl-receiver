@@ -4,11 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/hex"
-	"io"
 	"testing"
 	"time"
 
-	"github.com/404minds/avl-receiver/internal/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -96,14 +94,14 @@ func TestWanwayLoginMessage(t *testing.T) {
 	loginmsg, _ := hex.DecodeString(startBit + packetLength + messageType + imei + typeIdentifier + timezone + informationNumber + crc + stopBits)
 	reader := bufio.NewReader(bytes.NewReader(loginmsg))
 
-	var writeBuffer bytes.Buffer
-	writer := bufio.NewWriter(&writeBuffer)
-	var c chan types.DeviceStatus
-
 	p := WanwayProtocol{}
-	err := p.ConsumeStream(reader, writer, c)
-	assert.ErrorIs(t, err, io.EOF)
+	ack, bytesToSkip, err := p.Login(reader)
+
+	assert.NoError(t, err, "Login should succeed")
+	assert.Equal(t, len(loginmsg), bytesToSkip, "bytesToSkip should be 17")
+
+	assert.Equal(t, imei[1:], p.GetDeviceIdentifier(), "device identifier should match")
 
 	expectedResponse := startBit + packetLength + messageType + informationNumber + crc + stopBits
-	assert.Equal(t, expectedResponse, hex.EncodeToString(writeBuffer.Bytes()))
+	assert.Equal(t, expectedResponse, hex.EncodeToString(ack))
 }
