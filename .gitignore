@@ -1,3 +1,5 @@
 avl-receiver
 __debug_bin*
 data
+./testRpcStore
+./receiver
