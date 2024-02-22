@@ -11,6 +11,7 @@ import (
 	"github.com/404minds/avl-receiver/internal/crc"
 	errs "github.com/404minds/avl-receiver/internal/errors"
 	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
+	"github.com/404minds/avl-receiver/internal/types"
 )
 
 var logger = configuredLogger.Logger
@@ -61,6 +62,8 @@ func (p *WanwayProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Write
 		if err != nil {
 			return err
 		}
+
+		commonDeviceInfo := p.ToDeviceInformation(packet)
 	}
 }
 
@@ -466,4 +469,33 @@ func (p *WanwayProtocol) IsWanwayHeader(reader *bufio.Reader) bool {
 		return true
 	}
 	return false
+}
+
+func (p *WanwayProtocol) ToDeviceInformation(packet *WanwayPacket) *types.DeviceInformation {
+	info := &types.DeviceInformation{}
+
+	info.Imei = p.GetDeviceIdentifier()
+	info.DeviceType = types.DeviceType_WANWAY
+	info.VehicleStatus = &types.VehicleStatus{}
+
+	position := &types.GPSPosition{}
+	info.Position = position
+
+	var gpsInfo *WanwayGPSInformation
+	switch v := packet.Information.(type) {
+	case *WanwayPositioningInformation:
+		gpsInfo = &v.GPSInfo
+	case *WanwayAlarmInformation:
+		gpsInfo = &v.GpsInformation
+	default:
+		gpsInfo = nil
+	}
+
+	if gpsInfo != nil {
+		position.Latitude = gpsInfo.Latitude
+		position.Longitude = gpsInfo.Longitude
+		position.Altitude = gpsInfo
+	}
+
+	return commonDeviceInfo
 }

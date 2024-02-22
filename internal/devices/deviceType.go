@@ -3,25 +3,15 @@ package devices
 import (
 	"github.com/404minds/avl-receiver/internal/devices/teltonika"
 	"github.com/404minds/avl-receiver/internal/devices/wanway"
+	"github.com/404minds/avl-receiver/internal/types"
 )
 
-// enum for device types
-type AVLDeviceType int
-
-const (
-	Teltonika AVLDeviceType = iota + 1
-	Wanway
-)
-
-func (t AVLDeviceType) String() string {
-	return [...]string{"Teltonika", "Wanway"}[t-1]
-}
-
-func (t AVLDeviceType) GetProtocol() DeviceProtocol {
+func GetProtocolForDeviceType(t types.DeviceType) DeviceProtocol {
 	switch t {
-	case Teltonika:
+	case types.DeviceType_Teltonika:
 		return &teltonika.TeltonikaProtocol{}
-	case Wanway:
+	case types.DeviceType_Wanway:
+	case types.DeviceType_Concox:
 		return &wanway.WanwayProtocol{}
 	default:
 		return nil

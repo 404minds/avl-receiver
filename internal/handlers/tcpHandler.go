@@ -12,6 +12,7 @@ import (
 	errs "github.com/404minds/avl-receiver/internal/errors"
 	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
 	"github.com/404minds/avl-receiver/internal/store"
+	"github.com/404minds/avl-receiver/internal/types"
 )
 
 var logger = configuredLogger.Logger
@@ -20,7 +21,7 @@ const BUFFER_SIZE = 256 // bytes
 
 type tcpHandler struct {
 	connToProtocolMap     map[string]devices.DeviceProtocol // make this an LRU cache to evict stale connections
-	registeredDeviceTypes []devices.AVLDeviceType
+	registeredDeviceTypes []types.DeviceType
 	connToStoreMap        map[string]store.Store
 	dataDir               string
 }

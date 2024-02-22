@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"time"
+
+	"github.com/404minds/avl-receiver/internal/types"
 )
 
 type WanwayPacket struct {
@@ -273,4 +275,37 @@ func (m *WanwayGPSDataUploadMode) ToString() string {
 	default:
 		return "Invalid"
 	}
+}
+
+func (packet *WanwayPacket) ToDeviceInformation(imei string, deviceType types.DeviceType) *types.DeviceInformation {
+	info := &types.DeviceInformation{}
+
+	info.Imei = imei
+	info.DeviceType = deviceType
+	info.VehicleStatus = &types.VehicleStatus{}
+	info.Position = &types.GPSPosition{}
+
+	switch v := packet.Information.(type) {
+	case *WanwayPositioningInformation:
+		info.Position.Latitude = v.GPSInfo.Latitude
+		info.Position.Longitude = v.GPSInfo.Longitude
+		info.Position.Speed = float32(v.GPSInfo.Speed)
+		info.VehicleStatus.Ignition = v.ACCHigh
+	case *WanwayAlarmInformation:
+		info.Position.Latitude = v.GpsInformation.Latitude
+		info.Position.Longitude = v.GpsInformation.Longitude
+		info.Position.Speed = float32(v.GpsInformation.Speed)
+		info.VehicleStatus.Ignition = v.StatusInformation.TerminalInformation.ACCHigh
+	case *WanwayHeartbeatData:
+		info.VehicleStatus.Ignition = v.TerminalInformation.ACCHigh
+	default:
+	}
+
+	if gpsInfo != nil {
+		position.Latitude = gpsInfo.Latitude
+		position.Longitude = gpsInfo.Longitude
+		position.Speed = float32(gpsInfo.Speed)
+	}
+
+	return info
 }

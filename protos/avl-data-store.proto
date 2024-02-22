@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+
+option go_package = "github.com/404minds/avl-receiver/internal/store;store";
+
+package store;
+
+import "common-types.proto";
+
+service AvlDataStore {
+    rpc VerifyDevice(VerifyDeviceRequest) returns (VerifyDeviceReply) {}
+}
+
+message VerifyDeviceRequest {
+    string imei = 1;
+}
+
+message VerifyDeviceReply {
+    string imei = 1;
+    types.DeviceType deviceType = 2;
+}

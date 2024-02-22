@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+option go_package = "github.com/404minds/avl-receiver/internal/types;types";
+
+import "google/protobuf/timestamp.proto";
+
+package types;
+
+enum DeviceType {
+    TELTONIKA = 0;
+    WANWAY = 1;
+    CONCOX = 2;
+}
+
+message DeviceInformation {
+    string imei = 1;
+    DeviceType device_type = 2;
+    google.protobuf.Timestamp timestamp = 3;
+
+    GPSPosition position = 4;
+    VehicleStatus vehicle_status = 5;
+
+    oneof raw_data {
+        WanwayPacket wanway_packet = 6;
+        TeltonikaPacket teltonika_packet = 7;
+    }
+}
+
+message GPSPosition {
+    float latitude = 1;
+    float longitude = 2;
+    float altitude = 3;
+    float speed = 4;
+    float course = 5;
+}
+
+message VehicleStatus {
+    bool ignition = 1;
+}
+
+message WanwayPacket {
+    bytes raw_data = 1;
+}
+
+message TeltonikaPacket {
+    bytes raw_data = 1;
+}
