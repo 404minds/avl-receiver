@@ -12,7 +12,7 @@ enum DeviceType {
     CONCOX = 2;
 }
 
-message DeviceInformation {
+message DeviceStatus {
     string imei = 1;
     DeviceType device_type = 2;
     google.protobuf.Timestamp timestamp = 3;

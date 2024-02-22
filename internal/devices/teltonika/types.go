@@ -1,5 +1,13 @@
 package teltonika
 
+import (
+	"encoding/json"
+	"time"
+
+	"github.com/404minds/avl-receiver/internal/types"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
 type TeltonikaRecord struct {
 	IMEI   string             `json:"imei"`
 	Record TeltonikaAvlRecord `json:"record"`
@@ -22,10 +30,10 @@ type TeltonikaAvlRecord struct {
 type TeltonikaGpsElement struct {
 	Longitude  float32 `json:"longitude"`
 	Latitude   float32 `json:"latitude"`
-	Altitude   uint16 `json:"altitude"`
-	Angle      uint16 `json:"angle"`
-	Satellites uint8  `json:"satellites"`
-	Speed      uint16 `json:"speed"`
+	Altitude   uint16  `json:"altitude"`
+	Angle      uint16  `json:"angle"`
+	Satellites uint8   `json:"satellites"`
+	Speed      uint16  `json:"speed"`
 }
 
 type TeltonikaIOElement struct {
@@ -100,4 +108,31 @@ func IOPropertyFromID(id uint8) *TeltonikaIOProperty {
 		}
 	}
 	return nil
+}
+
+func (r *TeltonikaRecord) ToProtobufDeviceStatus() *types.DeviceStatus {
+	info := &types.DeviceStatus{}
+
+	info.Imei = r.IMEI
+	info.DeviceType = types.DeviceType_TELTONIKA
+	info.Timestamp = timestamppb.New(time.Unix(int64(r.Record.Timestamp), 0))
+
+	// gps info
+	info.Position = &types.GPSPosition{}
+	info.Position.Latitude = r.Record.GPSElement.Latitude
+	info.Position.Longitude = r.Record.GPSElement.Longitude
+	info.Position.Altitude = float32(r.Record.GPSElement.Altitude)
+	info.Position.Speed = float32(r.Record.GPSElement.Speed)
+	info.Position.Course = float32(r.Record.GPSElement.Angle)
+
+	// vehicle info
+	info.VehicleStatus = &types.VehicleStatus{}
+	info.VehicleStatus.Ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0
+
+	rawdata, _ := json.Marshal(r)
+	info.RawData = &types.DeviceStatus_TeltonikaPacket{
+		TeltonikaPacket: &types.TeltonikaPacket{RawData: rawdata},
+	}
+
+	return info
 }

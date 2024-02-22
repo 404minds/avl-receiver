@@ -3,9 +3,11 @@ package wanway
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"time"
 
 	"github.com/404minds/avl-receiver/internal/types"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type WanwayPacket struct {
@@ -32,7 +34,7 @@ type WanwayHeartbeatData struct {
 }
 
 type WanwayPositioningInformation struct {
-	GPSInfo           WanwayGPSInformation
+	GpsInformation    WanwayGPSInformation
 	LBSInfo           WanwayLBSInformation
 	ACCHigh           bool
 	DataReportingMode WanwayGPSDataUploadMode // for concox, but not for wanway
@@ -277,34 +279,40 @@ func (m *WanwayGPSDataUploadMode) ToString() string {
 	}
 }
 
-func (packet *WanwayPacket) ToDeviceInformation(imei string, deviceType types.DeviceType) *types.DeviceInformation {
-	info := &types.DeviceInformation{}
+func (packet *WanwayPacket) ToProtobufDeviceStatus(imei string, deviceType types.DeviceType) *types.DeviceStatus {
+	info := &types.DeviceStatus{}
 
 	info.Imei = imei
 	info.DeviceType = deviceType
+	info.Timestamp = timestamppb.New(time.Now())
 	info.VehicleStatus = &types.VehicleStatus{}
 	info.Position = &types.GPSPosition{}
 
+	// location info
 	switch v := packet.Information.(type) {
 	case *WanwayPositioningInformation:
-		info.Position.Latitude = v.GPSInfo.Latitude
-		info.Position.Longitude = v.GPSInfo.Longitude
-		info.Position.Speed = float32(v.GPSInfo.Speed)
-		info.VehicleStatus.Ignition = v.ACCHigh
 	case *WanwayAlarmInformation:
+		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
 		info.Position.Latitude = v.GpsInformation.Latitude
 		info.Position.Longitude = v.GpsInformation.Longitude
 		info.Position.Speed = float32(v.GpsInformation.Speed)
+	default:
+	}
+
+	// vehicle status
+	switch v := packet.Information.(type) {
+	case *WanwayPositioningInformation:
+		info.VehicleStatus.Ignition = v.ACCHigh
+	case *WanwayAlarmInformation:
 		info.VehicleStatus.Ignition = v.StatusInformation.TerminalInformation.ACCHigh
 	case *WanwayHeartbeatData:
 		info.VehicleStatus.Ignition = v.TerminalInformation.ACCHigh
 	default:
 	}
 
-	if gpsInfo != nil {
-		position.Latitude = gpsInfo.Latitude
-		position.Longitude = gpsInfo.Longitude
-		position.Speed = float32(gpsInfo.Speed)
+	rawdata, _ := json.Marshal(packet)
+	info.RawData = &types.DeviceStatus_WanwayPacket{
+		WanwayPacket: &types.WanwayPacket{RawData: rawdata},
 	}
 
 	return info

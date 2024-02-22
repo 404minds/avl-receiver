@@ -8,9 +8,11 @@ package store
 
 import (
 	context "context"
+	types "github.com/404minds/avl-receiver/internal/types"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -23,6 +25,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AvlDataStoreClient interface {
 	VerifyDevice(ctx context.Context, in *VerifyDeviceRequest, opts ...grpc.CallOption) (*VerifyDeviceReply, error)
+	SaveDeviceStatus(ctx context.Context, in *types.DeviceStatus, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type avlDataStoreClient struct {
@@ -42,11 +45,21 @@ func (c *avlDataStoreClient) VerifyDevice(ctx context.Context, in *VerifyDeviceR
 	return out, nil
 }
 
+func (c *avlDataStoreClient) SaveDeviceStatus(ctx context.Context, in *types.DeviceStatus, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/store.AvlDataStore/SaveDeviceStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AvlDataStoreServer is the server API for AvlDataStore service.
 // All implementations must embed UnimplementedAvlDataStoreServer
 // for forward compatibility
 type AvlDataStoreServer interface {
 	VerifyDevice(context.Context, *VerifyDeviceRequest) (*VerifyDeviceReply, error)
+	SaveDeviceStatus(context.Context, *types.DeviceStatus) (*emptypb.Empty, error)
 	mustEmbedUnimplementedAvlDataStoreServer()
 }
 
@@ -56,6 +69,9 @@ type UnimplementedAvlDataStoreServer struct {
 
 func (UnimplementedAvlDataStoreServer) VerifyDevice(context.Context, *VerifyDeviceRequest) (*VerifyDeviceReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyDevice not implemented")
+}
+func (UnimplementedAvlDataStoreServer) SaveDeviceStatus(context.Context, *types.DeviceStatus) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SaveDeviceStatus not implemented")
 }
 func (UnimplementedAvlDataStoreServer) mustEmbedUnimplementedAvlDataStoreServer() {}
 
@@ -88,6 +104,24 @@ func _AvlDataStore_VerifyDevice_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AvlDataStore_SaveDeviceStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(types.DeviceStatus)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AvlDataStoreServer).SaveDeviceStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/store.AvlDataStore/SaveDeviceStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AvlDataStoreServer).SaveDeviceStatus(ctx, req.(*types.DeviceStatus))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AvlDataStore_ServiceDesc is the grpc.ServiceDesc for AvlDataStore service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -98,6 +132,10 @@ var AvlDataStore_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VerifyDevice",
 			Handler:    _AvlDataStore_VerifyDevice_Handler,
+		},
+		{
+			MethodName: "SaveDeviceStatus",
+			Handler:    _AvlDataStore_SaveDeviceStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

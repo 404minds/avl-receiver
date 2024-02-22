@@ -6,5 +6,11 @@ services:
     container_name: avl-receiver
     ports:
       - "9000:9000"
-    volumes:
-      - ./data:/data
+    command: ["./receiver", "-port", "9000", "-remoteStoreAddr", "testServer:8080"]
+
+  testServer:
+    image: avl-receiver
+    container_name: avl-test-server
+    ports:
+      - "8080:8080"
+    command: ["./testRpcStore", "-port", "8080"]

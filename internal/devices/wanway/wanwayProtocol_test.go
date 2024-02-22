@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/404minds/avl-receiver/internal/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -97,7 +98,7 @@ func TestWanwayLoginMessage(t *testing.T) {
 
 	var writeBuffer bytes.Buffer
 	writer := bufio.NewWriter(&writeBuffer)
-	var c chan interface{}
+	var c chan types.DeviceStatus
 
 	p := WanwayProtocol{}
 	err := p.ConsumeStream(reader, writer, c)

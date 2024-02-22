@@ -10,6 +10,7 @@ import (
 	"github.com/404minds/avl-receiver/internal/crc"
 	errs "github.com/404minds/avl-receiver/internal/errors"
 	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
+	"github.com/404minds/avl-receiver/internal/types"
 )
 
 var logger = configuredLogger.Logger
@@ -36,7 +37,7 @@ func (t *TeltonikaProtocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip
 	return []byte{0x01}, bytesToSkip, nil
 }
 
-func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Writer, storeProcessChan chan interface{}) error {
+func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Writer, storeProcessChan chan types.DeviceStatus) error {
 	for {
 		err := t.consumeMessage(reader, storeProcessChan, writer)
 		if err != nil {
@@ -49,7 +50,7 @@ func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Wr
 	}
 }
 
-func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessChan chan interface{}, writer *bufio.Writer) (err error) {
+func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessChan chan types.DeviceStatus, writer *bufio.Writer) (err error) {
 	var headerZeros uint32
 	err = binary.Read(reader, binary.BigEndian, &headerZeros)
 	if err != nil {
@@ -92,7 +93,8 @@ func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessCha
 			Record: record,
 			IMEI:   t.Imei,
 		}
-		storeProcessChan <- r
+		protoRecord := r.ToProtobufDeviceStatus()
+		storeProcessChan <- *protoRecord
 	}
 	logger.Sugar().Infof("stored %d records", len(parsedPacket.Data))
 

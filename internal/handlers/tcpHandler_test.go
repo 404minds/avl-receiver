@@ -3,20 +3,44 @@ package handlers
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/hex"
 	"testing"
 
 	"github.com/404minds/avl-receiver/internal/devices/teltonika"
 	"github.com/404minds/avl-receiver/internal/devices/wanway"
 	errs "github.com/404minds/avl-receiver/internal/errors"
+	"github.com/404minds/avl-receiver/internal/store"
+	"github.com/404minds/avl-receiver/internal/types"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
+
+type mockRemoteDataStore struct {
+	Imei       string
+	DeviceType types.DeviceType
+}
+
+func (s *mockRemoteDataStore) VerifyDevice(ctx context.Context, in *store.VerifyDeviceRequest, opts ...grpc.CallOption) (*store.VerifyDeviceReply, error) {
+	return &store.VerifyDeviceReply{
+		Imei:       s.Imei,
+		DeviceType: s.DeviceType,
+	}, nil
+}
+
+func (s *mockRemoteDataStore) SaveDeviceStatus(ctx context.Context, in *types.DeviceStatus, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	return &emptypb.Empty{}, nil
+}
 
 func TestTeltonikaDeviceLogin(t *testing.T) {
 	buf, _ := hex.DecodeString("000F333536333037303433373231353739")
 
 	reader := bufio.NewReader(bytes.NewReader(buf))
-	handler := NewTcpHandler("")
+	handler := NewTcpHandler(&mockRemoteDataStore{
+		Imei:       "356307043721579",
+		DeviceType: types.DeviceType_TELTONIKA,
+	})
 	protocol, ack, err := handler.attemptDeviceLogin(reader)
 
 	assert.NoError(t, err, "device login should succeed")
@@ -30,7 +54,10 @@ func TestWanwayDeviceLogin(t *testing.T) {
 	buf, _ := hex.DecodeString("78781101035745407517707205184dd8000191400d0a")
 
 	reader := bufio.NewReader(bytes.NewReader(buf))
-	handler := NewTcpHandler("")
+	handler := NewTcpHandler(&mockRemoteDataStore{
+		Imei:       "357454075177072",
+		DeviceType: types.DeviceType_WANWAY,
+	})
 	protocol, ack, err := handler.attemptDeviceLogin(reader)
 
 	assert.NoError(t, err, "device login should succeed")
@@ -43,7 +70,7 @@ func TestWanwayDeviceLogin(t *testing.T) {
 func TestUnkonwnDeviceLogin(t *testing.T) {
 	buf, _ := hex.DecodeString("7676fafafafa")
 	reader := bufio.NewReader(bytes.NewReader(buf))
-	handler := NewTcpHandler("")
+	handler := NewTcpHandler(&mockRemoteDataStore{})
 	protocol, ack, err := handler.attemptDeviceLogin(reader)
 
 	assert.Nil(t, protocol, "protocol should be nil")

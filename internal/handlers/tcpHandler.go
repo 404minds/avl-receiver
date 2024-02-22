@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"io"
 	"net"
@@ -23,7 +24,7 @@ type tcpHandler struct {
 	connToProtocolMap     map[string]devices.DeviceProtocol // make this an LRU cache to evict stale connections
 	registeredDeviceTypes []types.DeviceType
 	connToStoreMap        map[string]store.Store
-	dataDir               string
+	remoteStoreClient     store.AvlDataStoreClient
 }
 
 func (t *tcpHandler) HandleConnection(conn net.Conn) {
@@ -38,7 +39,8 @@ func (t *tcpHandler) HandleConnection(conn net.Conn) {
 	}
 
 	t.connToProtocolMap[conn.RemoteAddr().String()] = deviceProtocol
-	dataStore := makeJsonStore(t.dataDir, deviceProtocol.GetDeviceIdentifier())
+	// dataStore := makeJsonStore(t.dataDir, deviceProtocol.GetDeviceIdentifier())
+	dataStore := makeRemoteRpcStore(t.remoteStoreClient)
 	go dataStore.Process()
 	defer func() { dataStore.GetCloseChan() <- true }()
 
@@ -57,6 +59,14 @@ func (t *tcpHandler) HandleConnection(conn net.Conn) {
 	}
 }
 
+func makeRemoteRpcStore(remoteStoreClient store.AvlDataStoreClient) store.Store {
+	return &store.RemoteRpcStore{
+		ProcessChan:       make(chan types.DeviceStatus, 200),
+		CloseChan:         make(chan bool, 200),
+		RemoteStoreClient: remoteStoreClient,
+	}
+}
+
 func makeJsonStore(datadir string, deviceIdentifier string) store.Store {
 	file, err := os.OpenFile(path.Join(datadir, deviceIdentifier+".json"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -67,14 +77,14 @@ func makeJsonStore(datadir string, deviceIdentifier string) store.Store {
 
 	return &store.JsonLinesStore{
 		File:        file,
-		ProcessChan: make(chan interface{}, 200),
+		ProcessChan: make(chan types.DeviceStatus, 200),
 		CloseChan:   make(chan bool, 200),
 	}
 }
 
 func (t *tcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DeviceProtocol, []byte, error) {
 	for _, deviceType := range t.registeredDeviceTypes {
-		protocol := deviceType.GetProtocol()
+		protocol := devices.MakeProtocolForDeviceType(deviceType)
 		ack, bytesToSkip, err := protocol.Login(reader)
 
 		if err != nil {
@@ -88,6 +98,18 @@ func (t *tcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DevicePro
 			if _, err := reader.Discard(bytesToSkip); err != nil {
 				return nil, nil, err
 			}
+
+			reply, err := t.remoteStoreClient.VerifyDevice(context.Background(), &store.VerifyDeviceRequest{
+				Imei: protocol.GetDeviceIdentifier(),
+			})
+			if err != nil {
+				logger.Sugar().Errorf("failed to verify device %s", protocol.GetDeviceIdentifier())
+			}
+			if reply.GetImei() != protocol.GetDeviceIdentifier() || reply.GetDeviceType() != deviceType {
+				logger.Sugar().Infof("Device %s is not authorized to connect", protocol.GetDeviceIdentifier())
+				return nil, nil, errs.ErrUnauthorizedDevice
+			}
+
 			return protocol, ack, nil
 		}
 	}

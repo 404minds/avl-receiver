@@ -52,7 +52,7 @@ func (p *WanwayProtocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int
 	}
 }
 
-func (p *WanwayProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Writer, storeProcessChan chan interface{}) error {
+func (p *WanwayProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Writer, storeProcessChan chan types.DeviceStatus) error {
 	for {
 		packet, err := p.parseWanwayPacket(reader)
 		if err != nil {
@@ -63,7 +63,8 @@ func (p *WanwayProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Write
 			return err
 		}
 
-		commonDeviceInfo := p.ToDeviceInformation(packet)
+		protoPacket := packet.ToProtobufDeviceStatus(p.GetDeviceIdentifier(), types.DeviceType_WANWAY)
+		storeProcessChan <- *protoPacket
 	}
 }
 
@@ -255,7 +256,7 @@ func (p *WanwayProtocol) parsePositioningData(reader *bufio.Reader) (positionInf
 
 	gpsInfo, err := p.parseGPSInformation(reader)
 	checkErr(err)
-	parsed.GPSInfo = gpsInfo
+	parsed.GpsInformation = gpsInfo
 
 	lbsInfo, err := p.parseLBSInformation(reader)
 	checkErr(err)
@@ -469,33 +470,4 @@ func (p *WanwayProtocol) IsWanwayHeader(reader *bufio.Reader) bool {
 		return true
 	}
 	return false
-}
-
-func (p *WanwayProtocol) ToDeviceInformation(packet *WanwayPacket) *types.DeviceInformation {
-	info := &types.DeviceInformation{}
-
-	info.Imei = p.GetDeviceIdentifier()
-	info.DeviceType = types.DeviceType_WANWAY
-	info.VehicleStatus = &types.VehicleStatus{}
-
-	position := &types.GPSPosition{}
-	info.Position = position
-
-	var gpsInfo *WanwayGPSInformation
-	switch v := packet.Information.(type) {
-	case *WanwayPositioningInformation:
-		gpsInfo = &v.GPSInfo
-	case *WanwayAlarmInformation:
-		gpsInfo = &v.GpsInformation
-	default:
-		gpsInfo = nil
-	}
-
-	if gpsInfo != nil {
-		position.Latitude = gpsInfo.Latitude
-		position.Longitude = gpsInfo.Longitude
-		position.Altitude = gpsInfo
-	}
-
-	return commonDeviceInfo
 }

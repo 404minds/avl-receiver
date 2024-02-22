@@ -6,14 +6,14 @@ import (
 	"github.com/404minds/avl-receiver/internal/types"
 )
 
-func GetProtocolForDeviceType(t types.DeviceType) DeviceProtocol {
+func MakeProtocolForDeviceType(t types.DeviceType) DeviceProtocol {
 	switch t {
-	case types.DeviceType_Teltonika:
+	case types.DeviceType_TELTONIKA:
 		return &teltonika.TeltonikaProtocol{}
-	case types.DeviceType_Wanway:
-	case types.DeviceType_Concox:
+	case types.DeviceType_WANWAY:
 		return &wanway.WanwayProtocol{}
 	default:
 		return nil
 	}
+	return nil
 }
