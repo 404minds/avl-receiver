@@ -98,7 +98,7 @@ func TestWanwayLoginMessage(t *testing.T) {
 	ack, bytesToSkip, err := p.Login(reader)
 
 	assert.NoError(t, err, "Login should succeed")
-	assert.Equal(t, len(loginmsg), bytesToSkip, "bytesToSkip should be 17")
+	assert.Equal(t, 0, bytesToSkip, "bytesToSkip should be 17")
 
 	assert.Equal(t, imei[1:], p.GetDeviceIdentifier(), "device identifier should match")
 
