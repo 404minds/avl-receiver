@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"strings"
 	"testing"
 
 	"github.com/404minds/avl-receiver/internal/devices/teltonika"
@@ -50,21 +51,19 @@ func TestTeltonikaDeviceLogin(t *testing.T) {
 }
 
 func TestWanwayDeviceLogin(t *testing.T) {
-	// buf, _ := hex.DecodeString("78781101035745407517707205184dd80001bb1a0d0a")
-	buf, _ := hex.DecodeString("78781101035745407517707205184dd8000191400d0a")
+	buf, _ := hex.DecodeString(strings.ReplaceAll("78 78 11 01 07 52 53 36 78 90 02 42 70 00 32 01 00 05 12 79 0D 0A", " ", ""))
 
 	reader := bufio.NewReader(bytes.NewReader(buf))
 	handler := NewTcpHandler(&mockRemoteDataStore{
-		Imei:       "357454075177072",
+		Imei:       "752533678900242",
 		DeviceType: types.DeviceType_WANWAY,
 	})
 	protocol, ack, err := handler.attemptDeviceLogin(reader)
 
 	assert.NoError(t, err, "device login should succeed")
 	assert.IsType(t, &wanway.WanwayProtocol{}, protocol, "protocol should be of type TeltonikaProtocol")
-	assert.Equal(t, "357454075177072", protocol.GetDeviceIdentifier(), "imei should be parsed correctly")
-	// assert.Equal(t, []byte{0x78, 0x78, 0x11, 0x01, 0x00, 0x01, 0xbb, 0x1a, 0x0d, 0x0a}, ack, "login ack should be of the format as wanway expects")
-	assert.Equal(t, []byte{0x78, 0x78, 0x11, 0x01, 0x00, 0x01, 0x91, 0x40, 0x0d, 0x0a}, ack, "login ack should be of the format as wanway expects")
+	assert.Equal(t, "752533678900242", protocol.GetDeviceIdentifier(), "imei should be parsed correctly")
+	assert.Equal(t, []byte{0x78, 0x78, 0x11, 0x01, 0x00, 0x05, 0x12, 0x79, 0x0d, 0x0a}, ack, "login ack should be of the format as wanway expects")
 }
 
 func TestUnkonwnDeviceLogin(t *testing.T) {

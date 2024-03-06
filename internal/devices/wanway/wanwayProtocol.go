@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/404minds/avl-receiver/internal/crc"
@@ -113,12 +114,15 @@ func (p *WanwayProtocol) parseWanwayPacket(reader *bufio.Reader) (packet *Wanway
 	checkErr(binary.Read(reader, binary.BigEndian, &packet.PacketLength))
 
 	// packet data
-	packetData := make([]byte, packet.PacketLength-2) // 2 for crc
+	packetData := make([]byte, packet.PacketLength-4) // 2 for crc, 2 for serial number
 	_, err = io.ReadFull(reader, packetData)
 	checkErr(err)
 
 	// packet data to packet
 	checkErr(p.parsePacketData(bufio.NewReader(bytes.NewReader(packetData)), packet))
+
+	// information serial number
+	checkErr(binary.Read(reader, binary.BigEndian, &packet.InformationSerialNumber))
 
 	// crc
 	checkErr(binary.Read(reader, binary.BigEndian, &packet.Crc))
@@ -131,8 +135,18 @@ func (p *WanwayProtocol) parseWanwayPacket(reader *bufio.Reader) (packet *Wanway
 	}
 
 	// validate crc
-	expectedCrc := crc.Crc_Wanway(append([]byte{byte(packet.PacketLength)}, packetData...))
+	expectedCrc := crc.Crc_Wanway(
+		slices.Concat(
+			[]byte{byte(packet.PacketLength)},
+			packetData,
+			[]byte{
+				byte(packet.InformationSerialNumber >> 8),
+				byte(packet.InformationSerialNumber & 0xff),
+			},
+		),
+	)
 	if expectedCrc != packet.Crc {
+		logger.Sugar().Errorln("Invalid crc. Excpected %x, got %x", expectedCrc, packet.Crc)
 		return nil, errs.ErrWanwayBadCrc
 	}
 	return
@@ -153,21 +167,10 @@ func (p *WanwayProtocol) parsePacketData(reader *bufio.Reader, packet *WanwayPac
 
 	packet.MessageType = msgType
 
-	packetInfoBytes := make([]byte, packet.PacketLength-5) // 2 for info serial number, 2 for crc, 1 for msgType
-	bytesRead, err := io.ReadFull(reader, packetInfoBytes)
-	if bytesRead != int(packet.PacketLength)-5 {
-		return errs.ErrWanwayInvalidPacket
-	}
-
 	// TODO: parse packetInfoBytes
-	packet.Information, err = p.parsePacketInformation(bufio.NewReader(bytes.NewReader(packetInfoBytes)), packet.MessageType)
+	packet.Information, err = p.parsePacketInformation(reader, packet.MessageType)
 	if err != nil {
 		return err
-	}
-
-	err = binary.Read(reader, binary.BigEndian, &packet.InformationSerialNumber)
-	if err != nil {
-		return errs.ErrWanwayInvalidPacket
 	}
 
 	return nil

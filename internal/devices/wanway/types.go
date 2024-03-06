@@ -30,7 +30,7 @@ type WanwayHeartbeatData struct {
 	TerminalInformation WanwayTerminalInformation
 	BatteryLevel        WanwayBatteryLevel
 	GSMSignalStrength   WanwayGSMSignalStrength
-	ExtendedPortStatus  uint16 // 0x01 Chinese, 0x02 English
+	ExtendedPortStatus  uint16 // 0x0001 Chinese, 0x0002 English
 }
 
 type WanwayPositioningInformation struct {

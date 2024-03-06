@@ -1,11 +1,5 @@
 package crc
 
-import (
-	"bytes"
-	"encoding/binary"
-	"io"
-)
-
 var teltonika_crc_table = [256]uint16{
 
 	0x0000, 0xc0c1, 0xc181, 0x0140, 0xc301, 0x03c0, 0x0280, 0xc241, 0xc601,
@@ -85,17 +79,14 @@ var wanway_crc_table = [256]uint16{
 }
 
 func Crc_Wanway(buf []byte) uint16 {
-	var crc uint16 = 0xFFFF
-	reader := bytes.NewReader(buf)
+	var fcs uint16 = 0xffff
 
-	for {
-		var b uint16
-		err := binary.Read(reader, binary.BigEndian, &b)
-		if err == io.EOF {
-			break
-		}
-		crc = uint16(crc>>8) ^ uint16(wanway_crc_table[((crc)^uint16(b))&0xff])
+	var b16 uint16
+	for _, b8 := range buf {
+		b16 = uint16(b8)
+		crc_tab_idx := (fcs ^ b16) & 0x00ff
+		fcs = uint16(fcs>>8) ^ wanway_crc_table[crc_tab_idx]
 	}
+	return fcs ^ 0xffff
 
-	return crc ^ 0xffff
 }

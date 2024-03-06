@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/hex"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,7 +56,7 @@ func TestParseWanwaypacket(t *testing.T) {
 	typeIdentifier := "0518"
 	timezone := "4dd8"
 	informationNumber := "0001"
-	crc := "e2c0"
+	crc := "cb97"
 	stopBits := "0d0a"
 
 	data, _ := hex.DecodeString(startBit + packetLength + messageType + imei + typeIdentifier + timezone + informationNumber + crc + stopBits)
@@ -70,7 +71,7 @@ func TestParseWanwaypacket(t *testing.T) {
 		assert.Equal(t, int8(17), packet.PacketLength, "packet length should match")
 		assert.Equal(t, MSG_LoginData, packet.MessageType, "message type should match")
 		assert.Equal(t, uint16(0x0001), packet.InformationSerialNumber, "information serial number should match")
-		assert.Equal(t, uint16(0xe2c0), packet.Crc, "crc should match")
+		assert.Equal(t, uint16(0xcb97), packet.Crc, "crc should match")
 
 		if assert.IsType(t, &WanwayLoginData{}, packet.Information, "packet information should be of type WanwayLoginInformation") {
 			loginInfo := packet.Information.(*WanwayLoginData)
@@ -104,4 +105,58 @@ func TestWanwayLoginMessage(t *testing.T) {
 
 	expectedResponse := startBit + packetLength + messageType + informationNumber + crc + stopBits
 	assert.Equal(t, expectedResponse, hex.EncodeToString(ack))
+}
+
+func TestWanwayHeartbeatPacket(t *testing.T) {
+	bytestr := strings.ReplaceAll("78 78 0A 13 40 04 04 00 01 00 0F DC EE 0D 0A", " ", "")
+	data, _ := hex.DecodeString(bytestr)
+
+	p := WanwayProtocol{}
+
+	packet, err := p.parseWanwayPacket(bufio.NewReader(bytes.NewReader(data)))
+	assert.NoError(t, err, "should parse heartbeat packet")
+
+	assert.Equal(t, uint16(0x7878), packet.StartBit, "start bits should match")
+	assert.Equal(t, uint16(0x0d0a), packet.StopBits, "stop bits should match")
+	assert.Equal(t, int8(10), packet.PacketLength, "packet length should match")
+	assert.Equal(t, WanwayMessageType(MSG_HeartbeatData), packet.MessageType, "message type should match")
+	assert.Equal(t, uint16(0x000f), packet.InformationSerialNumber, "information serial number should match")
+	assert.Equal(t, uint16(0xdcee), packet.Crc, "crc should match")
+
+	heartbeatData := packet.Information.(WanwayHeartbeatData)
+	assert.Equal(t, false, heartbeatData.TerminalInformation.OilElectricityConnected, "termInfo: oil electricity connected should match")
+	assert.Equal(t, true, heartbeatData.TerminalInformation.GPSSignalAvailable, "termInfo: gps signal available")
+	assert.Equal(t, false, heartbeatData.TerminalInformation.Charging, "termInfo: charging should match")
+	assert.Equal(t, false, heartbeatData.TerminalInformation.ACCHigh, "termInfo: acc high should match")
+	assert.Equal(t, false, heartbeatData.TerminalInformation.Armed, "termInfo: armed should match")
+
+	assert.Equal(t, WanwayBatteryLevel(VL_BatteryMedium), heartbeatData.BatteryLevel, "battery level should match")
+	assert.Equal(t, WanwayGSMSignalStrength(GSM_StrongSignal), heartbeatData.GSMSignalStrength, "gsm signal strength should match")
+	assert.Equal(t, uint16(0x0001), heartbeatData.ExtendedPortStatus, "alarm status should match")
+}
+
+func TestGpsLocationPacket(t *testing.T) {
+	// bytestr := strings.ReplaceAll("78 78 22 22 0F 0C 1D 02 33 05 C9 02 7A C8 18 0C 46 58 60 00 14 00 01 CC 00 28 7D 00 1F 71 00 00 01 00 08 20 86 0D 0A", " ", "")
+	bytestr := strings.ReplaceAll("78 78 22 22 0F 0C 1D 02 33 05 C9 02 7A C8 18 0C 46 58 60 00 14 00 01 CC 00 28 7D 00 1F 71 00 00 01 00 00 00 00 00 08 20 86 0D 0A", " ", "")
+	//  inserting zero for milege bytes because the packet in example has 4 missing bytes
+	data, _ := hex.DecodeString(bytestr)
+
+	p := WanwayProtocol{LoginInformation: &WanwayLoginData{Timezone: time.UTC}}
+
+	packet, err := p.parseWanwayPacket(bufio.NewReader(bytes.NewReader(data)))
+	assert.NoError(t, err, "should parse gps location packet")
+
+	assert.Equal(t, uint16(0x7878), packet.StartBit, "start bits should match")
+	assert.Equal(t, uint16(0x0d0a), packet.StopBits, "stop bits should match")
+	assert.Equal(t, int8(34), packet.PacketLength, "packet length should match")
+	assert.Equal(t, WanwayMessageType(MSG_PositioningData), packet.MessageType, "message type should match")
+	assert.Equal(t, uint16(0x0008), packet.InformationSerialNumber, "information serial number should match")
+	assert.Equal(t, uint16(0x2086), packet.Crc, "crc should match")
+
+	gpsData := packet.Information.(WanwayGPSInformation)
+	assert.Equal(t, time.Date(16, 12, 29, 2, 51, 5, 0, time.UTC), gpsData.Timestamp, "latitude degree should match")
+	assert.Equal(t, uint(8), gpsData.GPSInfoLength, "gps info length should match")
+	assert.Equal(t, uint(9), gpsData.NumberOfSatellites, "number of satellites length should match")
+	assert.Equal(t, float32(41601048/1800000), gpsData.Latitude, "latitude should match")
+	assert.Equal(t, float32(52719804416/1800000), gpsData.Longitude, "latitude should match")
 }
