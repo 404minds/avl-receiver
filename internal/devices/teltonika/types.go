@@ -128,6 +128,8 @@ func (r *TeltonikaRecord) ToProtobufDeviceStatus() *types.DeviceStatus {
 	// vehicle info
 	info.VehicleStatus = &types.VehicleStatus{}
 	info.VehicleStatus.Ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0
+	info.VehicleStatus.Overspeeding = r.Record.IOElement.Properties1B[TIO_Overspeeding] > 0
+	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
 
 	rawdata, _ := json.Marshal(r)
 	info.RawData = &types.DeviceStatus_TeltonikaPacket{

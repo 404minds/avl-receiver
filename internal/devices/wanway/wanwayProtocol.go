@@ -19,10 +19,23 @@ var logger = configuredLogger.Logger
 
 type WanwayProtocol struct {
 	LoginInformation *WanwayLoginData
+	DeviceType       types.DeviceType
 }
 
 func (p *WanwayProtocol) GetDeviceIdentifier() string {
 	return p.LoginInformation.TerminalID
+}
+
+func (p *WanwayProtocol) GetDeviceType() types.DeviceType {
+	return p.DeviceType
+}
+
+func (p *WanwayProtocol) SetDeviceType(t types.DeviceType) {
+	p.DeviceType = t
+}
+
+func (p *WanwayProtocol) GetProtocolType() types.DeviceProtocolType {
+	return types.DeviceProtocolType_GT06
 }
 
 func (p *WanwayProtocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int, e error) {
@@ -39,9 +52,8 @@ func (p *WanwayProtocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int
 	if packet.MessageType == MSG_LoginData {
 		p.LoginInformation = packet.Information.(*WanwayLoginData)
 
-		var byteBuffer bytes.Buffer
-		var writer = bufio.NewWriter(&byteBuffer)
-		err = p.sendResponse(packet, writer)
+		byteBuffer := bytes.NewBuffer([]byte{})
+		err = p.sendResponse(packet, byteBuffer)
 		if err != nil {
 			logger.Sugar().Error("failed to parse wanway packet ", err)
 			return nil, 0, err
@@ -53,7 +65,7 @@ func (p *WanwayProtocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int
 	}
 }
 
-func (p *WanwayProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Writer, storeProcessChan chan types.DeviceStatus) error {
+func (p *WanwayProtocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, storeProcessChan chan types.DeviceStatus) error {
 	for {
 		packet, err := p.parseWanwayPacket(reader)
 		if err != nil {
@@ -64,12 +76,12 @@ func (p *WanwayProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Write
 			return err
 		}
 
-		protoPacket := packet.ToProtobufDeviceStatus(p.GetDeviceIdentifier(), types.DeviceType_WANWAY)
+		protoPacket := packet.ToProtobufDeviceStatus(p.GetDeviceIdentifier(), p.DeviceType)
 		storeProcessChan <- *protoPacket
 	}
 }
 
-func (p *WanwayProtocol) sendResponse(parsedPacket *WanwayPacket, writer *bufio.Writer) (err error) {
+func (p *WanwayProtocol) sendResponse(parsedPacket *WanwayPacket, writer io.Writer) (err error) {
 	defer func() {
 		if condition := recover(); condition != nil {
 			err = condition.(error)
@@ -77,21 +89,21 @@ func (p *WanwayProtocol) sendResponse(parsedPacket *WanwayPacket, writer *bufio.
 		}
 	}()
 
-	if parsedPacket.MessageType == MSG_LoginData {
-		responsePacket := ResponsePacket{
-			StartBit:                parsedPacket.StartBit,
-			PacketLength:            parsedPacket.PacketLength,
-			ProtocolNumber:          int8(parsedPacket.MessageType),
-			InformationSerialNumber: parsedPacket.InformationSerialNumber,
-			Crc:                     parsedPacket.Crc,
-			StopBits:                parsedPacket.StopBits,
-		}
-		_, err := writer.Write(responsePacket.ToBytes())
-		checkErr(err)
-		checkErr(writer.Flush())
-	} else {
-		return nil
+	// if parsedPacket.MessageType == MSG_LoginData {
+	responsePacket := ResponsePacket{
+		StartBit:                parsedPacket.StartBit,
+		PacketLength:            parsedPacket.PacketLength,
+		ProtocolNumber:          int8(parsedPacket.MessageType),
+		InformationSerialNumber: parsedPacket.InformationSerialNumber,
+		Crc:                     parsedPacket.Crc,
+		StopBits:                parsedPacket.StopBits,
 	}
+	_, err = writer.Write(responsePacket.ToBytes())
+	checkErr(err)
+	//checkErr(writer.Flush())
+	// } else {
+	// 	return nil
+	// }
 	return nil
 }
 

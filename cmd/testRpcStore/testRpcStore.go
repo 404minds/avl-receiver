@@ -23,6 +23,7 @@ type server struct {
 var knownImei = map[string]types.DeviceType{
 	"357454075177072": types.DeviceType_TELTONIKA,
 	"356307043721579": types.DeviceType_WANWAY,
+	"867440060961653": types.DeviceType_CONCOX,
 }
 
 func (s *server) VerifyDevice(ctx context.Context, req *store.VerifyDeviceRequest) (*store.VerifyDeviceReply, error) {

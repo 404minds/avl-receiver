@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"slices"
 
 	devices "github.com/404minds/avl-receiver/internal/devices"
 	errs "github.com/404minds/avl-receiver/internal/errors"
@@ -18,17 +19,19 @@ import (
 
 var logger = configuredLogger.Logger
 
-const BUFFER_SIZE = 256 // bytes
-
-type tcpHandler struct {
-	connToProtocolMap     map[string]devices.DeviceProtocol // make this an LRU cache to evict stale connections
-	registeredDeviceTypes []types.DeviceType
-	connToStoreMap        map[string]store.Store
-	remoteStoreClient     store.AvlDataStoreClient
+type TcpHandler struct {
+	connToProtocolMap   map[string]devices.DeviceProtocol // make this an LRU cache to evict stale connections
+	registeredProtocols []types.DeviceProtocolType
+	connToStoreMap      map[string]store.Store
+	remoteStoreClient   store.AvlDataStoreClient
 }
 
-func (t *tcpHandler) HandleConnection(conn net.Conn) {
+func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	defer conn.Close()
+	defer func() {
+		delete(t.connToProtocolMap, conn.RemoteAddr().String())
+		delete(t.connToStoreMap, conn.RemoteAddr().String())
+	}()
 
 	reader := bufio.NewReader(conn)
 
@@ -45,13 +48,16 @@ func (t *tcpHandler) HandleConnection(conn net.Conn) {
 	defer func() { dataStore.GetCloseChan() <- true }()
 
 	t.connToStoreMap[conn.RemoteAddr().String()] = dataStore
-	conn.Write(ack)
+	_, err = conn.Write(ack)
+	if err != nil {
+		logger.Sugar().Error("Error while writing login ack", err)
+		return
+	}
 
-	writer := bufio.NewWriter(conn)
-	err = deviceProtocol.ConsumeStream(reader, writer, dataStore.GetProcessChan())
+	err = deviceProtocol.ConsumeStream(reader, conn, dataStore.GetProcessChan())
 	if err != nil && err != io.EOF {
-		logger.Sugar().Errorf("Error reading from connection %s", conn.RemoteAddr().String())
-		logger.Error(err.Error())
+		logger.Sugar().Errorf("Error reading from connection %s", conn.RemoteAddr().String(), err)
+		//logger.Error(err.Error())
 		return
 	} else if err == io.EOF {
 		logger.Sugar().Infof("Connection %s closed", conn.RemoteAddr().String())
@@ -82,9 +88,9 @@ func makeJsonStore(datadir string, deviceIdentifier string) store.Store {
 	}
 }
 
-func (t *tcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DeviceProtocol, []byte, error) {
-	for _, deviceType := range t.registeredDeviceTypes {
-		protocol := devices.MakeProtocolForDeviceType(deviceType)
+func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DeviceProtocol, []byte, error) {
+	for _, protocolType := range t.registeredProtocols {
+		protocol := devices.MakeProtocolForType(protocolType)
 		ack, bytesToSkip, err := protocol.Login(reader)
 
 		if err != nil {
@@ -94,7 +100,7 @@ func (t *tcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DevicePro
 				return nil, nil, err
 			}
 		} else {
-			logger.Sugar().Infof("Device identified to be of type %s with identifier %s, bytes to skip %d", deviceType.String(), protocol.GetDeviceIdentifier(), bytesToSkip)
+			logger.Sugar().Infof("Protocol identified to be of type %s with identifier %s, bytes to skip %d", protocolType.String(), protocol.GetDeviceIdentifier(), bytesToSkip)
 			if _, err := reader.Discard(bytesToSkip); err != nil {
 				return nil, nil, err
 			}
@@ -105,9 +111,12 @@ func (t *tcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DevicePro
 			if err != nil {
 				logger.Sugar().Errorf("failed to verify device %s", protocol.GetDeviceIdentifier())
 			}
-			if reply.GetImei() != protocol.GetDeviceIdentifier() || reply.GetDeviceType() != deviceType {
+			if reply.GetImei() != protocol.GetDeviceIdentifier() || slices.Contains(devices.GetDeviceTypesForProtocol(protocolType), reply.GetDeviceType()) == false {
 				logger.Sugar().Infof("Device %s is not authorized to connect", protocol.GetDeviceIdentifier())
 				return nil, nil, errs.ErrUnauthorizedDevice
+			} else {
+				protocol.SetDeviceType(reply.GetDeviceType())
+				logger.Sugar().Infof("Login successful for device %s of type %s", protocol.GetDeviceIdentifier(), protocol.GetDeviceType())
 			}
 
 			return protocol, ack, nil

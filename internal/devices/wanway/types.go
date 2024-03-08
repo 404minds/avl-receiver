@@ -101,12 +101,12 @@ type ResponsePacket struct {
 
 func (r *ResponsePacket) ToBytes() []byte {
 	var b bytes.Buffer
-	binary.Write(&b, binary.BigEndian, r.StartBit)
-	binary.Write(&b, binary.BigEndian, r.PacketLength)
-	binary.Write(&b, binary.BigEndian, r.ProtocolNumber)
-	binary.Write(&b, binary.BigEndian, r.InformationSerialNumber)
-	binary.Write(&b, binary.BigEndian, r.Crc)
-	binary.Write(&b, binary.BigEndian, r.StopBits)
+	_ = binary.Write(&b, binary.BigEndian, r.StartBit)
+	_ = binary.Write(&b, binary.BigEndian, r.PacketLength)
+	_ = binary.Write(&b, binary.BigEndian, r.ProtocolNumber)
+	_ = binary.Write(&b, binary.BigEndian, r.InformationSerialNumber)
+	_ = binary.Write(&b, binary.BigEndian, r.Crc)
+	_ = binary.Write(&b, binary.BigEndian, r.StopBits)
 	return b.Bytes()
 }
 
@@ -303,6 +303,7 @@ func (packet *WanwayPacket) ToProtobufDeviceStatus(imei string, deviceType types
 	switch v := packet.Information.(type) {
 	case *WanwayPositioningInformation:
 		info.VehicleStatus.Ignition = v.ACCHigh
+		info.VehicleStatus.Overspeeding = false
 	case *WanwayAlarmInformation:
 		info.VehicleStatus.Ignition = v.StatusInformation.TerminalInformation.ACCHigh
 	case *WanwayHeartbeatData:

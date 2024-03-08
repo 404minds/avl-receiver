@@ -12,6 +12,11 @@ enum DeviceType {
     CONCOX = 2;
 }
 
+enum DeviceProtocolType {
+    FM1200 = 0;
+    GT06 = 1;
+}
+
 message DeviceStatus {
     string imei = 1;
     DeviceType device_type = 2;
@@ -36,6 +41,8 @@ message GPSPosition {
 
 message VehicleStatus {
     bool ignition = 1;
+    bool overspeeding = 2;
+    bool rash_driving = 3;
 }
 
 message WanwayPacket {

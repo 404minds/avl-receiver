@@ -16,11 +16,24 @@ import (
 var logger = configuredLogger.Logger
 
 type TeltonikaProtocol struct {
-	Imei string
+	Imei       string
+	DeviceType types.DeviceType
 }
 
 func (t *TeltonikaProtocol) GetDeviceIdentifier() string {
 	return t.Imei
+}
+
+func (p *TeltonikaProtocol) GetDeviceType() types.DeviceType {
+	return p.DeviceType
+}
+
+func (p *TeltonikaProtocol) SetDeviceType(t types.DeviceType) {
+	p.DeviceType = t
+}
+
+func (p *TeltonikaProtocol) GetProtocolType() types.DeviceProtocolType {
+	return types.DeviceProtocolType_FM1200
 }
 
 func (t *TeltonikaProtocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip int, e error) {
@@ -37,7 +50,7 @@ func (t *TeltonikaProtocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip
 	return []byte{0x01}, bytesToSkip, nil
 }
 
-func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Writer, storeProcessChan chan types.DeviceStatus) error {
+func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, storeProcessChan chan types.DeviceStatus) error {
 	for {
 		err := t.consumeMessage(reader, storeProcessChan, writer)
 		if err != nil {
@@ -50,7 +63,7 @@ func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer *bufio.Wr
 	}
 }
 
-func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessChan chan types.DeviceStatus, writer *bufio.Writer) (err error) {
+func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessChan chan types.DeviceStatus, writer io.Writer) (err error) {
 	var headerZeros uint32
 	err = binary.Read(reader, binary.BigEndian, &headerZeros)
 	if err != nil {
@@ -103,7 +116,7 @@ func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessCha
 		logger.Sugar().Error("failed to write ack for incoming data", err)
 		return fmt.Errorf("failed to write ack for incoming data: %w", err)
 	}
-	err = writer.Flush()
+	//err = writer.Flush()
 	if err != nil {
 		logger.Sugar().Error("failed to flush ack for incoming data", err)
 		return fmt.Errorf("failed to flush ack for incoming data: %w", err)
