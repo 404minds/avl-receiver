@@ -1,4 +1,4 @@
-package wanway
+package gt06
 
 import (
 	"bytes"
@@ -10,49 +10,49 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type WanwayPacket struct {
+type Packet struct {
 	StartBit                uint16
 	PacketLength            int8
-	MessageType             WanwayMessageType
+	MessageType             MessageType
 	Information             interface{}
 	InformationSerialNumber uint16
 	Crc                     uint16
 	StopBits                uint16
 }
 
-type WanwayLoginData struct {
+type LoginData struct {
 	TerminalID   string
 	TerminalType [2]byte
 	Timezone     *time.Location
 }
 
-type WanwayHeartbeatData struct {
-	TerminalInformation WanwayTerminalInformation
-	BatteryLevel        WanwayBatteryLevel
-	GSMSignalStrength   WanwayGSMSignalStrength
+type HeartbeatData struct {
+	TerminalInformation TerminalInformation
+	BatteryLevel        BatteryLevel
+	GSMSignalStrength   GSMSignalStrength
 	ExtendedPortStatus  uint16 // 0x0001 Chinese, 0x0002 English
 }
 
-type WanwayPositioningInformation struct {
-	GpsInformation    WanwayGPSInformation
-	LBSInfo           WanwayLBSInformation
+type PositioningInformation struct {
+	GpsInformation    GPSInformation
+	LBSInfo           LBSInformation
 	ACCHigh           bool
-	DataReportingMode WanwayGPSDataUploadMode // for concox, but not for wanway
-	GPSRealTime       bool                    // 0x00 - realtime, 0x01 - re-upload
+	DataReportingMode GPSDataUploadMode // for concox, but not for gt06
+	GPSRealTime       bool              // 0x00 - realtime, 0x01 - re-upload
 	MileageStatistics uint32
 }
 
-type WanwayGPSInformation struct {
+type GPSInformation struct {
 	Timestamp          time.Time
 	GPSInfoLength      uint8
 	NumberOfSatellites uint8
 	Latitude           float32
 	Longitude          float32
-	Speed              uint8           // gpsSpeed
-	Course             WanwayGPSCourse // course/heading - running direction of GPS
+	Speed              uint8     // gpsSpeed
+	Course             GPSCourse // course/heading - running direction of GPS
 }
 
-type WanwayGPSCourse struct {
+type GPSCourse struct {
 	IsRealtime     bool
 	IsDifferential bool
 	Positioned     bool
@@ -61,30 +61,30 @@ type WanwayGPSCourse struct {
 	Degree         uint16
 }
 
-type WanwayLBSInformation struct {
+type LBSInformation struct {
 	MCC    uint16 // mobile country code
 	MNC    uint8  // mobile network code
 	LAC    uint16 // location area code
 	CellID [3]byte
 }
 
-type WanwayAlarmInformation struct {
-	GpsInformation    WanwayGPSInformation
-	LBSInformation    WanwayLBSInformation
-	StatusInformation WanwayStatusInformation
+type AlarmInformation struct {
+	GpsInformation    GPSInformation
+	LBSInformation    LBSInformation
+	StatusInformation StatusInformation
 }
 
-type WanwayStatusInformation struct {
-	TerminalInformation WanwayTerminalInformation
-	BatteryLevel        WanwayBatteryLevel
-	GSMSignalStrength   WanwayGSMSignalStrength
+type StatusInformation struct {
+	TerminalInformation TerminalInformation
+	BatteryLevel        BatteryLevel
+	GSMSignalStrength   GSMSignalStrength
 	AlarmStatus         uint16
 }
 
-type WanwayTerminalInformation struct {
+type TerminalInformation struct {
 	OilElectricityConnected bool
 	GPSSignalAvailable      bool
-	AlarmType               WanwayAlarmType // concox has no alarm type, while wanway does
+	AlarmType               AlarmType // concox has no alarm type, while gt06 does
 	Charging                bool
 	ACCHigh                 bool
 	Armed                   bool
@@ -110,23 +110,23 @@ func (r *ResponsePacket) ToBytes() []byte {
 	return b.Bytes()
 }
 
-type WanwayMessageType byte
+type MessageType byte
 
 const (
-	MSG_LoginData               WanwayMessageType = 0x01
-	MSG_PositioningData                           = 0x22
-	MSG_HeartbeatData                             = 0x13
-	MSG_StringInformation                         = 0x21
-	MSG_AlarmData                                 = 0x26
-	MSG_LBSInformation                            = 0x28 // TODO: check if this is correct
-	MSG_TimezoneInformation                       = 0x27
-	MSG_GPS_PhoneNumber                           = 0x2a
-	MSG_WifiInformation                           = 0x2c
-	MSG_TransmissionInstruction                   = 0x80
-	MSG_Invalid                                   = 0xff
+	MSG_LoginData               MessageType = 0x01
+	MSG_PositioningData                     = 0x22
+	MSG_HeartbeatData                       = 0x13
+	MSG_StringInformation                   = 0x21
+	MSG_AlarmData                           = 0x26
+	MSG_LBSInformation                      = 0x28 // TODO: check if this is correct
+	MSG_TimezoneInformation                 = 0x27
+	MSG_GPS_PhoneNumber                     = 0x2a
+	MSG_WifiInformation                     = 0x2c
+	MSG_TransmissionInstruction             = 0x80
+	MSG_Invalid                             = 0xff
 )
 
-func WanwayMessageTypeFromId(id byte) WanwayMessageType {
+func MessageTypeFromId(id byte) MessageType {
 	// write switch cases to create message type from byte id
 	switch id {
 	case 0x01:
@@ -154,18 +154,18 @@ func WanwayMessageTypeFromId(id byte) WanwayMessageType {
 	}
 }
 
-type WanwayAlarmType uint8 // alarm type is 3 bit info, trying to encode it to 8 bit
+type AlarmType uint8 // alarm type is 3 bit info, trying to encode it to 8 bit
 
 const (
-	AL_SOSDistress  WanwayAlarmType = 0x04 // 100 -> 0000 0100
-	AL_LowBattery                   = 0x03 // 011 -> 0000 0011
-	AL_PowerFailure                 = 0x02 // 010 -> 0000 0010
-	AL_Vibration                    = 0x01 // 001 -> 0000 0001
-	AL_Normal                       = 0x00 // 000 -> 0000 0000
-	AL_Invalid                      = 0xff
+	AL_SOSDistress  AlarmType = 0x04 // 100 -> 0000 0100
+	AL_LowBattery             = 0x03 // 011 -> 0000 0011
+	AL_PowerFailure           = 0x02 // 010 -> 0000 0010
+	AL_Vibration              = 0x01 // 001 -> 0000 0001
+	AL_Normal                 = 0x00 // 000 -> 0000 0000
+	AL_Invalid                = 0xff
 )
 
-func WanwayAlarmTypeFromId(id byte) WanwayAlarmType {
+func AlarmTypeFromId(id byte) AlarmType {
 	switch id {
 	case 0x04:
 		return AL_SOSDistress
@@ -182,20 +182,20 @@ func WanwayAlarmTypeFromId(id byte) WanwayAlarmType {
 	}
 }
 
-type WanwayBatteryLevel uint8
+type BatteryLevel uint8
 
 const (
-	VL_NoPower             WanwayBatteryLevel = 0x00
-	VL_BatteryExtremelyLow                    = 0x01
-	VL_BatteryVeryLow                         = 0x02
-	VL_BatteryLow                             = 0x03
-	VL_BatteryMedium                          = 0x04
-	VL_BatteryHigh                            = 0x05
-	VL_BatteryFull                            = 0x06
-	VL_Invalid                                = 0xff
+	VL_NoPower             BatteryLevel = 0x00
+	VL_BatteryExtremelyLow              = 0x01
+	VL_BatteryVeryLow                   = 0x02
+	VL_BatteryLow                       = 0x03
+	VL_BatteryMedium                    = 0x04
+	VL_BatteryHigh                      = 0x05
+	VL_BatteryFull                      = 0x06
+	VL_Invalid                          = 0xff
 )
 
-func WanwayBatteryLevelFromByte(b byte) WanwayBatteryLevel {
+func BatteryLevelFromByte(b byte) BatteryLevel {
 	switch b {
 	case 0x00:
 		return VL_NoPower
@@ -216,18 +216,18 @@ func WanwayBatteryLevelFromByte(b byte) WanwayBatteryLevel {
 	}
 }
 
-type WanwayGSMSignalStrength uint8
+type GSMSignalStrength uint8
 
 const (
-	GSM_NoSignal            WanwayGSMSignalStrength = 0x00
-	GSM_ExtremelyWeakSignal                         = 0x01
-	GSM_WeakSignal                                  = 0x02
-	GSM_GoodSignal                                  = 0x03
-	GSM_StrongSignal                                = 0x04
-	GSM_Invalid                                     = 0xff
+	GSM_NoSignal            GSMSignalStrength = 0x00
+	GSM_ExtremelyWeakSignal                   = 0x01
+	GSM_WeakSignal                            = 0x02
+	GSM_GoodSignal                            = 0x03
+	GSM_StrongSignal                          = 0x04
+	GSM_Invalid                               = 0xff
 )
 
-func WanwayGSMSignalStrengthFromByte(b byte) WanwayGSMSignalStrength {
+func GSMSignalStrengthFromByte(b byte) GSMSignalStrength {
 	switch b {
 	case 0x00:
 		return GSM_NoSignal
@@ -244,9 +244,9 @@ func WanwayGSMSignalStrengthFromByte(b byte) WanwayGSMSignalStrength {
 	}
 }
 
-type WanwayGPSDataUploadMode uint8
+type GPSDataUploadMode uint8
 
-func (m *WanwayGPSDataUploadMode) ToString() string {
+func (m *GPSDataUploadMode) ToString() string {
 	switch *m {
 	case 0x00:
 		return "Upload by time interval"
@@ -279,7 +279,7 @@ func (m *WanwayGPSDataUploadMode) ToString() string {
 	}
 }
 
-func (packet *WanwayPacket) ToProtobufDeviceStatus(imei string, deviceType types.DeviceType) *types.DeviceStatus {
+func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.DeviceType) *types.DeviceStatus {
 	info := &types.DeviceStatus{}
 
 	info.Imei = imei
@@ -290,8 +290,8 @@ func (packet *WanwayPacket) ToProtobufDeviceStatus(imei string, deviceType types
 
 	// location info
 	switch v := packet.Information.(type) {
-	case *WanwayPositioningInformation:
-	case *WanwayAlarmInformation:
+	case *PositioningInformation:
+	case *AlarmInformation:
 		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
 		info.Position.Latitude = v.GpsInformation.Latitude
 		info.Position.Longitude = v.GpsInformation.Longitude
@@ -301,12 +301,12 @@ func (packet *WanwayPacket) ToProtobufDeviceStatus(imei string, deviceType types
 
 	// vehicle status
 	switch v := packet.Information.(type) {
-	case *WanwayPositioningInformation:
+	case *PositioningInformation:
 		info.VehicleStatus.Ignition = v.ACCHigh
 		info.VehicleStatus.Overspeeding = false
-	case *WanwayAlarmInformation:
+	case *AlarmInformation:
 		info.VehicleStatus.Ignition = v.StatusInformation.TerminalInformation.ACCHigh
-	case *WanwayHeartbeatData:
+	case *HeartbeatData:
 		info.VehicleStatus.Ignition = v.TerminalInformation.ACCHigh
 	default:
 	}

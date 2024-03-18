@@ -1,10 +1,11 @@
-package wanway
+package gt06
 
 import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"go.uber.org/zap"
 	"io"
 	"slices"
 	"time"
@@ -17,57 +18,57 @@ import (
 
 var logger = configuredLogger.Logger
 
-type WanwayProtocol struct {
-	LoginInformation *WanwayLoginData
+type GT06Protocol struct {
+	LoginInformation *LoginData
 	DeviceType       types.DeviceType
 }
 
-func (p *WanwayProtocol) GetDeviceIdentifier() string {
+func (p *GT06Protocol) GetDeviceID() string {
 	return p.LoginInformation.TerminalID
 }
 
-func (p *WanwayProtocol) GetDeviceType() types.DeviceType {
+func (p *GT06Protocol) GetDeviceType() types.DeviceType {
 	return p.DeviceType
 }
 
-func (p *WanwayProtocol) SetDeviceType(t types.DeviceType) {
+func (p *GT06Protocol) SetDeviceType(t types.DeviceType) {
 	p.DeviceType = t
 }
 
-func (p *WanwayProtocol) GetProtocolType() types.DeviceProtocolType {
+func (p *GT06Protocol) GetProtocolType() types.DeviceProtocolType {
 	return types.DeviceProtocolType_GT06
 }
 
-func (p *WanwayProtocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int, e error) {
-	if !p.IsWanwayHeader(reader) {
-		return nil, 0, errs.ErrNotWanwayDevice
+func (p *GT06Protocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int, e error) {
+	if !p.IsValidHeader(reader) {
+		return nil, 0, errs.ErrUnknownProtocol
 	}
 
-	// this should have been a wanway device
-	packet, err := p.parseWanwayPacket(reader)
+	// this should have been a gt06 device
+	packet, err := p.parsePacket(reader)
 	if err != nil {
-		logger.Sugar().Error("failed to parse wanway packet ", err)
+		logger.Error("failed to parse gt06 packet ", zap.Error(err))
 		return nil, 0, err
 	}
 	if packet.MessageType == MSG_LoginData {
-		p.LoginInformation = packet.Information.(*WanwayLoginData)
+		p.LoginInformation = packet.Information.(*LoginData)
 
 		byteBuffer := bytes.NewBuffer([]byte{})
 		err = p.sendResponse(packet, byteBuffer)
 		if err != nil {
-			logger.Sugar().Error("failed to parse wanway packet ", err)
+			logger.Error("failed to parse gt06 packet ", zap.Error(err))
 			return nil, 0, err
 		}
 
 		return byteBuffer.Bytes(), 0, nil // nothing to skip since the stream is already consumed
 	} else {
-		return nil, 0, errs.ErrWanwayInvalidLoginInfo
+		return nil, 0, errs.ErrGT06InvalidLoginInfo
 	}
 }
 
-func (p *WanwayProtocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, storeProcessChan chan types.DeviceStatus) error {
+func (p *GT06Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, asyncStore chan types.DeviceStatus) error {
 	for {
-		packet, err := p.parseWanwayPacket(reader)
+		packet, err := p.parsePacket(reader)
 		if err != nil {
 			return err
 		}
@@ -76,20 +77,19 @@ func (p *WanwayProtocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, s
 			return err
 		}
 
-		protoPacket := packet.ToProtobufDeviceStatus(p.GetDeviceIdentifier(), p.DeviceType)
-		storeProcessChan <- *protoPacket
+		protoPacket := packet.ToProtobufDeviceStatus(p.GetDeviceID(), p.DeviceType)
+		asyncStore <- *protoPacket
 	}
 }
 
-func (p *WanwayProtocol) sendResponse(parsedPacket *WanwayPacket, writer io.Writer) (err error) {
+func (p *GT06Protocol) sendResponse(parsedPacket *Packet, writer io.Writer) (err error) {
 	defer func() {
 		if condition := recover(); condition != nil {
 			err = condition.(error)
-			logger.Sugar().Error("failed to write response packet", err)
+			logger.Error("failed to write response packet", zap.Error(err))
 		}
 	}()
 
-	// if parsedPacket.MessageType == MSG_LoginData {
 	responsePacket := ResponsePacket{
 		StartBit:                parsedPacket.StartBit,
 		PacketLength:            parsedPacket.PacketLength,
@@ -100,24 +100,20 @@ func (p *WanwayProtocol) sendResponse(parsedPacket *WanwayPacket, writer io.Writ
 	}
 	_, err = writer.Write(responsePacket.ToBytes())
 	checkErr(err)
-	//checkErr(writer.Flush())
-	// } else {
-	// 	return nil
-	// }
 	return nil
 }
 
-func (p *WanwayProtocol) parseWanwayPacket(reader *bufio.Reader) (packet *WanwayPacket, err error) {
+func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
 			if err != io.EOF {
-				err = errs.ErrWanwayInvalidPacket
+				err = errs.ErrGT06BadDataPacket
 			}
 		}
 	}()
 
-	packet = &WanwayPacket{}
+	packet = &Packet{}
 
 	// start bit
 	checkErr(binary.Read(reader, binary.BigEndian, &packet.StartBit))
@@ -147,7 +143,7 @@ func (p *WanwayProtocol) parseWanwayPacket(reader *bufio.Reader) (packet *Wanway
 	}
 
 	// validate crc
-	expectedCrc := crc.Crc_Wanway(
+	expectedCrc := crc.CrcWanway(
 		slices.Concat(
 			[]byte{byte(packet.PacketLength)},
 			packetData,
@@ -158,15 +154,15 @@ func (p *WanwayProtocol) parseWanwayPacket(reader *bufio.Reader) (packet *Wanway
 		),
 	)
 	if expectedCrc != packet.Crc {
-		logger.Sugar().Errorln("Invalid crc. Excpected %x, got %x", expectedCrc, packet.Crc)
-		return nil, errs.ErrWanwayBadCrc
+		logger.Sugar().Errorf("Invalid crc. Excpected %x, got %x", expectedCrc, packet.Crc)
+		return nil, errs.ErrBadCrc
 	}
 	return
 }
 
-func (p *WanwayProtocol) parsePacketData(reader *bufio.Reader, packet *WanwayPacket) error {
+func (p *GT06Protocol) parsePacketData(reader *bufio.Reader, packet *Packet) error {
 	protocolNumByte, err := reader.ReadByte()
-	msgType := WanwayMessageTypeFromId(protocolNumByte)
+	msgType := MessageTypeFromId(protocolNumByte)
 	if msgType == MSG_Invalid {
 		logger.Sugar().Errorf("Invalid message type: %x", protocolNumByte)
 		remainingData, err := p.consumePacket(reader)
@@ -174,7 +170,7 @@ func (p *WanwayProtocol) parsePacketData(reader *bufio.Reader, packet *WanwayPac
 			return err
 		}
 		logger.Sugar().Errorln("Invalid message type: ", hex.Dump(remainingData))
-		return errs.ErrWanwayInvalidPacket
+		return errs.ErrGT06BadDataPacket
 	}
 
 	packet.MessageType = msgType
@@ -188,7 +184,7 @@ func (p *WanwayProtocol) parsePacketData(reader *bufio.Reader, packet *WanwayPac
 	return nil
 }
 
-func (p *WanwayProtocol) consumePacket(reader *bufio.Reader) ([]byte, error) {
+func (p *GT06Protocol) consumePacket(reader *bufio.Reader) ([]byte, error) {
 	data := make([]byte, 0)
 	term := []byte{0x0d, 0x0a}
 
@@ -205,7 +201,7 @@ func (p *WanwayProtocol) consumePacket(reader *bufio.Reader) ([]byte, error) {
 	return data, nil
 }
 
-func (p *WanwayProtocol) parsePacketInformation(reader *bufio.Reader, messageType WanwayMessageType) (interface{}, error) {
+func (p *GT06Protocol) parsePacketInformation(reader *bufio.Reader, messageType MessageType) (interface{}, error) {
 	if messageType == MSG_LoginData {
 		parsedInfo, err := p.parseLoginInformation(reader)
 		return parsedInfo, err
@@ -219,29 +215,29 @@ func (p *WanwayProtocol) parsePacketInformation(reader *bufio.Reader, messageTyp
 		parsedInfo, err := p.parsehHeartbeatData(reader)
 		return parsedInfo, err
 	} else {
-		return nil, errs.ErrWanwayInvalidPacket
+		return nil, errs.ErrGT06BadDataPacket
 	}
 }
 
-func (p *WanwayProtocol) parseLoginInformation(reader *bufio.Reader) (interface{}, error) {
-	var loginInfo WanwayLoginData
+func (p *GT06Protocol) parseLoginInformation(reader *bufio.Reader) (interface{}, error) {
+	var loginInfo LoginData
 
 	var imeiBytes [8]byte
 	err := binary.Read(reader, binary.BigEndian, &imeiBytes)
 	if err != nil {
-		return nil, errs.ErrWanwayInvalidLoginInfo
+		return nil, errs.ErrGT06InvalidLoginInfo
 	}
 	loginInfo.TerminalID = hex.EncodeToString(imeiBytes[:])[1:] // imei is 15 chars
 
 	err = binary.Read(reader, binary.BigEndian, &loginInfo.TerminalType)
 	if err != nil {
-		return nil, errs.ErrWanwayInvalidLoginInfo
+		return nil, errs.ErrGT06InvalidLoginInfo
 	}
 
 	var timezoneOffset int16
 	err = binary.Read(reader, binary.BigEndian, &timezoneOffset)
 	if err != nil {
-		return nil, errs.ErrWanwayInvalidLoginInfo
+		return nil, errs.ErrGT06InvalidLoginInfo
 	}
 	timezonePart := int(timezoneOffset >> 4)
 	hours := timezonePart / 100
@@ -257,17 +253,17 @@ func (p *WanwayProtocol) parseLoginInformation(reader *bufio.Reader) (interface{
 	return &loginInfo, nil
 }
 
-func (p *WanwayProtocol) parsePositioningData(reader *bufio.Reader) (positionInfo interface{}, err error) {
+func (p *GT06Protocol) parsePositioningData(reader *bufio.Reader) (positionInfo interface{}, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
 			if err != io.EOF {
-				err = errs.ErrWanwayInvalidPacket
+				err = errs.ErrGT06BadDataPacket
 			}
 		}
 	}()
 
-	var parsed WanwayPositioningInformation
+	var parsed PositioningInformation
 
 	gpsInfo, err := p.parseGPSInformation(reader)
 	checkErr(err)
@@ -293,12 +289,12 @@ func (p *WanwayProtocol) parsePositioningData(reader *bufio.Reader) (positionInf
 	return &parsed, nil
 }
 
-func (p *WanwayProtocol) parseAlarmData(reader *bufio.Reader) (alarmInfo WanwayAlarmInformation, err error) {
+func (p *GT06Protocol) parseAlarmData(reader *bufio.Reader) (alarmInfo AlarmInformation, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
 			if err != io.EOF {
-				err = errs.ErrWanwayInvalidPacket
+				err = errs.ErrGT06BadDataPacket
 			}
 		}
 	}()
@@ -315,12 +311,12 @@ func (p *WanwayProtocol) parseAlarmData(reader *bufio.Reader) (alarmInfo WanwayA
 	return
 }
 
-func (p *WanwayProtocol) parsehHeartbeatData(reader *bufio.Reader) (heartbeat WanwayHeartbeatData, err error) {
+func (p *GT06Protocol) parsehHeartbeatData(reader *bufio.Reader) (heartbeat HeartbeatData, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
 			if err != io.EOF {
-				err = errs.ErrWanwayInvalidPacket
+				err = errs.ErrGT06BadDataPacket
 			}
 		}
 	}()
@@ -332,15 +328,15 @@ func (p *WanwayProtocol) parsehHeartbeatData(reader *bufio.Reader) (heartbeat Wa
 	checkErr(err)
 
 	checkErr(binary.Read(reader, binary.BigEndian, &b))
-	heartbeat.BatteryLevel = WanwayBatteryLevelFromByte(b)
+	heartbeat.BatteryLevel = BatteryLevelFromByte(b)
 	if heartbeat.BatteryLevel == VL_Invalid {
-		return heartbeat, errs.ErrWanwayInvalidVoltageLevel
+		return heartbeat, errs.ErrGT06InvalidVoltageLevel
 	}
 
 	checkErr(binary.Read(reader, binary.BigEndian, &b))
-	heartbeat.GSMSignalStrength = WanwayGSMSignalStrengthFromByte(b)
+	heartbeat.GSMSignalStrength = GSMSignalStrengthFromByte(b)
 	if heartbeat.GSMSignalStrength == GSM_Invalid {
-		return heartbeat, errs.ErrWanwayInvalidGSMSignalStrength
+		return heartbeat, errs.ErrGT06InvalidGSMSignalStrength
 	}
 
 	checkErr(binary.Read(reader, binary.BigEndian, &heartbeat.ExtendedPortStatus))
@@ -353,7 +349,7 @@ func checkErr(err error) {
 	}
 }
 
-func (p *WanwayProtocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo WanwayGPSInformation, err error) {
+func (p *GT06Protocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo GPSInformation, err error) {
 	timestamp, err := p.parseTimestamp(reader)
 	checkErr(err)
 	gpsInfo.Timestamp = timestamp
@@ -384,7 +380,7 @@ func (p *WanwayProtocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo Wanw
 	return
 }
 
-func (p *WanwayProtocol) parseGpsCourse(courseValue uint16) (course WanwayGPSCourse) {
+func (p *GT06Protocol) parseGpsCourse(courseValue uint16) (course GPSCourse) {
 	b1 := byte(courseValue >> 8)
 
 	course.IsRealtime = b1&0x20 == 0x00     // byte 1, bit 5 is 0
@@ -397,7 +393,7 @@ func (p *WanwayProtocol) parseGpsCourse(courseValue uint16) (course WanwayGPSCou
 	return
 }
 
-func (p *WanwayProtocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time, err error) {
+func (p *GT06Protocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time, err error) {
 	year, err := reader.ReadByte()
 	checkErr(err)
 
@@ -420,7 +416,7 @@ func (p *WanwayProtocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Ti
 	return
 }
 
-func (p *WanwayProtocol) parseLBSInformation(reader *bufio.Reader) (lbsInfo WanwayLBSInformation, err error) {
+func (p *GT06Protocol) parseLBSInformation(reader *bufio.Reader) (lbsInfo LBSInformation, err error) {
 	// MCC
 	checkErr(binary.Read(reader, binary.BigEndian, &lbsInfo.MCC))
 	// MNC
@@ -432,7 +428,7 @@ func (p *WanwayProtocol) parseLBSInformation(reader *bufio.Reader) (lbsInfo Wanw
 	return
 }
 
-func (p *WanwayProtocol) parseStatusInformation(reader *bufio.Reader) (statusInfo WanwayStatusInformation, err error) {
+func (p *GT06Protocol) parseStatusInformation(reader *bufio.Reader) (statusInfo StatusInformation, err error) {
 	var b byte
 
 	// terminal information content
@@ -442,17 +438,17 @@ func (p *WanwayProtocol) parseStatusInformation(reader *bufio.Reader) (statusInf
 
 	// voltage level
 	checkErr(binary.Read(reader, binary.BigEndian, &b))
-	statusInfo.BatteryLevel = WanwayBatteryLevelFromByte(b)
+	statusInfo.BatteryLevel = BatteryLevelFromByte(b)
 	if statusInfo.BatteryLevel == VL_Invalid {
-		return statusInfo, errs.ErrWanwayInvalidAlarmType
+		return statusInfo, errs.ErrGT06InvalidAlarmType
 	}
 
 	// GSM signal strength
 	checkErr(binary.Read(reader, binary.BigEndian, &b))
-	statusInfo.GSMSignalStrength = WanwayGSMSignalStrengthFromByte(b)
+	statusInfo.GSMSignalStrength = GSMSignalStrengthFromByte(b)
 	checkErr(binary.Read(reader, binary.BigEndian, &statusInfo.GSMSignalStrength))
 	if statusInfo.GSMSignalStrength == GSM_Invalid {
-		return statusInfo, errs.ErrWanwayInvalidGSMSignalStrength
+		return statusInfo, errs.ErrGT06InvalidGSMSignalStrength
 	}
 
 	// alarm status
@@ -460,22 +456,22 @@ func (p *WanwayProtocol) parseStatusInformation(reader *bufio.Reader) (statusInf
 	return
 }
 
-func (p *WanwayProtocol) parseTerminalInfoFromByte(terminalInfoByte byte) (WanwayTerminalInformation, error) {
-	var terminalInfo WanwayTerminalInformation
-	terminalInfo.OilElectricityConnected = terminalInfoByte&0x80 == 0x80    // bit 7
-	terminalInfo.GPSSignalAvailable = terminalInfoByte&0x40 == 0x40         // bit 6
-	terminalInfo.AlarmType = WanwayAlarmTypeFromId(terminalInfoByte & 0x38) // bit 3, 4, 5
-	terminalInfo.Charging = terminalInfoByte&0x10 == 0x08                   // bit 2
-	terminalInfo.ACCHigh = terminalInfoByte&0x20 == 0x02                    // bit 1
-	terminalInfo.Armed = terminalInfoByte&0x01 == 0x01                      // bit 0
+func (p *GT06Protocol) parseTerminalInfoFromByte(terminalInfoByte byte) (TerminalInformation, error) {
+	var terminalInfo TerminalInformation
+	terminalInfo.OilElectricityConnected = terminalInfoByte&0x80 == 0x80 // bit 7
+	terminalInfo.GPSSignalAvailable = terminalInfoByte&0x40 == 0x40      // bit 6
+	terminalInfo.AlarmType = AlarmTypeFromId(terminalInfoByte & 0x38)    // bit 3, 4, 5
+	terminalInfo.Charging = terminalInfoByte&0x10 == 0x08                // bit 2
+	terminalInfo.ACCHigh = terminalInfoByte&0x20 == 0x02                 // bit 1
+	terminalInfo.Armed = terminalInfoByte&0x01 == 0x01                   // bit 0
 
 	if terminalInfo.AlarmType == AL_Invalid {
-		return terminalInfo, errs.ErrWanwayInvalidAlarmType
+		return terminalInfo, errs.ErrGT06InvalidAlarmType
 	}
 	return terminalInfo, nil
 }
 
-func (p *WanwayProtocol) IsWanwayHeader(reader *bufio.Reader) bool {
+func (p *GT06Protocol) IsValidHeader(reader *bufio.Reader) bool {
 	header, err := reader.Peek(2)
 	if err != nil {
 		return false

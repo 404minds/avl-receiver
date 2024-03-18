@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/404minds/avl-receiver/internal/devices/teltonika"
-	"github.com/404minds/avl-receiver/internal/devices/wanway"
 	errs "github.com/404minds/avl-receiver/internal/errors"
+	"github.com/404minds/avl-receiver/internal/protocols/fm1200"
+	"github.com/404minds/avl-receiver/internal/protocols/gt06"
 	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/404minds/avl-receiver/internal/types"
 	"github.com/stretchr/testify/assert"
@@ -41,12 +41,12 @@ func TestTeltonikaDeviceLogin(t *testing.T) {
 	handler := NewTcpHandler(&mockRemoteDataStore{
 		Imei:       "356307043721579",
 		DeviceType: types.DeviceType_TELTONIKA,
-	})
+	}, "")
 	protocol, ack, err := handler.attemptDeviceLogin(reader)
 
 	assert.NoError(t, err, "device login should succeed")
-	assert.IsType(t, &teltonika.TeltonikaProtocol{}, protocol, "protocol should be of type TeltonikaProtocol")
-	assert.Equal(t, "356307043721579", protocol.GetDeviceIdentifier(), "imei should be parsed correctly")
+	assert.IsType(t, &fm1200.FM1200Protocol{}, protocol, "protocol should be of type FM1200Protocol")
+	assert.Equal(t, "356307043721579", protocol.GetDeviceID(), "imei should be parsed correctly")
 	assert.Equal(t, []byte{0x01}, ack, "ack should be 0x01")
 }
 
@@ -57,19 +57,19 @@ func TestWanwayDeviceLogin(t *testing.T) {
 	handler := NewTcpHandler(&mockRemoteDataStore{
 		Imei:       "752533678900242",
 		DeviceType: types.DeviceType_WANWAY,
-	})
+	}, "")
 	protocol, ack, err := handler.attemptDeviceLogin(reader)
 
 	assert.NoError(t, err, "device login should succeed")
-	assert.IsType(t, &wanway.WanwayProtocol{}, protocol, "protocol should be of type TeltonikaProtocol")
-	assert.Equal(t, "752533678900242", protocol.GetDeviceIdentifier(), "imei should be parsed correctly")
-	assert.Equal(t, []byte{0x78, 0x78, 0x11, 0x01, 0x00, 0x05, 0x12, 0x79, 0x0d, 0x0a}, ack, "login ack should be of the format as wanway expects")
+	assert.IsType(t, &gt06.GT06Protocol{}, protocol, "protocol should be of type FM1200Protocol")
+	assert.Equal(t, "752533678900242", protocol.GetDeviceID(), "imei should be parsed correctly")
+	assert.Equal(t, []byte{0x78, 0x78, 0x11, 0x01, 0x00, 0x05, 0x12, 0x79, 0x0d, 0x0a}, ack, "login ack should be of the format as gt06 expects")
 }
 
 func TestUnkonwnDeviceLogin(t *testing.T) {
 	buf, _ := hex.DecodeString("7676fafafafa")
 	reader := bufio.NewReader(bytes.NewReader(buf))
-	handler := NewTcpHandler(&mockRemoteDataStore{})
+	handler := NewTcpHandler(&mockRemoteDataStore{}, "")
 	protocol, ack, err := handler.attemptDeviceLogin(reader)
 
 	assert.Nil(t, protocol, "protocol should be nil")
