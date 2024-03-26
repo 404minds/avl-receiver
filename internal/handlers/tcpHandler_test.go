@@ -66,7 +66,7 @@ func TestWanwayDeviceLogin(t *testing.T) {
 	assert.Equal(t, []byte{0x78, 0x78, 0x11, 0x01, 0x00, 0x05, 0x12, 0x79, 0x0d, 0x0a}, ack, "login ack should be of the format as gt06 expects")
 }
 
-func TestUnkonwnDeviceLogin(t *testing.T) {
+func TestUnknownDeviceLogin(t *testing.T) {
 	buf, _ := hex.DecodeString("7676fafafafa")
 	reader := bufio.NewReader(bytes.NewReader(buf))
 	handler := NewTcpHandler(&mockRemoteDataStore{}, "")

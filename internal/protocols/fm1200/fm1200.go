@@ -282,7 +282,7 @@ func (t *FM1200Protocol) readNByteProperties(n int, reader *bufio.Reader) (map[I
 		if err != nil {
 			return nil, err
 		}
-		property := *IOPropertyFromID(propertyID)
+		property := IOProperty(propertyID)
 
 		propBytes := make([]byte, n)
 		err = binary.Read(reader, binary.BigEndian, &propBytes)

@@ -30,7 +30,7 @@ func TestParseLoginInformation(t *testing.T) {
 	}
 }
 
-func TestIsWanwayHeader(t *testing.T) {
+func TestHeaderDetection(t *testing.T) {
 	cases := []struct {
 		data     []byte
 		expected bool
@@ -48,7 +48,7 @@ func TestIsWanwayHeader(t *testing.T) {
 	}
 }
 
-func TestParseWanwaypacket(t *testing.T) {
+func TestPacketParsing(t *testing.T) {
 	startBit := "7878"
 	packetLength := "11" // 17
 	messageType := "01"
@@ -81,7 +81,7 @@ func TestParseWanwaypacket(t *testing.T) {
 	}
 }
 
-func TestWanwayLoginMessage(t *testing.T) {
+func TestParseLoginMessage(t *testing.T) {
 	startBit := "7878"
 	packetLength := "11" // 17
 	messageType := "01"
@@ -107,7 +107,7 @@ func TestWanwayLoginMessage(t *testing.T) {
 	assert.Equal(t, expectedResponse, hex.EncodeToString(ack))
 }
 
-func TestWanwayHeartbeatPacket(t *testing.T) {
+func TestParseHeartbeatPacket(t *testing.T) {
 	bytestr := strings.ReplaceAll("78 78 0A 13 40 04 04 00 01 00 0F DC EE 0D 0A", " ", "")
 	data, _ := hex.DecodeString(bytestr)
 
@@ -135,7 +135,7 @@ func TestWanwayHeartbeatPacket(t *testing.T) {
 	assert.Equal(t, uint16(0x0001), heartbeatData.ExtendedPortStatus, "alarm status should match")
 }
 
-func TestGpsLocationPacket(t *testing.T) {
+func TestParseGpsLocationPacket(t *testing.T) {
 	// bytestr := strings.ReplaceAll("78 78 22 22 0F 0C 1D 02 33 05 C9 02 7A C8 18 0C 46 58 60 00 14 00 01 CC 00 28 7D 00 1F 71 00 00 01 00 08 20 86 0D 0A", " ", "")
 	bytestr := strings.ReplaceAll("78 78 22 22 0F 0C 1D 02 33 05 C9 02 7A C8 18 0C 46 58 60 00 14 00 01 CC 00 28 7D 00 1F 71 00 00 01 00 00 00 00 00 08 20 86 0D 0A", " ", "")
 	//  inserting zero for milege bytes because the packet in example has 4 missing bytes

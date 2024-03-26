@@ -22,7 +22,7 @@ func main() {
 	flag.Parse()
 
 	if *port == 0 || *remoteStoreAddr == "" || *storeType == "" {
-		fmt.Fprintln(os.Stderr, "Usage:")
+		_, _ = fmt.Fprintln(os.Stderr, "Usage:")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
