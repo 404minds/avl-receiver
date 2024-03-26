@@ -78,7 +78,8 @@ type StatusInformation struct {
 	TerminalInformation TerminalInformation
 	BatteryLevel        BatteryLevel
 	GSMSignalStrength   GSMSignalStrength
-	AlarmStatus         uint16
+	Alarm               AlarmValue
+	Language            Language
 }
 
 type TerminalInformation struct {
@@ -126,34 +127,6 @@ const (
 	MSG_Invalid                             = 0xff
 )
 
-func MessageTypeFromId(id byte) MessageType {
-	// write switch cases to create message type from byte id
-	switch id {
-	case 0x01:
-		return MSG_LoginData
-	case 0x22:
-		return MSG_PositioningData
-	case 0x13:
-		return MSG_HeartbeatData
-	case 0x21:
-		return MSG_StringInformation
-	case 0x2d: // TODO: check if this is correct
-		return MSG_LBSInformation
-	case 0x26:
-		return MSG_AlarmData
-	case 0x27:
-		return MSG_TimezoneInformation
-	case 0x2a:
-		return MSG_GPS_PhoneNumber
-	case 0x2c:
-		return MSG_WifiInformation
-	case 0x80:
-		return MSG_TransmissionInstruction
-	default:
-		return MSG_Invalid
-	}
-}
-
 type AlarmType uint8 // alarm type is 3 bit info, trying to encode it to 8 bit
 
 const (
@@ -164,23 +137,6 @@ const (
 	AL_Normal                 = 0x00 // 000 -> 0000 0000
 	AL_Invalid                = 0xff
 )
-
-func AlarmTypeFromId(id byte) AlarmType {
-	switch id {
-	case 0x04:
-		return AL_SOSDistress
-	case 0x03:
-		return AL_LowBattery
-	case 0x02:
-		return AL_PowerFailure
-	case 0x01:
-		return AL_Vibration
-	case 0x00:
-		return AL_Normal
-	default:
-		return AL_Invalid
-	}
-}
 
 type BatteryLevel uint8
 
@@ -195,26 +151,51 @@ const (
 	VL_Invalid                          = 0xff
 )
 
-func BatteryLevelFromByte(b byte) BatteryLevel {
-	switch b {
-	case 0x00:
-		return VL_NoPower
-	case 0x01:
-		return VL_BatteryExtremelyLow
-	case 0x02:
-		return VL_BatteryVeryLow
-	case 0x03:
-		return VL_BatteryLow
-	case 0x04:
-		return VL_BatteryMedium
-	case 0x05:
-		return VL_BatteryHigh
-	case 0x06:
-		return VL_BatteryFull
-	default:
-		return VL_Invalid
-	}
-}
+type AlarmValue uint8
+
+const (
+	ALV_Normal                       = 0x00
+	ALV_SOS                          = 0x01
+	ALV_PowerCut                     = 0x02
+	ALV_Vibration                    = 0x03
+	ALV_EnterFence                   = 0x04
+	ALV_ExitFence                    = 0x05
+	ALV_OverSpeed                    = 0x06
+	ALV_Moving                       = 0x09
+	ALV_EnterGPSDeadZone             = 0x0a
+	ALV_ExitGPSDeadZone              = 0x0b
+	ALV_PowerOn                      = 0x0c
+	ALV_GPSFirstFixNotice            = 0x0d
+	ALV_ExternalLowBattery           = 0x0e
+	ALV_ExternalLowBatteryProtection = 0x0f
+	ALV_SIMChange                    = 0x10
+	ALV_PowerOff                     = 0x11
+	ALV_AirplaneMode                 = 0x12
+	ALV_Diassemble                   = 0x13
+	ALV_Door                         = 0x14
+	ALV_ShutdownLowPower             = 0x15
+	ALV_Sound                        = 0x16
+	ALV_InternalBatteryLow           = 0x17
+	ALV_SleepMode                    = 0x20
+	ALV_HarshAcceleration            = 0x29
+	ALV_HarshBraking                 = 0x30
+	ALV_SharpLeftTurn                = 0x2a
+	ALV_SharpRightTurn               = 0x2b
+	ALV_SharpCrash                   = 0x2c
+	ALV_Pull                         = 0x32
+	ALV_PressToUploadAlarmMessageBtn = 0x3e
+	ALV_Fall                         = 0x23
+	ALV_ACCOn                        = 0xee
+	ALV_ACCOff                       = 0xff
+)
+
+type Language uint8
+
+const (
+	LANG_Chinese = 0x01
+	LANG_English = 0x02
+	LANG_NoReply = 0x00
+)
 
 type GSMSignalStrength uint8
 
@@ -226,23 +207,6 @@ const (
 	GSM_StrongSignal                          = 0x04
 	GSM_Invalid                               = 0xff
 )
-
-func GSMSignalStrengthFromByte(b byte) GSMSignalStrength {
-	switch b {
-	case 0x00:
-		return GSM_NoSignal
-	case 0x01:
-		return GSM_ExtremelyWeakSignal
-	case 0x02:
-		return GSM_WeakSignal
-	case 0x03:
-		return GSM_GoodSignal
-	case 0x04:
-		return GSM_StrongSignal
-	default:
-		return GSM_Invalid
-	}
-}
 
 type GPSDataUploadMode uint8
 
@@ -306,6 +270,7 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 		info.VehicleStatus.Overspeeding = false
 	case *AlarmInformation:
 		info.VehicleStatus.Ignition = v.StatusInformation.TerminalInformation.ACCHigh
+		info.VehicleStatus.Overspeeding = v.StatusInformation.Alarm == ALV_OverSpeed
 	case *HeartbeatData:
 		info.VehicleStatus.Ignition = v.TerminalInformation.ACCHigh
 	default:

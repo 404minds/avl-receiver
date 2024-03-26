@@ -87,29 +87,6 @@ const (
 	TIO_Overspeeding                  = 255
 )
 
-var iOProperties = []IOProperty{
-	TIO_DigitalInput1, TIO_DigitalInput2, TIO_DigitalInput3,
-	TIO_AnalogInput, TIO_PCBTemperature, TIO_DigitalOutput1,
-	TIO_DigitalOutput2, TIO_GPSPDOP, TIO_GPSHDOP, TIO_ExternalVoltage,
-	TIO_GPSPower, TIO_MovementSensor, TIO_OdometerValue, TIO_GSMOperator,
-	TIO_Speed, TIO_IButtonID, TIO_WorkingMode, TIO_GSMSignal,
-	TIO_SleepMode, TIO_CellID, TIO_AreaCode, TIO_DallasTemperature,
-	TIO_BatteryVoltage, TIO_BatteryCurrent, TIO_AutoGeofence,
-	TIO_Geozone1, TIO_Geozone2, TIO_Geozone3, TIO_Geozone4,
-	TIO_Geozone5, TIO_TripMode, TIO_Immobilizer,
-	TIO_AuthorizedDriving, TIO_GreenDrivingStatus, TIO_GreenDrivingValue,
-	TIO_Overspeeding,
-}
-
-func IOPropertyFromID(id uint8) *IOProperty {
-	for _, property := range iOProperties {
-		if uint8(property) == id {
-			return &property
-		}
-	}
-	return nil
-}
-
 func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info := &types.DeviceStatus{}
 

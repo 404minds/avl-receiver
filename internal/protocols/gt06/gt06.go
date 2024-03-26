@@ -162,7 +162,7 @@ func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 
 func (p *GT06Protocol) parsePacketData(reader *bufio.Reader, packet *Packet) error {
 	protocolNumByte, err := reader.ReadByte()
-	msgType := MessageTypeFromId(protocolNumByte)
+	msgType := MessageType(protocolNumByte)
 	if msgType == MSG_Invalid {
 		logger.Sugar().Errorf("Invalid message type: %x", protocolNumByte)
 		remainingData, err := p.consumePacket(reader)
@@ -212,7 +212,7 @@ func (p *GT06Protocol) parsePacketInformation(reader *bufio.Reader, messageType 
 		parsedInfo, err := p.parseAlarmData(reader)
 		return parsedInfo, err
 	} else if messageType == MSG_HeartbeatData {
-		parsedInfo, err := p.parsehHeartbeatData(reader)
+		parsedInfo, err := p.parseHeartbeatData(reader)
 		return parsedInfo, err
 	} else {
 		return nil, errs.ErrGT06BadDataPacket
@@ -311,7 +311,7 @@ func (p *GT06Protocol) parseAlarmData(reader *bufio.Reader) (alarmInfo AlarmInfo
 	return
 }
 
-func (p *GT06Protocol) parsehHeartbeatData(reader *bufio.Reader) (heartbeat HeartbeatData, err error) {
+func (p *GT06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat HeartbeatData, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -328,13 +328,13 @@ func (p *GT06Protocol) parsehHeartbeatData(reader *bufio.Reader) (heartbeat Hear
 	checkErr(err)
 
 	checkErr(binary.Read(reader, binary.BigEndian, &b))
-	heartbeat.BatteryLevel = BatteryLevelFromByte(b)
+	heartbeat.BatteryLevel = BatteryLevel(b)
 	if heartbeat.BatteryLevel == VL_Invalid {
 		return heartbeat, errs.ErrGT06InvalidVoltageLevel
 	}
 
 	checkErr(binary.Read(reader, binary.BigEndian, &b))
-	heartbeat.GSMSignalStrength = GSMSignalStrengthFromByte(b)
+	heartbeat.GSMSignalStrength = GSMSignalStrength(b)
 	if heartbeat.GSMSignalStrength == GSM_Invalid {
 		return heartbeat, errs.ErrGT06InvalidGSMSignalStrength
 	}
@@ -438,21 +438,27 @@ func (p *GT06Protocol) parseStatusInformation(reader *bufio.Reader) (statusInfo 
 
 	// voltage level
 	checkErr(binary.Read(reader, binary.BigEndian, &b))
-	statusInfo.BatteryLevel = BatteryLevelFromByte(b)
+	statusInfo.BatteryLevel = BatteryLevel(b)
 	if statusInfo.BatteryLevel == VL_Invalid {
 		return statusInfo, errs.ErrGT06InvalidAlarmType
 	}
 
 	// GSM signal strength
 	checkErr(binary.Read(reader, binary.BigEndian, &b))
-	statusInfo.GSMSignalStrength = GSMSignalStrengthFromByte(b)
+	statusInfo.GSMSignalStrength = GSMSignalStrength(b)
 	checkErr(binary.Read(reader, binary.BigEndian, &statusInfo.GSMSignalStrength))
 	if statusInfo.GSMSignalStrength == GSM_Invalid {
 		return statusInfo, errs.ErrGT06InvalidGSMSignalStrength
 	}
 
 	// alarm status
-	checkErr(binary.Read(reader, binary.BigEndian, &statusInfo.AlarmStatus))
+	alarm, err := reader.ReadByte()
+	checkErr(err)
+	statusInfo.Alarm = AlarmValue(alarm)
+
+	language, err := reader.ReadByte()
+	checkErr(err)
+	statusInfo.Language = Language(language)
 	return
 }
 
@@ -460,7 +466,7 @@ func (p *GT06Protocol) parseTerminalInfoFromByte(terminalInfoByte byte) (Termina
 	var terminalInfo TerminalInformation
 	terminalInfo.OilElectricityConnected = terminalInfoByte&0x80 == 0x80 // bit 7
 	terminalInfo.GPSSignalAvailable = terminalInfoByte&0x40 == 0x40      // bit 6
-	terminalInfo.AlarmType = AlarmTypeFromId(terminalInfoByte & 0x38)    // bit 3, 4, 5
+	terminalInfo.AlarmType = AlarmType(terminalInfoByte & 0x38)          // bit 3, 4, 5
 	terminalInfo.Charging = terminalInfoByte&0x10 == 0x08                // bit 2
 	terminalInfo.ACCHigh = terminalInfoByte&0x20 == 0x02                 // bit 1
 	terminalInfo.Armed = terminalInfoByte&0x01 == 0x01                   // bit 0
