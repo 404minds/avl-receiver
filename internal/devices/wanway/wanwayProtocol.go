@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"go.uber.org/zap"
 	"io"
 	"slices"
 	"time"
@@ -23,6 +24,7 @@ type WanwayProtocol struct {
 }
 
 func (p *WanwayProtocol) GetDeviceIdentifier() string {
+	logger.Sugar().Info(p.LoginInformation)
 	return p.LoginInformation.TerminalID
 }
 
@@ -45,15 +47,17 @@ func (p *WanwayProtocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int
 
 	// this should have been a wanway device
 	packet, err := p.parseWanwayPacket(reader)
+	logger.Sugar().Error("failed to parse wanway packet ", err)
 	if err != nil {
-		logger.Sugar().Error("failed to parse wanway packet ", err)
+
 		return nil, 0, err
 	}
 	if packet.MessageType == MSG_LoginData {
 		p.LoginInformation = packet.Information.(*WanwayLoginData)
-
+		logger.Sugar().Info(p.LoginInformation, p.DeviceType)
 		byteBuffer := bytes.NewBuffer([]byte{})
 		err = p.sendResponse(packet, byteBuffer)
+
 		if err != nil {
 			logger.Sugar().Error("failed to parse wanway packet ", err)
 			return nil, 0, err
@@ -66,6 +70,8 @@ func (p *WanwayProtocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int
 }
 
 func (p *WanwayProtocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, storeProcessChan chan types.DeviceStatus) error {
+	logger.Sugar().Info("consume stream called")
+
 	for {
 		packet, err := p.parseWanwayPacket(reader)
 		if err != nil {
@@ -165,6 +171,7 @@ func (p *WanwayProtocol) parseWanwayPacket(reader *bufio.Reader) (packet *Wanway
 }
 
 func (p *WanwayProtocol) parsePacketData(reader *bufio.Reader, packet *WanwayPacket) error {
+	logger.Sugar().Info("parsePacketData function is being called")
 	protocolNumByte, err := reader.ReadByte()
 	msgType := WanwayMessageTypeFromId(protocolNumByte)
 	if msgType == MSG_Invalid {
@@ -206,17 +213,21 @@ func (p *WanwayProtocol) consumePacket(reader *bufio.Reader) ([]byte, error) {
 }
 
 func (p *WanwayProtocol) parsePacketInformation(reader *bufio.Reader, messageType WanwayMessageType) (interface{}, error) {
+	logger.Sugar().Info("parsePacketInformation function is being called")
+	logger.Sugar().Infof("message", messageType)
 	if messageType == MSG_LoginData {
 		parsedInfo, err := p.parseLoginInformation(reader)
+		logger.Sugar().Infof("parsedInfo", parsedInfo)
 		return parsedInfo, err
 	} else if messageType == MSG_PositioningData {
 		parsedInfo, err := p.parsePositioningData(reader)
+		logger.Sugar().Info("position data parsed")
 		return parsedInfo, err
 	} else if messageType == MSG_AlarmData {
 		parsedInfo, err := p.parseAlarmData(reader)
 		return parsedInfo, err
 	} else if messageType == MSG_HeartbeatData {
-		parsedInfo, err := p.parsehHeartbeatData(reader)
+		parsedInfo, err := p.parseHeartbeatData(reader)
 		return parsedInfo, err
 	} else {
 		return nil, errs.ErrWanwayInvalidPacket
@@ -253,11 +264,12 @@ func (p *WanwayProtocol) parseLoginInformation(reader *bufio.Reader) (interface{
 		zoneOffset = 1
 	}
 	loginInfo.Timezone = time.FixedZone("", int(zoneOffset)*(hours*60*60+minutes*60))
-
+	logger.Sugar().Info(loginInfo)
 	return &loginInfo, nil
 }
 
 func (p *WanwayProtocol) parsePositioningData(reader *bufio.Reader) (positionInfo interface{}, err error) {
+	logger.Sugar().Info("parsePositioningData function is being called")
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -315,7 +327,7 @@ func (p *WanwayProtocol) parseAlarmData(reader *bufio.Reader) (alarmInfo WanwayA
 	return
 }
 
-func (p *WanwayProtocol) parsehHeartbeatData(reader *bufio.Reader) (heartbeat WanwayHeartbeatData, err error) {
+func (p *WanwayProtocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat WanwayHeartbeatData, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -354,6 +366,7 @@ func checkErr(err error) {
 }
 
 func (p *WanwayProtocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo WanwayGPSInformation, err error) {
+	logger.Sugar().Info("ParseGPSInformation function is being called")
 	timestamp, err := p.parseTimestamp(reader)
 	checkErr(err)
 	gpsInfo.Timestamp = timestamp
@@ -367,10 +380,12 @@ func (p *WanwayProtocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo Wanw
 	// latitude
 	checkErr(binary.Read(reader, binary.BigEndian, &i32))
 	gpsInfo.Latitude = float32(i32) / 1800000
+	logger.Sugar().Infof("fetching position data", zap.Any("latitude", gpsInfo.Latitude))
 
 	// longitude
 	checkErr(binary.Read(reader, binary.BigEndian, &i32))
 	gpsInfo.Longitude = float32(i32) / 1800000
+	logger.Sugar().Infof("fetching position data", zap.Any("longitude", gpsInfo.Longitude))
 
 	// speed
 	checkErr(binary.Read(reader, binary.BigEndian, &gpsInfo.Speed))
@@ -476,7 +491,9 @@ func (p *WanwayProtocol) parseTerminalInfoFromByte(terminalInfoByte byte) (Wanwa
 }
 
 func (p *WanwayProtocol) IsWanwayHeader(reader *bufio.Reader) bool {
+
 	header, err := reader.Peek(2)
+
 	if err != nil {
 		return false
 	}

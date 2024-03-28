@@ -58,6 +58,7 @@ func TestWanwayDeviceLogin(t *testing.T) {
 		Imei:       "752533678900242",
 		DeviceType: types.DeviceType_WANWAY,
 	})
+
 	protocol, ack, err := handler.attemptDeviceLogin(reader)
 
 	assert.NoError(t, err, "device login should succeed")

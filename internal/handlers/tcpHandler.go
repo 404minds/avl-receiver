@@ -73,8 +73,8 @@ func makeRemoteRpcStore(remoteStoreClient store.AvlDataStoreClient) store.Store 
 	}
 }
 
-func makeJsonStore(datadir string, deviceIdentifier string) store.Store {
-	file, err := os.OpenFile(path.Join(datadir, deviceIdentifier+".json"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+func makeJsonStore(dataDir string, deviceIdentifier string) store.Store {
+	file, err := os.OpenFile(path.Join(dataDir, deviceIdentifier+".json"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		logger.Error("failed to open file to store data")
 		logger.Panic(err.Error())
@@ -100,7 +100,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DevicePro
 				return nil, nil, err
 			}
 		} else {
-			logger.Sugar().Infof("Protocol identified to be of type %s with identifier %s, bytes to skip %d", protocolType.String(), protocol.GetDeviceIdentifier(), bytesToSkip)
+			logger.Sugar().Infof("Protocol identified to be of type %s with identifier imei %s, bytes to skip %d", protocolType.String(), protocol.GetDeviceIdentifier(), bytesToSkip)
 			if _, err := reader.Discard(bytesToSkip); err != nil {
 				return nil, nil, err
 			}
@@ -108,6 +108,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DevicePro
 			reply, err := t.remoteStoreClient.VerifyDevice(context.Background(), &store.VerifyDeviceRequest{
 				Imei: protocol.GetDeviceIdentifier(),
 			})
+
 			if err != nil {
 				logger.Sugar().Errorf("failed to verify device %s", protocol.GetDeviceIdentifier())
 			}
