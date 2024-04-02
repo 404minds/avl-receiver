@@ -1,10 +1,10 @@
-package teltonika
+package fm1200
 
 import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
-	"fmt"
+	"go.uber.org/zap"
 	"io"
 
 	"github.com/404minds/avl-receiver/internal/crc"
@@ -15,34 +15,35 @@ import (
 
 var logger = configuredLogger.Logger
 
-type TeltonikaProtocol struct {
+type FM1200Protocol struct {
 	Imei       string
 	DeviceType types.DeviceType
 }
 
-func (t *TeltonikaProtocol) GetDeviceIdentifier() string {
+func (t *FM1200Protocol) GetDeviceID() string {
 	return t.Imei
 }
 
-func (p *TeltonikaProtocol) GetDeviceType() types.DeviceType {
+func (p *FM1200Protocol) GetDeviceType() types.DeviceType {
 	return p.DeviceType
 }
 
-func (p *TeltonikaProtocol) SetDeviceType(t types.DeviceType) {
+func (p *FM1200Protocol) SetDeviceType(t types.DeviceType) {
 	p.DeviceType = t
 }
 
-func (p *TeltonikaProtocol) GetProtocolType() types.DeviceProtocolType {
+func (p *FM1200Protocol) GetProtocolType() types.DeviceProtocolType {
 	return types.DeviceProtocolType_FM1200
 }
 
-func (t *TeltonikaProtocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip int, e error) {
+func (t *FM1200Protocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip int, e error) {
 	imei, bytesToSkip, err := t.peekImei(reader)
 	if err != nil {
 		return nil, bytesToSkip, err
 	}
+	// TODO: in case of unauthorized device, reply with 0x00 ack
 	if !t.isImeiAuthorized(imei) {
-		return nil, bytesToSkip, errs.ErrTeltonikaUnauthorizedDevice
+		return nil, bytesToSkip, errs.ErrUnauthorizedDevice
 	}
 
 	t.Imei = imei // maybe store this in redis if stream consume happens in a different process
@@ -50,27 +51,26 @@ func (t *TeltonikaProtocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip
 	return []byte{0x01}, bytesToSkip, nil
 }
 
-func (t *TeltonikaProtocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, storeProcessChan chan types.DeviceStatus) error {
+func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, asyncStore chan types.DeviceStatus) error {
 	for {
-		err := t.consumeMessage(reader, storeProcessChan, writer)
+		err := t.consumeMessage(reader, asyncStore, responseWriter)
 		if err != nil {
 			if err != io.EOF {
-				logger.Sugar().Error("failed to consume message", err)
-				return fmt.Errorf("failed to consume message %w", err)
+				logger.Error("failed to consume message", zap.Error(err))
 			}
 			return err
 		}
 	}
 }
 
-func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessChan chan types.DeviceStatus, writer io.Writer) (err error) {
+func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan types.DeviceStatus, responseWriter io.Writer) (err error) {
 	var headerZeros uint32
 	err = binary.Read(reader, binary.BigEndian, &headerZeros)
 	if err != nil {
 		return err
 	}
 	if headerZeros != 0x0000 {
-		return errs.ErrTeltonikaInvalidDataPacket
+		return errs.ErrFM1200BadDataPacket
 	}
 
 	var dataLen uint32
@@ -82,10 +82,10 @@ func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessCha
 	dataBytes := make([]byte, dataLen)
 	_, err = io.ReadFull(reader, dataBytes)
 	if err != nil {
-		return fmt.Errorf("failed to read data bytes: %w", err)
+		return errs.ErrFM1200BadDataPacket
 	}
-	dataReader := bufio.NewReader(bytes.NewReader(dataBytes))
 
+	dataReader := bufio.NewReader(bytes.NewReader(dataBytes))
 	parsedPacket, err := t.parseDataToRecord(dataReader)
 	if err != nil {
 		return err
@@ -93,49 +93,43 @@ func (t *TeltonikaProtocol) consumeMessage(reader *bufio.Reader, storeProcessCha
 
 	err = binary.Read(reader, binary.BigEndian, &parsedPacket.CRC)
 	if err != nil {
-		return fmt.Errorf("failed to read crc: %w", err)
+		return errs.ErrFM1200BadDataPacket
 	}
 
 	valid := t.ValidateCrc(dataBytes, parsedPacket.CRC)
 	if !valid {
-		return errs.ErrTeltonikaBadCrc
+		return errs.ErrBadCrc
 	}
 
 	for _, record := range parsedPacket.Data {
-		r := TeltonikaRecord{
+		r := Record{
 			Record: record,
 			IMEI:   t.Imei,
 		}
 		protoRecord := r.ToProtobufDeviceStatus()
-		storeProcessChan <- *protoRecord
+		asyncStore <- *protoRecord
 	}
 	logger.Sugar().Infof("stored %d records", len(parsedPacket.Data))
 
-	err = binary.Write(writer, binary.BigEndian, int32(len(parsedPacket.Data)))
+	err = binary.Write(responseWriter, binary.BigEndian, int32(parsedPacket.NumberOfData))
 	if err != nil {
-		logger.Sugar().Error("failed to write ack for incoming data", err)
-		return fmt.Errorf("failed to write ack for incoming data: %w", err)
-	}
-	//err = writer.Flush()
-	if err != nil {
-		logger.Sugar().Error("failed to flush ack for incoming data", err)
-		return fmt.Errorf("failed to flush ack for incoming data: %w", err)
+		return err
 	}
 	return nil
 }
 
-func (t *TeltonikaProtocol) parseDataToRecord(reader *bufio.Reader) (*TeltonikaAvlDataPacket, error) {
-	var packet TeltonikaAvlDataPacket
+func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader) (*AvlDataPacket, error) {
+	var packet AvlDataPacket
+	var err error
 
 	// coded id
-	codedIdBytes, err := reader.ReadByte()
-	packet.CodecID = uint8(codedIdBytes)
+	packet.CodecID, err = reader.ReadByte()
 	if err != nil {
 		return nil, err
 	}
 
 	// number of data
-	err = binary.Read(reader, binary.BigEndian, &packet.NumberOfData)
+	packet.NumberOfData, err = reader.ReadByte()
 	if err != nil {
 		return nil, err
 	}
@@ -154,13 +148,13 @@ func (t *TeltonikaProtocol) parseDataToRecord(reader *bufio.Reader) (*TeltonikaA
 		return nil, err
 	}
 	if endNumRecords != packet.NumberOfData {
-		return nil, errs.ErrTeltonikaInvalidDataPacket
+		return nil, errs.ErrFM1200BadDataPacket
 	}
 	return &packet, nil
 }
 
-func (t *TeltonikaProtocol) readSingleRecord(reader *bufio.Reader) (*TeltonikaAvlRecord, error) {
-	var record TeltonikaAvlRecord
+func (t *FM1200Protocol) readSingleRecord(reader *bufio.Reader) (*AvlRecord, error) {
+	var record AvlRecord
 	var err error
 
 	// timestamp
@@ -192,8 +186,8 @@ func (t *TeltonikaProtocol) readSingleRecord(reader *bufio.Reader) (*TeltonikaAv
 	return &record, nil
 }
 
-func (t *TeltonikaProtocol) parseIOElements(reader *bufio.Reader) (ioElement *TeltonikaIOElement, err error) {
-	ioElement = &TeltonikaIOElement{}
+func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader) (ioElement *IOElement, err error) {
+	ioElement = &IOElement{}
 
 	// eventId
 	err = binary.Read(reader, binary.BigEndian, &ioElement.EventID)
@@ -213,19 +207,19 @@ func (t *TeltonikaProtocol) parseIOElements(reader *bufio.Reader) (ioElement *Te
 	ioElement.Properties4B, err3 = t.read4BProperties(reader)
 	ioElement.Properties8B, err4 = t.read8BProperties(reader)
 	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
-		return nil, errs.ErrTeltonikaInvalidDataPacket
+		return nil, errs.ErrFM1200BadDataPacket
 	}
 
 	return
 }
 
-func (t *TeltonikaProtocol) read1BProperties(reader *bufio.Reader) (map[TeltonikaIOProperty]uint8, error) {
+func (t *FM1200Protocol) read1BProperties(reader *bufio.Reader) (map[IOProperty]uint8, error) {
 	propertyMap, err := t.readNByteProperties(1, reader)
 	if err != nil {
 		return nil, err
 	}
 
-	properties := make(map[TeltonikaIOProperty]uint8)
+	properties := make(map[IOProperty]uint8)
 	for k, v := range propertyMap {
 		properties[k] = v.(uint8)
 	}
@@ -233,13 +227,13 @@ func (t *TeltonikaProtocol) read1BProperties(reader *bufio.Reader) (map[Teltonik
 	return properties, nil
 }
 
-func (t *TeltonikaProtocol) read2BProperties(reader *bufio.Reader) (map[TeltonikaIOProperty]uint16, error) {
+func (t *FM1200Protocol) read2BProperties(reader *bufio.Reader) (map[IOProperty]uint16, error) {
 	propertyMap, err := t.readNByteProperties(2, reader)
 	if err != nil {
 		return nil, err
 	}
 
-	properties := make(map[TeltonikaIOProperty]uint16)
+	properties := make(map[IOProperty]uint16)
 	for k, v := range propertyMap {
 		properties[k] = v.(uint16)
 	}
@@ -247,13 +241,13 @@ func (t *TeltonikaProtocol) read2BProperties(reader *bufio.Reader) (map[Teltonik
 	return properties, nil
 }
 
-func (t *TeltonikaProtocol) read4BProperties(reader *bufio.Reader) (map[TeltonikaIOProperty]uint32, error) {
+func (t *FM1200Protocol) read4BProperties(reader *bufio.Reader) (map[IOProperty]uint32, error) {
 	propertyMap, err := t.readNByteProperties(4, reader)
 	if err != nil {
 		return nil, err
 	}
 
-	properties := make(map[TeltonikaIOProperty]uint32)
+	properties := make(map[IOProperty]uint32)
 	for k, v := range propertyMap {
 		properties[k] = v.(uint32)
 	}
@@ -261,13 +255,13 @@ func (t *TeltonikaProtocol) read4BProperties(reader *bufio.Reader) (map[Teltonik
 	return properties, nil
 }
 
-func (t *TeltonikaProtocol) read8BProperties(reader *bufio.Reader) (map[TeltonikaIOProperty]uint64, error) {
+func (t *FM1200Protocol) read8BProperties(reader *bufio.Reader) (map[IOProperty]uint64, error) {
 	propertyMap, err := t.readNByteProperties(8, reader)
 	if err != nil {
 		return nil, err
 	}
 
-	properties := make(map[TeltonikaIOProperty]uint64)
+	properties := make(map[IOProperty]uint64)
 	for k, v := range propertyMap {
 		properties[k] = v.(uint64)
 	}
@@ -275,20 +269,20 @@ func (t *TeltonikaProtocol) read8BProperties(reader *bufio.Reader) (map[Teltonik
 	return properties, nil
 }
 
-func (t *TeltonikaProtocol) readNByteProperties(n int, reader *bufio.Reader) (map[TeltonikaIOProperty]interface{}, error) {
+func (t *FM1200Protocol) readNByteProperties(n int, reader *bufio.Reader) (map[IOProperty]interface{}, error) {
 	var numProperties uint8
 	err := binary.Read(reader, binary.BigEndian, &numProperties)
 	if err != nil {
 		return nil, err
 	}
 
-	properties := make(map[TeltonikaIOProperty]interface{})
+	properties := make(map[IOProperty]interface{})
 	for i := uint8(0); i < numProperties; i++ {
 		propertyID, err := reader.ReadByte()
 		if err != nil {
 			return nil, err
 		}
-		property := *IOPropertyFromID(propertyID)
+		property := IOProperty(propertyID)
 
 		propBytes := make([]byte, n)
 		err = binary.Read(reader, binary.BigEndian, &propBytes)
@@ -309,7 +303,7 @@ func (t *TeltonikaProtocol) readNByteProperties(n int, reader *bufio.Reader) (ma
 	return properties, nil
 }
 
-func (t *TeltonikaProtocol) parseGpsElement(reader *bufio.Reader) (gpsElement TeltonikaGpsElement, err error) {
+func (t *FM1200Protocol) parseGpsElement(reader *bufio.Reader) (gpsElement GpsElement, err error) {
 	// longitude
 	var i32 uint32
 	err = binary.Read(reader, binary.BigEndian, &i32)
@@ -352,7 +346,7 @@ func (t *TeltonikaProtocol) parseGpsElement(reader *bufio.Reader) (gpsElement Te
 	return
 }
 
-func (t *TeltonikaProtocol) peekImei(reader *bufio.Reader) (imei string, bytesConsumed int, e error) {
+func (t *FM1200Protocol) peekImei(reader *bufio.Reader) (imei string, bytesConsumed int, e error) {
 	imeiLenBytes, err := reader.Peek(2)
 	if err != nil {
 		return "", 0, err
@@ -360,7 +354,7 @@ func (t *TeltonikaProtocol) peekImei(reader *bufio.Reader) (imei string, bytesCo
 
 	imeiLen := binary.BigEndian.Uint16(imeiLenBytes)
 	if imeiLen != 15 {
-		return "", 0, errs.ErrNotTeltonikaDevice
+		return "", 0, errs.ErrUnknownProtocol
 	}
 	err = binary.Read(bytes.NewReader(imeiLenBytes), binary.BigEndian, &imeiLen)
 	if err != nil {
@@ -377,12 +371,12 @@ func (t *TeltonikaProtocol) peekImei(reader *bufio.Reader) (imei string, bytesCo
 	return imei, 2 + int(imeiLen), nil
 }
 
-func (t *TeltonikaProtocol) isImeiAuthorized(imei string) bool {
+func (t *FM1200Protocol) isImeiAuthorized(imei string) bool {
 	logger.Sugar().Infof("IMEI %s is authorized", imei)
 	return true
 }
 
-func (t *TeltonikaProtocol) ValidateCrc(data []byte, expectedCrc uint32) bool {
-	calculatedCrc := crc.Crc_Teltonika(data)
+func (t *FM1200Protocol) ValidateCrc(data []byte, expectedCrc uint32) bool {
+	calculatedCrc := crc.CrcTeltonika(data)
 	return uint32(calculatedCrc) == expectedCrc
 }

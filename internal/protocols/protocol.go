@@ -1,17 +1,29 @@
-package devices
+package protocols
 
 import (
-	"github.com/404minds/avl-receiver/internal/devices/teltonika"
-	"github.com/404minds/avl-receiver/internal/devices/wanway"
+	"bufio"
+	"github.com/404minds/avl-receiver/internal/protocols/fm1200"
+	"github.com/404minds/avl-receiver/internal/protocols/gt06"
+	"io"
+
 	"github.com/404minds/avl-receiver/internal/types"
 )
+
+type DeviceProtocol interface {
+	GetDeviceType() types.DeviceType
+	SetDeviceType(types.DeviceType)
+	GetProtocolType() types.DeviceProtocolType
+	GetDeviceID() string
+	Login(*bufio.Reader) ([]byte, int, error)
+	ConsumeStream(*bufio.Reader, io.Writer, chan types.DeviceStatus) error
+}
 
 func MakeProtocolForType(t types.DeviceProtocolType) DeviceProtocol {
 	switch t {
 	case types.DeviceProtocolType_FM1200:
-		return &teltonika.TeltonikaProtocol{}
+		return &fm1200.FM1200Protocol{}
 	case types.DeviceProtocolType_GT06:
-		return &wanway.WanwayProtocol{}
+		return &gt06.GT06Protocol{}
 	default:
 		return nil
 	}

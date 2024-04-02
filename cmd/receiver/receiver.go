@@ -18,10 +18,11 @@ var logger = configuredLogger.Logger
 func main() {
 	var port = flag.Int("port", 9000, "Port to listen on")
 	var remoteStoreAddr = flag.String("remoteStoreAddr", "", "Address of the remote store")
+	var storeType = flag.String("storeType", "remote", "Store type - one of local or remote")
 	flag.Parse()
 
-	if *port == 0 || *remoteStoreAddr == "" {
-		fmt.Fprintln(os.Stderr, "Usage:")
+	if *port == 0 || *remoteStoreAddr == "" || *storeType == "" {
+		_, _ = fmt.Fprintln(os.Stderr, "Usage:")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -33,7 +34,7 @@ func main() {
 	defer storeConn.Close()
 
 	remoteStoreClient := store.NewAvlDataStoreClient(storeConn)
-	tcpHandler := handlers.NewTcpHandler(remoteStoreClient)
+	tcpHandler := handlers.NewTcpHandler(remoteStoreClient, *storeType)
 
 	listener, err := net.Listen("tcp4", fmt.Sprintf(":%d", *port))
 	if err != nil {

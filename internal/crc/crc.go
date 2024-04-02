@@ -33,11 +33,11 @@ var teltonika_crc_table = [256]uint16{
 	0x4100, 0x81c1, 0x8081, 0x4040,
 }
 
-func Crc_Teltonika(buf []byte) uint16 {
+func CrcTeltonika(buf []byte) uint16 {
 	var crc uint16 = 0x0000
 
 	for _, b := range buf {
-		crc = uint16(crc>>8) ^ uint16(teltonika_crc_table[((crc)^uint16(b))&0xff])
+		crc = crc>>8 ^ teltonika_crc_table[((crc)^uint16(b))&0xff]
 	}
 
 	return crc
@@ -78,14 +78,14 @@ var wanway_crc_table = [256]uint16{
 	0x7BC7, 0x6A4E, 0x58D5, 0x495C, 0x3DE3, 0x2C6A, 0x1EF1, 0x0F78,
 }
 
-func Crc_Wanway(buf []byte) uint16 {
+func CrcWanway(buf []byte) uint16 {
 	var fcs uint16 = 0xffff
 
 	var b16 uint16
 	for _, b8 := range buf {
 		b16 = uint16(b8)
 		crc_tab_idx := (fcs ^ b16) & 0x00ff
-		fcs = uint16(fcs>>8) ^ wanway_crc_table[crc_tab_idx]
+		fcs = fcs>>8 ^ wanway_crc_table[crc_tab_idx]
 	}
 	return fcs ^ 0xffff
 
