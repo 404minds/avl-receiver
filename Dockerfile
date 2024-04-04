@@ -1,6 +1,6 @@
 ## build environment
 
-FROM golang:1.21.5 as builder
+FROM golang:1.22.0 as builder
 
 WORKDIR /avl-receiver
 
