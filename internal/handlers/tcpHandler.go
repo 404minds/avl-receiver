@@ -24,7 +24,7 @@ type TcpHandler struct {
 	connToProtocolMap map[string]devices.DeviceProtocol // make this an LRU cache to evict stale connections
 	allowedProtocols  []types.DeviceProtocolType
 	connToStoreMap    map[string]store.Store
-	remoteStoreClient store.AvlDataStoreClient
+	remoteStoreClient store.CustomAvlDataStoreClient
 	storeType         string
 }
 
@@ -80,7 +80,7 @@ func (t *TcpHandler) makeAsyncStore(deviceProtocol devices.DeviceProtocol) store
 	return nil
 }
 
-func makeRemoteRpcStore(remoteStoreClient store.AvlDataStoreClient) store.Store {
+func makeRemoteRpcStore(remoteStoreClient store.CustomAvlDataStoreClient) store.Store {
 	return &store.RemoteRpcStore{
 		ProcessChan:       make(chan types.DeviceStatus, 200),
 		CloseChan:         make(chan bool, 200),
