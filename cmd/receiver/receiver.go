@@ -21,6 +21,7 @@ func main() {
 	var port = flag.Int("port", 9000, "Port to listen on")
 	logger.Sugar().Info(*port)
 	var remoteStoreAddr = flag.String("remoteStoreAddr", "", "Address of the remote store")
+	logger.Sugar().Info(*remoteStoreAddr)
 	var storeType = flag.String("storeType", "remote", "Store type - one of local or remote")
 	flag.Parse()
 
