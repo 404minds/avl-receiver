@@ -4,13 +4,12 @@ services:
       context: .
     image: avl-receiver
     container_name: avl-receiver
+    networks:
+      - deployment_base-network
     ports:
       - "9000:9000"
-    command: ["./receiver", "-port", "9000", "-remoteStoreAddr", "testServer:8080"]
+    command: ["./receiver", "-port", "9000", "-remoteStoreAddr", "fns-consumer-grpc-server:8000"]
 
-  testServer:
-    image: avl-receiver
-    container_name: avl-test-server
-    ports:
-      - "8080:8080"
-    command: ["./testRpcStore", "-port", "8080"]
+networks:
+  deployment_base-network:
+   external: true

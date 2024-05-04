@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	"github.com/404minds/avl-receiver/internal/handlers"
 	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
 	"github.com/404minds/avl-receiver/internal/store"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -17,7 +19,9 @@ var logger = configuredLogger.Logger
 
 func main() {
 	var port = flag.Int("port", 9000, "Port to listen on")
+	logger.Sugar().Info(*port)
 	var remoteStoreAddr = flag.String("remoteStoreAddr", "", "Address of the remote store")
+	logger.Sugar().Info(*remoteStoreAddr)
 	var storeType = flag.String("storeType", "remote", "Store type - one of local or remote")
 	flag.Parse()
 
@@ -33,8 +37,18 @@ func main() {
 	}
 	defer storeConn.Close()
 
-	remoteStoreClient := store.NewAvlDataStoreClient(storeConn)
-	tcpHandler := handlers.NewTcpHandler(remoteStoreClient, *storeType)
+	go func() {
+		time.Sleep(5 * time.Second)
+		if storeConn.GetState() != connectivity.Ready {
+			logger.Sugar().Errorf("Connection to gRPC server %s not ready", *remoteStoreAddr)
+		} else {
+			logger.Sugar().Infof("Connected to gRPC server %s", *remoteStoreAddr)
+		}
+	}()
+
+	remoteStoreClient := store.NewCustomAvlDataStoreClient(storeConn)
+
+	tcpHandler := handlers.NewTcpHandler(*remoteStoreClient, *storeType)
 
 	listener, err := net.Listen("tcp4", fmt.Sprintf(":%d", *port))
 	if err != nil {

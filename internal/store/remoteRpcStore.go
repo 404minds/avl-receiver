@@ -11,7 +11,7 @@ import (
 type RemoteRpcStore struct {
 	ProcessChan       chan types.DeviceStatus // TODO: change to a more specific type
 	CloseChan         chan bool
-	RemoteStoreClient AvlDataStoreClient
+	RemoteStoreClient CustomAvlDataStoreClient
 	DeviceIdentifier  string
 }
 
