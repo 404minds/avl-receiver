@@ -101,12 +101,16 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Altitude = float32(r.Record.GPSElement.Altitude)
 	info.Position.Speed = float32(r.Record.GPSElement.Speed)
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
+	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 
 	// vehicle info
 	info.VehicleStatus = &types.VehicleStatus{}
 	info.VehicleStatus.Ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0
 	info.VehicleStatus.Overspeeding = r.Record.IOElement.Properties1B[TIO_Overspeeding] > 0
 	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
+
+	//battery level
+	info.BatteryLevel = int32(r.Record.IOElement.Properties2B[TIO_BatteryVoltage])
 
 	rawdata, _ := json.Marshal(r)
 	info.RawData = &types.DeviceStatus_TeltonikaPacket{

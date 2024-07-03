@@ -24,10 +24,10 @@ message DeviceStatus {
 
     GPSPosition position = 4;
     VehicleStatus vehicle_status = 5;
-
+    int32 battery_level = 6;
     oneof raw_data {
-        WanwayPacket wanway_packet = 6;
-        TeltonikaPacket teltonika_packet = 7;
+        WanwayPacket wanway_packet = 7;
+        TeltonikaPacket teltonika_packet = 8;
     }
 }
 
@@ -37,6 +37,7 @@ message GPSPosition {
     float altitude = 3;
     float speed = 4;
     float course = 5;
+    int32 satellites = 6;
 }
 
 message VehicleStatus {
