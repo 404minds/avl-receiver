@@ -210,7 +210,7 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader) (ioElement *IOEle
 		return nil, errs.ErrFM1200BadDataPacket
 	}
 
-	return
+	return ioElement, nil
 }
 
 func (t *FM1200Protocol) read1BProperties(reader *bufio.Reader) (map[IOProperty]uint8, error) {
