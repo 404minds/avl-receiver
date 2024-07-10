@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"go.uber.org/zap"
 	"io"
 	"slices"
@@ -82,25 +83,50 @@ func (p *GT06Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, asy
 	}
 }
 
-func (p *GT06Protocol) sendResponse(parsedPacket *Packet, writer io.Writer) (err error) {
+func (p *GT06Protocol) sendResponse(parsedPacket *Packet, writer io.Writer) error {
 	defer func() {
 		if condition := recover(); condition != nil {
-			err = condition.(error)
-			logger.Error("failed to write response packet", zap.Error(err))
+			err := fmt.Errorf("panic: %v", condition)
+			logger.Error("Failed to write response packet", zap.Error(err))
 		}
 	}()
 
 	responsePacket := ResponsePacket{
 		StartBit:                parsedPacket.StartBit,
-		PacketLength:            parsedPacket.PacketLength,
-		ProtocolNumber:          int8(parsedPacket.MessageType),
+		PacketLength:            0x05,                           // Example: adjust as per actual protocol
+		ProtocolNumber:          int8(parsedPacket.MessageType), // Convert to uint8 if necessary
 		InformationSerialNumber: parsedPacket.InformationSerialNumber,
-		Crc:                     parsedPacket.Crc,
 		StopBits:                parsedPacket.StopBits,
 	}
-	_, err = writer.Write(responsePacket.ToBytes())
-	checkErr(err)
+
+	// Calculate CRC-ITU over the relevant part of the response packet
+	responsePacket.Crc = calculateCRC(responsePacket.ToBytes()[1:6]) // From Packet Length to Information Serial Number
+
+	logger.Sugar().Info("Sending response packet: ", responsePacket.ToBytes())
+	_, err := writer.Write(responsePacket.ToBytes())
+	if err != nil {
+		return fmt.Errorf("failed to write response packet: %w", err)
+	}
 	return nil
+}
+
+// calculateCRC calculates CRC-ITU (CRC16) over the given data slice
+func calculateCRC(data []byte) uint16 {
+	crc := uint16(0xFFFF)
+
+	for _, b := range data {
+		crc ^= uint16(b)
+		for i := 0; i < 8; i++ {
+			if (crc & 0x0001) != 0 {
+				crc >>= 1
+				crc ^= 0xA001
+			} else {
+				crc >>= 1
+			}
+		}
+	}
+
+	return crc
 }
 
 func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err error) {
@@ -265,27 +291,43 @@ func (p *GT06Protocol) parsePositioningData(reader *bufio.Reader) (positionInfo 
 
 	var parsed PositioningInformation
 
+	// Parse GPS Information
 	gpsInfo, err := p.parseGPSInformation(reader)
-	checkErr(err)
+	if err != nil {
+		return nil, err
+	}
 	parsed.GpsInformation = gpsInfo
 
+	// Parse LBS Information
 	lbsInfo, err := p.parseLBSInformation(reader)
-	checkErr(err)
+	if err != nil {
+		return nil, err
+	}
 	parsed.LBSInfo = lbsInfo
 
-	// ACC
+	// ACC status
 	var b byte
-	checkErr(binary.Read(reader, binary.BigEndian, &b))
+	if err := binary.Read(reader, binary.BigEndian, &b); err != nil {
+		return nil, err
+	}
 	parsed.ACCHigh = b == 0x01 // 00 is low, 01 is high
 
-	// data reporting mode
-	checkErr(binary.Read(reader, binary.BigEndian, &parsed.DataReportingMode))
+	// Data reporting mode
+	if err := binary.Read(reader, binary.BigEndian, &parsed.DataReportingMode); err != nil {
+		return nil, err
+	}
 
-	checkErr(binary.Read(reader, binary.BigEndian, &b))
-	parsed.GPSRealTime = b == 0x00 // 00 is realtime, 01 is re-upload
+	// GPS real-time/re-upload status
+	if err := binary.Read(reader, binary.BigEndian, &b); err != nil {
+		return nil, err
+	}
+	parsed.GPSRealTime = b == 0x00 // 00 is real-time, 01 is re-upload
 
-	// mileage statistics
-	checkErr(binary.Read(reader, binary.BigEndian, &parsed.MileageStatistics))
+	// Mileage statistics
+	if err := binary.Read(reader, binary.BigEndian, &parsed.MileageStatistics); err != nil {
+		return nil, err
+	}
+
 	return &parsed, nil
 }
 

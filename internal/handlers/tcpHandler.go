@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"slices"
+	"time"
 
 	errs "github.com/404minds/avl-receiver/internal/errors"
 	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
@@ -47,7 +48,14 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 
 	t.connToProtocolMap[remoteAddr] = deviceProtocol
 	dataStore := t.makeAsyncStore(deviceProtocol)
+
+	logger.Sugar().Info("processing device called for ", zap.String("remoteAddr", remoteAddr))
+
+	start := time.Now()
 	go dataStore.Process()
+
+	duration := time.Since(start)
+	logger.Sugar().Info("time taken to complete go routine ", duration.Seconds())
 	defer func() { dataStore.GetCloseChan() <- true }()
 
 	t.connToStoreMap[remoteAddr] = dataStore
@@ -129,7 +137,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DevicePro
 		ack, bytesToSkip, err := protocol.Login(reader)
 
 		if err != nil {
-			if errors.Is(err, errs.ErrUnknownDeviceType) {
+			if errors.Is(err, errs.ErrUnknownProtocol) {
 				continue // try another device
 			} else {
 				return nil, nil, err

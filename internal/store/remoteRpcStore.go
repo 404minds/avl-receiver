@@ -28,11 +28,14 @@ func (s *RemoteRpcStore) Process() {
 		select {
 		case deviceStatus := <-s.ProcessChan:
 			logger.Sugar().Infoln(deviceStatus.String())
-			ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+			ctx, _ := context.WithTimeout(context.Background(), time.Second*30)
+			startTime := time.Now()
 			_, err := s.RemoteStoreClient.SaveDeviceStatus(ctx, &deviceStatus)
 			if err != nil {
 				logger.Error("failed to save device status", zap.String("imei", deviceStatus.Imei), zap.Error(err))
 			}
+			duration := time.Since(startTime)
+			logger.Sugar().Info("time taken by SaveDeviceStatus ", "duration ", duration.Seconds())
 		case <-s.CloseChan:
 			logger.Sugar().Info("async remote rpc store shutting down for device id", s.DeviceIdentifier)
 			return

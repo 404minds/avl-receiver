@@ -136,15 +136,19 @@ func TestParseHeartbeatPacket(t *testing.T) {
 }
 
 func TestParseGpsLocationPacket(t *testing.T) {
-	// bytestr := strings.ReplaceAll("78 78 22 22 0F 0C 1D 02 33 05 C9 02 7A C8 18 0C 46 58 60 00 14 00 01 CC 00 28 7D 00 1F 71 00 00 01 00 08 20 86 0D 0A", " ", "")
-	bytestr := strings.ReplaceAll("78 78 22 22 0F 0C 1D 02 33 05 C9 02 7A C8 18 0C 46 58 60 00 14 00 01 CC 00 28 7D 00 1F 71 00 00 01 00 00 00 00 00 08 20 86 0D 0A", " ", "")
-	//  inserting zero for milege bytes because the packet in example has 4 missing bytes
+	bytestr := strings.ReplaceAll("78 78 22 22 0F 0C 1D 02 33 05 C9 02 7A C8 18 0C 46 58 60 00 14 00 01 CC 00 28 7D 00 1F 71 00 00 01 00 08 20 86 0D 0A", " ", "")
 	data, _ := hex.DecodeString(bytestr)
 
 	p := GT06Protocol{LoginInformation: &LoginData{Timezone: time.UTC}}
 
 	packet, err := p.parsePacket(bufio.NewReader(bytes.NewReader(data)))
-	assert.NoError(t, err, "should parse gps location packet")
+	if err != nil {
+		t.Fatalf("should parse gps location packet, but got error: %v", err)
+	}
+
+	if packet == nil {
+		t.Fatalf("packet should not be nil")
+	}
 
 	assert.Equal(t, uint16(0x7878), packet.StartBit, "start bits should match")
 	assert.Equal(t, uint16(0x0d0a), packet.StopBits, "stop bits should match")
@@ -153,10 +157,14 @@ func TestParseGpsLocationPacket(t *testing.T) {
 	assert.Equal(t, uint16(0x0008), packet.InformationSerialNumber, "information serial number should match")
 	assert.Equal(t, uint16(0x2086), packet.Crc, "crc should match")
 
-	gpsData := packet.Information.(GPSInformation)
-	assert.Equal(t, time.Date(16, 12, 29, 2, 51, 5, 0, time.UTC), gpsData.Timestamp, "latitude degree should match")
+	gpsData, ok := packet.Information.(GPSInformation)
+	if !ok {
+		t.Fatalf("packet information should be of type GPSInformation")
+	}
+
+	assert.Equal(t, time.Date(16, 12, 29, 2, 51, 5, 0, time.UTC), gpsData.Timestamp, "timestamp should match")
 	assert.Equal(t, uint(8), gpsData.GPSInfoLength, "gps info length should match")
-	assert.Equal(t, uint(9), gpsData.NumberOfSatellites, "number of satellites length should match")
+	assert.Equal(t, uint(9), gpsData.NumberOfSatellites, "number of satellites should match")
 	assert.Equal(t, float32(41601048/1800000), gpsData.Latitude, "latitude should match")
-	assert.Equal(t, float32(52719804416/1800000), gpsData.Longitude, "latitude should match")
+	assert.Equal(t, float32(52719804416/1800000), gpsData.Longitude, "longitude should match")
 }
