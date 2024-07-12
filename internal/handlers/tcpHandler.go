@@ -38,7 +38,6 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	}()
 
 	reader := bufio.NewReader(conn)
-
 	deviceProtocol, ack, err := t.attemptDeviceLogin(reader)
 	if err != nil {
 		logger.Error("failed to identify device", zap.String("remoteAddr", remoteAddr), zap.Error(err))
@@ -129,7 +128,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DevicePro
 		ack, bytesToSkip, err := protocol.Login(reader)
 
 		if err != nil {
-			if errors.Is(err, errs.ErrUnknownDeviceType) {
+			if errors.Is(err, errs.ErrUnknownProtocol) {
 				continue // try another device
 			} else {
 				return nil, nil, err

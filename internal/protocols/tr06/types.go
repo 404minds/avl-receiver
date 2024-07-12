@@ -1,4 +1,4 @@
-package gt06
+package tr06
 
 import (
 	"bytes"
@@ -10,9 +10,49 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+const (
+	StartBitValue = 0x7979
+	StopBitValue  = 0x0D0A
+)
+
+type InformationType byte
+
+const (
+	ExternalPowerVoltage InformationType = 0x00
+	TerminalStatusSync   InformationType = 0x04
+	DoorStatus           InformationType = 0x05
+)
+
+type ExternalPowerVoltageData struct {
+	Voltage float32
+}
+
+type TerminalStatusSyncData struct {
+	Status string
+}
+
+type DoorStatusData struct {
+	DoorOpen bool
+}
+
+type InformationTransmissionPacket struct {
+	StartBit                uint16
+	PacketLength            uint16
+	ProtocolNumber          byte
+	InformationContent      InformationContent
+	InformationSerialNumber uint16
+	Crc                     uint16
+	StopBits                uint16
+}
+
+type InformationContent struct {
+	InformationType InformationType
+	DataContent     uint16
+}
+
 type Packet struct {
 	StartBit                uint16
-	PacketLength            int8
+	PacketLength            uint16
 	MessageType             MessageType
 	Information             interface{}
 	InformationSerialNumber uint16
@@ -115,16 +155,16 @@ type MessageType byte
 
 const (
 	MSG_LoginData               MessageType = 0x01
-	MSG_PositioningData                     = 0x22
+	MSG_PositioningData                     = 0x12
 	MSG_HeartbeatData                       = 0x13
 	MSG_EG_HeartbeatData                    = 0x23
-	MSG_StringInformation                   = 0x21
-	MSG_AlarmData                           = 0x26
+	MSG_StringInformation                   = 0x15
+	MSG_AlarmData                           = 0x16
 	MSG_LBSInformation                      = 0x28 // TODO: check if this is correct
 	MSG_TimezoneInformation                 = 0x27
 	MSG_GPS_PhoneNumber                     = 0x2a
 	MSG_WifiInformation                     = 0x2c
-	MSG_TransmissionInstruction             = 0x80
+	MSG_TransmissionInstruction             = 0x94
 	MSG_Invalid                             = 0xff
 )
 

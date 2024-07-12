@@ -34,7 +34,7 @@ func (s *RemoteRpcStore) Process() {
 				logger.Error("failed to save device status", zap.String("imei", deviceStatus.Imei), zap.Error(err))
 			}
 		case <-s.CloseChan:
-			logger.Sugar().Info("async remote rpc store shutting down for device id", s.DeviceIdentifier)
+			logger.Sugar().Info("async remote rpc store shutting down for device")
 			return
 		}
 	}
