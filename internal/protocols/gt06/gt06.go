@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"go.uber.org/zap"
 	"io"
 	"slices"
@@ -82,25 +83,50 @@ func (p *GT06Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, asy
 	}
 }
 
-func (p *GT06Protocol) sendResponse(parsedPacket *Packet, writer io.Writer) (err error) {
+func (p *GT06Protocol) sendResponse(parsedPacket *Packet, writer io.Writer) error {
 	defer func() {
 		if condition := recover(); condition != nil {
-			err = condition.(error)
-			logger.Error("failed to write response packet", zap.Error(err))
+			err := fmt.Errorf("panic: %v", condition)
+			logger.Error("Failed to write response packet", zap.Error(err))
 		}
 	}()
 
 	responsePacket := ResponsePacket{
 		StartBit:                parsedPacket.StartBit,
-		PacketLength:            parsedPacket.PacketLength,
+		PacketLength:            0x05,
 		ProtocolNumber:          int8(parsedPacket.MessageType),
 		InformationSerialNumber: parsedPacket.InformationSerialNumber,
-		Crc:                     parsedPacket.Crc,
 		StopBits:                parsedPacket.StopBits,
 	}
-	_, err = writer.Write(responsePacket.ToBytes())
-	checkErr(err)
+
+	responsePacket.Crc = crc.CrcWanway(responsePacket.ToBytes()[2:6])
+
+	logger.Sugar().Info("Sending response packet: ", responsePacket.ToBytes())
+	_, err := writer.Write(responsePacket.ToBytes())
+	if err != nil {
+		return fmt.Errorf("failed to write response packet: %w", err)
+	}
 	return nil
+}
+
+func calculateCRC(data []byte) uint16 {
+	logger.Sugar().Info(data)
+	crc := uint16(0xFFFF)
+	logger.Sugar().Info(crc)
+	for _, b := range data {
+		logger.Sugar().Info(crc)
+		crc ^= uint16(b)
+		for i := 0; i < 8; i++ {
+			if (crc & 0x0001) != 0 {
+				crc >>= 1
+				crc ^= 0xA001
+			} else {
+				crc >>= 1
+			}
+		}
+	}
+
+	return crc
 }
 
 func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err error) {
@@ -202,6 +228,7 @@ func (p *GT06Protocol) consumePacket(reader *bufio.Reader) ([]byte, error) {
 }
 
 func (p *GT06Protocol) parsePacketInformation(reader *bufio.Reader, messageType MessageType) (interface{}, error) {
+	logger.Sugar().Info(messageType)
 	if messageType == MSG_LoginData {
 		parsedInfo, err := p.parseLoginInformation(reader)
 		return parsedInfo, err
@@ -212,6 +239,9 @@ func (p *GT06Protocol) parsePacketInformation(reader *bufio.Reader, messageType 
 		parsedInfo, err := p.parseAlarmData(reader)
 		return parsedInfo, err
 	} else if messageType == MSG_HeartbeatData {
+		parsedInfo, err := p.parseHeartbeatData(reader)
+		return parsedInfo, err
+	} else if messageType == MSG_EG_HeartbeatData {
 		parsedInfo, err := p.parseHeartbeatData(reader)
 		return parsedInfo, err
 	} else {

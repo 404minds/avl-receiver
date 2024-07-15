@@ -19,6 +19,14 @@ func TestWanwayCrc(t *testing.T) {
 		{"3B 28 10 01 0D 02 02 02 01 CC 00 28 7D 00 1F 71 3E 28 7D 00 1F 72 31 28 7D 00" +
 			"1E 23 2D 28 7D 00 1F 40 18 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 FF 00 02 00" +
 			"05", 0xB14B},
+		{"", 0xFFFF},                        // Empty input
+		{"00", 0x8D02},                      // Single byte input
+		{"FF", 0x81F9},                      // Single byte input with maximum value
+		{"01 02", 0xE1F1},                   // Two byte input
+		{"01 02 03", 0xCC35},                // Three byte input
+		{"FF FF FF FF", 0x0BB3},             // Four byte input with maximum values
+		{"AA BB CC DD EE FF", 0x4B37},       // Six byte input with mixed values
+		{"FF 00 FF 00 FF 00 FF 00", 0x2D6F}, // Alternating high and low bytes
 	}
 
 	for _, testcase := range testCases {

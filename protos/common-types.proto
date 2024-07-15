@@ -15,6 +15,7 @@ enum DeviceType {
 enum DeviceProtocolType {
     FM1200 = 0;
     GT06 = 1;
+    TR06 = 2;
 }
 
 message DeviceStatus {
