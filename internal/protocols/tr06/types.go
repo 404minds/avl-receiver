@@ -52,7 +52,7 @@ type InformationContent struct {
 
 type Packet struct {
 	StartBit                uint16
-	PacketLength            uint16
+	PacketLength            byte
 	MessageType             MessageType
 	Information             interface{}
 	InformationSerialNumber uint16
@@ -155,11 +155,11 @@ type MessageType byte
 
 const (
 	MSG_LoginData               MessageType = 0x01
-	MSG_PositioningData                     = 0x12
+	MSG_PositioningData                     = 0x22
 	MSG_HeartbeatData                       = 0x13
 	MSG_EG_HeartbeatData                    = 0x23
 	MSG_StringInformation                   = 0x15
-	MSG_AlarmData                           = 0x16
+	MSG_AlarmData                           = 0x26
 	MSG_LBSInformation                      = 0x28 // TODO: check if this is correct
 	MSG_TimezoneInformation                 = 0x27
 	MSG_GPS_PhoneNumber                     = 0x2a
@@ -296,25 +296,43 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	// location info
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
+
+		info.Position.Latitude = v.GpsInformation.Latitude
+		info.Position.Longitude = v.GpsInformation.Longitude
+		info.Position.Speed = float32(v.GpsInformation.Speed)
+		info.Position.Course = float32(v.GpsInformation.Course.Degree)
+
 	case *AlarmInformation:
 		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
 		info.Position.Latitude = v.GpsInformation.Latitude
 		info.Position.Longitude = v.GpsInformation.Longitude
 		info.Position.Speed = float32(v.GpsInformation.Speed)
+		info.Position.Course = float32(v.GpsInformation.Course.Degree)
 	default:
 	}
 
 	// vehicle status
+	logger.Sugar().Info(packet.Information)
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
-		info.VehicleStatus.Ignition = v.ACCHigh
-		info.VehicleStatus.Overspeeding = false
+		info.VehicleStatus.Ignition = v.ACCHigh //（not available for 06 ）
+
 	case *AlarmInformation:
 		info.VehicleStatus.Ignition = v.StatusInformation.TerminalInformation.ACCHigh
 		info.VehicleStatus.Overspeeding = v.StatusInformation.Alarm == ALV_OverSpeed
+
 	case *HeartbeatData:
 		info.VehicleStatus.Ignition = v.TerminalInformation.ACCHigh
 	default:
+	}
+
+	//battery Strength
+	switch v := packet.Information.(type) {
+	case *AlarmInformation:
+		info.BatteryLevel = int32(v.StatusInformation.BatteryLevel)
+	case *PositioningInformation:
+
+	case *HeartbeatData:
 	}
 
 	rawdata, _ := json.Marshal(packet)
@@ -323,4 +341,13 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	}
 
 	return info
+}
+
+func checkRashDriving(eventCodes []byte) bool {
+	for _, eventCode := range eventCodes {
+		if eventCode == ALV_HarshAcceleration || eventCode == ALV_HarshBraking || eventCode == ALV_SharpLeftTurn || eventCode == ALV_SharpRightTurn {
+			return true
+		}
+	}
+	return false
 }

@@ -126,6 +126,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DevicePro
 	for _, protocolType := range t.allowedProtocols {
 		protocol := devices.MakeProtocolForType(protocolType)
 		ack, bytesToSkip, err := protocol.Login(reader)
+		logger.Sugar().Info(ack, " for device ID : ", protocol.GetDeviceID(), " and erro: ", err)
 
 		if err != nil {
 			if errors.Is(err, errs.ErrUnknownProtocol) {

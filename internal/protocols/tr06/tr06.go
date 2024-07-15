@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"io"
-	"slices"
 	"time"
 
 	"github.com/404minds/avl-receiver/internal/crc"
@@ -75,11 +74,12 @@ func (p *Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, asyncSt
 			logger.Sugar().Info("Consume Stream :", err)
 			return err
 		}
-		err = p.sendResponse(packet, writer)
-
-		if err != nil {
-			logger.Sugar().Info("error while sending response", err)
-			return err
+		if packet.MessageType == MSG_HeartbeatData {
+			err = p.sendResponse(packet, writer)
+			if err != nil {
+				logger.Sugar().Info("error while sending response", err)
+				return err
+			}
 		}
 
 		protoPacket := packet.ToProtobufDeviceStatus(p.GetDeviceID(), p.DeviceType)
@@ -96,7 +96,7 @@ func (p *Protocol) sendResponse(parsedPacket *Packet, writer io.Writer) error {
 	}()
 
 	responsePacket := ResponsePacket{
-		StartBit:                parsedPacket.StartBit,
+		StartBit:                0x7878,
 		PacketLength:            0x05,
 		ProtocolNumber:          int8(parsedPacket.MessageType),
 		InformationSerialNumber: parsedPacket.InformationSerialNumber,
@@ -147,7 +147,7 @@ func (p *Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err error)
 			logger.Sugar().Errorf("parse packet Failed to read packet length: %v", err)
 			return nil, err
 		}
-		packet.PacketLength = packetLength
+		packet.PacketLength = byte(packetLength)
 		logger.Sugar().Infof("parse packet Packet length: %d", packet.PacketLength)
 
 	} else if packet.StartBit == 0x7878 {
@@ -157,7 +157,7 @@ func (p *Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err error)
 			logger.Sugar().Errorf("parse packet Failed to read packet length: %v", err)
 			return nil, err
 		}
-		packet.PacketLength = uint16(int8(packetLength))
+		packet.PacketLength = packetLength
 		logger.Sugar().Infof("parse packet Packet length: %d", packet.PacketLength)
 	} else {
 		return nil, errors.Wrapf(errs.ErrTR06BadDataPacket, "from parsePacket Invalid StartBit packet.StartBit: %d", packet.StartBit) // Invalid start bit
@@ -213,20 +213,20 @@ func (p *Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err error)
 	}
 
 	// Validate CRC
-	expectedCrc := crc.CrcWanway(
-		slices.Concat(
-			[]byte{byte(packet.PacketLength)},
-			packetData,
-			[]byte{
-				byte(packet.InformationSerialNumber >> 8),
-				byte(packet.InformationSerialNumber & 0xff),
-			},
-		),
-	)
-	if expectedCrc != packet.Crc {
-		logger.Sugar().Errorf("parse packet Invalid CRC. Expected %x, got %x", expectedCrc, packet.Crc)
-		return nil, errs.ErrBadCrc
-	}
+	//expectedCrc := crc.CrcWanway(
+	//	slices.Concat(
+	//		[]byte{byte(packet.PacketLength)},
+	//		packetData,
+	//		[]byte{
+	//			byte(packet.InformationSerialNumber >> 8),
+	//			byte(packet.InformationSerialNumber & 0xff),
+	//		},
+	//	),
+	//)
+	//if expectedCrc != packet.Crc {
+	//	logger.Sugar().Errorf("parse packet Invalid CRC. Expected %x, got %x", expectedCrc, packet.Crc)
+	//	return nil, errs.ErrBadCrc
+	//}
 
 	return packet, nil
 }
@@ -362,6 +362,7 @@ func (p *Protocol) parsePositioningData(reader *bufio.Reader) (positionInfo inte
 	var b byte
 	checkErr(binary.Read(reader, binary.BigEndian, &b))
 	parsed.ACCHigh = b == 0x01 // 00 is low, 01 is high
+	logger.Sugar().Info("parsePositioningData Ignition ", parsed.ACCHigh)
 
 	// data reporting mode
 	checkErr(binary.Read(reader, binary.BigEndian, &parsed.DataReportingMode))
@@ -473,7 +474,7 @@ func (p *Protocol) parseInformationTransmissionPacket(reader *bufio.Reader) (pac
 	logger.Sugar().Info("parseInformationTransmissionPacket: ", packet.InformationContent.InformationType)
 
 	dataContent := make([]byte, 2)
-	logger.Sugar().Info("parseInformationTransmissionPacket: Reading data content, length: ", dataContent)
+	logger.Sugar().Info("parseInformationTransmissionPacket: Reading data content: ", dataContent)
 	if _, err := io.ReadFull(reader, dataContent); err != nil {
 		logger.Sugar().Info("parseInformationTransmissionPacket: Failed to read data content ", err)
 		return packet, err
@@ -486,9 +487,9 @@ func (p *Protocol) parseInformationTransmissionPacket(reader *bufio.Reader) (pac
 			logger.Sugar().Info("parseInformationTransmissionPacket: Insufficient data for ExternalPowerVoltage")
 			return packet, errors.New("Insufficient data for ExternalPowerVoltage")
 		}
-		voltage := float32(packet.InformationContent.DataContent)
+		voltage := binary.BigEndian.Uint16(dataContent)
 		logger.Sugar().Info("voltage: ", voltage)
-		packet.InformationContent.DataContent = uint16(voltage)
+		packet.InformationContent.DataContent = (voltage) / 100
 	case TerminalStatusSync:
 		status := packet.InformationContent.DataContent
 		packet.InformationContent.DataContent = status
