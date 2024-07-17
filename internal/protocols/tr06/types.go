@@ -296,7 +296,7 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	// Location info
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
-
+		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
 		info.Position.Latitude = v.GpsInformation.Latitude
 		info.Position.Longitude = v.GpsInformation.Longitude
 		if v.GpsInformation.Speed != 0 {
@@ -324,6 +324,9 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	logger.Sugar().Info(packet.Information)
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
+		if !v.ACCHigh {
+			info.VehicleStatus.Ignition = false
+		}
 		info.VehicleStatus.Ignition = v.ACCHigh // (not available for 06)
 
 	case *AlarmInformation:
