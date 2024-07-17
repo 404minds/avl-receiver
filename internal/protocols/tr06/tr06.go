@@ -25,6 +25,7 @@ type TR06Protocol struct {
 }
 
 func (p *TR06Protocol) GetDeviceID() string {
+	logger.Sugar().Info(p.LoginInformation)
 	if p.LoginInformation == nil {
 		logger.Error("LoginInformation is nil in GetDeviceID")
 		return ""
@@ -537,7 +538,8 @@ func (p *TR06Protocol) parseInformationTransmissionPacket(reader *bufio.Reader) 
 		break
 	}
 
-	if _, err := reader.Peek(1); err != io.EOF {
+	if remain, err := reader.Peek(1); err != io.EOF {
+		logger.Sugar().Info("parseInformationTransmissionPacket remaining bytes: ", remain)
 		logger.Sugar().Info("parseInformationTransmissionPacket: Extra bytes detected in packet")
 		return packet, errors.New("TR06 Bad Data Packet")
 	}
