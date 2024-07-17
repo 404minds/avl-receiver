@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"strings"
 	"testing"
 
 	errs "github.com/404minds/avl-receiver/internal/errors"
@@ -51,7 +50,8 @@ func TestTeltonikaDeviceLogin(t *testing.T) {
 }
 
 func TestWanwayDeviceLogin(t *testing.T) {
-	buf, _ := hex.DecodeString(strings.ReplaceAll("78 78 11 01 07 52 53 36 78 90 02 42 70 00 32 01 00 05 12 79 0D 0A", " ", ""))
+	hexString := "78781101075253367890024270003201000512790D0A"
+	buf, _ := hex.DecodeString(hexString)
 
 	reader := bufio.NewReader(bytes.NewReader(buf))
 	handler := NewTcpHandler(&mockRemoteDataStore{
@@ -61,9 +61,9 @@ func TestWanwayDeviceLogin(t *testing.T) {
 	protocol, ack, err := handler.attemptDeviceLogin(reader)
 
 	assert.NoError(t, err, "device login should succeed")
-	assert.IsType(t, &gt06.GT06Protocol{}, protocol, "protocol should be of type FM1200Protocol")
+	assert.IsType(t, &gt06.GT06Protocol{}, protocol, "protocol should be of type GT06Protocol")
 	assert.Equal(t, "752533678900242", protocol.GetDeviceID(), "imei should be parsed correctly")
-	assert.Equal(t, []byte{0x78, 0x78, 0x11, 0x01, 0x00, 0x05, 0x12, 0x79, 0x0d, 0x0a}, ack, "login ack should be of the format as gt06 expects")
+	assert.Equal(t, []byte{0x78, 0x78, 0x11, 0x01, 0x00, 0x05, 0x12, 0x79, 0x0d, 0x0a}, ack, "login ack should be of the format as GT06 expects")
 }
 
 func TestUnknownDeviceLogin(t *testing.T) {

@@ -293,46 +293,68 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	info.VehicleStatus = &types.VehicleStatus{}
 	info.Position = &types.GPSPosition{}
 
-	// location info
+	// Location info
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
 
 		info.Position.Latitude = v.GpsInformation.Latitude
 		info.Position.Longitude = v.GpsInformation.Longitude
-		info.Position.Speed = float32(v.GpsInformation.Speed)
+		if v.GpsInformation.Speed != 0 {
+			info.Position.Speed = float32(v.GpsInformation.Speed)
+		} else {
+			info.Position.Speed = 0
+		}
 		info.Position.Course = float32(v.GpsInformation.Course.Degree)
 
 	case *AlarmInformation:
 		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
 		info.Position.Latitude = v.GpsInformation.Latitude
 		info.Position.Longitude = v.GpsInformation.Longitude
-		info.Position.Speed = float32(v.GpsInformation.Speed)
+		if v.GpsInformation.Speed != 0 {
+			info.Position.Speed = float32(v.GpsInformation.Speed)
+		} else {
+			info.Position.Speed = 0
+		}
 		info.Position.Course = float32(v.GpsInformation.Course.Degree)
+
 	default:
 	}
 
-	// vehicle status
+	// Vehicle status
 	logger.Sugar().Info(packet.Information)
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
-		info.VehicleStatus.Ignition = v.ACCHigh //（not available for 06 ）
+		info.VehicleStatus.Ignition = v.ACCHigh // (not available for 06)
 
 	case *AlarmInformation:
+		if !v.StatusInformation.TerminalInformation.ACCHigh {
+			info.VehicleStatus.Ignition = false
+		}
 		info.VehicleStatus.Ignition = v.StatusInformation.TerminalInformation.ACCHigh
 		info.VehicleStatus.Overspeeding = v.StatusInformation.Alarm == ALV_OverSpeed
 
 	case *HeartbeatData:
+		if !v.TerminalInformation.ACCHigh {
+			info.VehicleStatus.Ignition = false
+		}
 		info.VehicleStatus.Ignition = v.TerminalInformation.ACCHigh
+		info.Position.Satellites = int32(v.GSMSignalStrength) // GSM signal strength from HeartbeatData
+		info.BatteryLevel = int32(v.BatteryLevel)             // Battery level from HeartbeatData
 	default:
+		info.VehicleStatus.Ignition = false // Default to false if not set
 	}
 
-	//battery Strength
+	// Battery strength and GSM signal strength
 	switch v := packet.Information.(type) {
 	case *AlarmInformation:
 		info.BatteryLevel = int32(v.StatusInformation.BatteryLevel)
-	case *PositioningInformation:
-
+		info.Position.Satellites = int32(v.StatusInformation.GSMSignalStrength)
 	case *HeartbeatData:
+		info.BatteryLevel = int32(v.BatteryLevel)
+		info.Position.Satellites = int32(v.GSMSignalStrength)
+	case *PositioningInformation:
+		// Assuming no battery level and GSM signal strength data in PositioningInformation
+	default:
 	}
 
 	rawdata, _ := json.Marshal(packet)
