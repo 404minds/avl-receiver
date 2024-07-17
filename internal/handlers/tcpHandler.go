@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"go.uber.org/zap"
 	"io"
 	"net"
@@ -121,61 +122,66 @@ func makeJsonStore(destDir string, deviceIdentifier string) store.Store {
 		DeviceID:    deviceIdentifier,
 	}
 }
-func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (devices.DeviceProtocol, []byte, error) {
+
+func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.DeviceProtocol, ack []byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Sugar().Error("Panic occurred during protocol login: ", r)
+			err = fmt.Errorf("panic occurred during protocol login: %v", r)
+		}
+	}()
+
 	for _, protocolType := range t.allowedProtocols {
-		logger.Sugar().Info("attemptDeviceLogin ProtocolType: ", protocolType)
-		protocol := devices.MakeProtocolForType(protocolType)
-		logger.Sugar().Info("attemptDeviceLogin Protocol: ", protocol)
+		logger.Sugar().Info("Attempting device login with ProtocolType: ", protocolType)
+		protocol = devices.MakeProtocolForType(protocolType)
+		logger.Sugar().Info("Created Protocol: ", protocol)
 
 		if protocol == nil {
-			logger.Sugar().Error("attemptDeviceLogin failed: Unsupported ProtocolType: ", protocolType)
+			logger.Sugar().Error("Unsupported ProtocolType: ", protocolType)
 			continue
 		}
-
-		defer func() {
-			if r := recover(); r != nil {
-				logger.Sugar().Error("panic occurred during protocol login: ", r)
-			}
-		}()
 
 		logger.Sugar().Info("Attempting to login with protocol: ", protocolType)
 		ack, bytesToSkip, err := protocol.Login(reader)
+		logger.Sugar().Infof("Acknowledgement: %v for bytes to skip: %d and error: %v", ack, bytesToSkip, err)
 
-		logger.Sugar().Info("Attempting to get deviceID: ")
-		deviceID := protocol.GetDeviceID()
-		logger.Sugar().Infof("Acknowledgement: %v for device ID: %s and error: %v", ack, deviceID, err)
-
-		switch {
-		case errors.Is(err, errs.ErrUnknownProtocol):
-			logger.Sugar().Error("Unknown protocol error: ", err)
-			continue // try another device
-		case err != nil:
+		if err != nil {
+			if errors.Is(err, errs.ErrUnknownProtocol) {
+				logger.Sugar().Error("Unknown protocol error: ", err)
+				continue // try another device
+			}
 			logger.Sugar().Error("Error during login: ", err)
 			return nil, nil, err
-		case deviceID == "":
+		}
+
+		// Only call GetDeviceID after a successful login
+		deviceID := protocol.GetDeviceID()
+		logger.Sugar().Infof("Device ID: %s", deviceID)
+
+		if deviceID == "" {
 			logger.Error("Device ID is empty after successful login")
 			continue
-		default:
-			logger.Info("Device identified", zap.String("protocol", protocolType.String()), zap.String("deviceID", deviceID), zap.Int("bytesToSkip", bytesToSkip))
-			if _, err := reader.Discard(bytesToSkip); err != nil {
-				logger.Sugar().Error("Error discarding bytes: ", err)
-				return nil, nil, err
-			}
+		}
 
-			deviceType, err := t.VerifyDevice(deviceID, protocol.GetProtocolType())
-			switch {
-			case errors.Is(err, errs.ErrUnauthorizedDevice):
+		logger.Info("Device identified", zap.String("protocol", protocolType.String()), zap.String("deviceID", deviceID), zap.Int("bytesToSkip", bytesToSkip))
+		if _, err := reader.Discard(bytesToSkip); err != nil {
+			logger.Sugar().Error("Error discarding bytes: ", err)
+			return nil, nil, err
+		}
+
+		deviceType, err := t.VerifyDevice(deviceID, protocol.GetProtocolType())
+		if err != nil {
+			if errors.Is(err, errs.ErrUnauthorizedDevice) {
 				logger.Error("Device is not authorized", zap.String("deviceID", deviceID), zap.String("protocolType", protocol.GetProtocolType().String()))
 				return nil, nil, err
-			case err != nil:
-				logger.Sugar().Error("Error verifying device: ", err)
-				return nil, nil, err
-			default:
-				protocol.SetDeviceType(deviceType)
-				logger.Info("Login successful", zap.String("deviceID", deviceID), zap.String("deviceType", deviceType.String()))
-				return protocol, ack, nil
 			}
+			logger.Sugar().Error("Error verifying device: ", err)
+			return nil, nil, err
 		}
+
+		protocol.SetDeviceType(deviceType)
+		logger.Info("Login successful", zap.String("deviceID", deviceID), zap.String("deviceType", deviceType.String()))
+		return protocol, ack, nil
 	}
 
 	logger.Sugar().Error("All protocols failed, unknown device type")

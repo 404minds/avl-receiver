@@ -25,6 +25,15 @@ type TR06Protocol struct {
 }
 
 func (p *TR06Protocol) GetDeviceID() string {
+	if p.LoginInformation == nil {
+		logger.Error("LoginInformation is nil in GetDeviceID")
+		return ""
+	}
+
+	if p.LoginInformation.TerminalID == "" {
+		logger.Error("Login Information does not have TerminalID in GetDeviceID")
+	}
+
 	return p.LoginInformation.TerminalID
 }
 
@@ -68,7 +77,7 @@ func (p *TR06Protocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int, 
 			logger.Error("loginData is nil", zap.Error(errs.ErrTR06InvalidLoginInfo))
 			return nil, 0, errs.ErrTR06InvalidLoginInfo
 		}
-
+		logger.Sugar().Info("from Login LoginData: ", loginData)
 		p.LoginInformation = loginData
 
 		byteBuffer := bytes.NewBuffer([]byte{})
@@ -330,9 +339,10 @@ func (p *TR06Protocol) parseLoginInformation(reader *bufio.Reader) (interface{},
 		logger.Error("failed to read IMEI bytes", zap.Error(err))
 		return nil, errs.ErrTR06InvalidLoginInfo
 	}
+	logger.Sugar().Info("parseLoginInformation imeiBytes: ", imeiBytes[:])
 	loginInfo.TerminalID = hex.EncodeToString(imeiBytes[:])[1:] // IMEI is 15 chars
-
-	logger.Sugar().Info("parseLoginInformation loginInfo: ", loginInfo.TerminalID)
+	logger.Sugar().Info("parseLoginInformation loginInfo: ", loginInfo)
+	logger.Sugar().Info("parseLoginInformation loginInfo.TerminalID: ", loginInfo.TerminalID)
 	err = binary.Read(reader, binary.BigEndian, &loginInfo.TerminalType)
 	if err != nil {
 		logger.Error("failed to read terminal type", zap.Error(err))
