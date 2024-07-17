@@ -23,10 +23,13 @@ func MakeProtocolForType(t types.DeviceProtocolType) DeviceProtocol {
 	switch t {
 	case types.DeviceProtocolType_FM1200:
 		return &fm1200.FM1200Protocol{}
+
 	case types.DeviceProtocolType_GT06:
 		return &gt06.GT06Protocol{}
+
 	case types.DeviceProtocolType_TR06:
-		return &tr06.Protocol{}
+		return &tr06.TR06Protocol{}
+
 	default:
 		return nil
 	}

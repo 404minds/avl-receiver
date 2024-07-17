@@ -19,55 +19,73 @@ import (
 
 var logger = configuredLogger.Logger
 
-type Protocol struct {
+type TR06Protocol struct {
 	LoginInformation *LoginData
 	DeviceType       types.DeviceType
 }
 
-func (p *Protocol) GetDeviceID() string {
+func (p *TR06Protocol) GetDeviceID() string {
 	return p.LoginInformation.TerminalID
 }
 
-func (p *Protocol) GetDeviceType() types.DeviceType {
+func (p *TR06Protocol) GetDeviceType() types.DeviceType {
 	return p.DeviceType
 }
 
-func (p *Protocol) SetDeviceType(t types.DeviceType) {
+func (p *TR06Protocol) SetDeviceType(t types.DeviceType) {
 	p.DeviceType = t
 }
 
-func (p *Protocol) GetProtocolType() types.DeviceProtocolType {
+func (p *TR06Protocol) GetProtocolType() types.DeviceProtocolType {
 	return types.DeviceProtocolType_TR06
 }
 
-func (p *Protocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int, e error) {
+func (p *TR06Protocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int, e error) {
 	if !p.IsValidHeader(reader) {
 		return nil, 0, errs.ErrUnknownProtocol
 	}
 
-	// this should have been a tr06 device
+	// This should have been a TR06 device
 	packet, err := p.parsePacket(reader)
 	if err != nil {
-		logger.Error("failed to parse tr06 packet ", zap.Error(err))
+		logger.Error("failed to parse TR06 packet", zap.Error(err))
 		return nil, 0, err
 	}
+
 	if packet.MessageType == MSG_LoginData {
-		p.LoginInformation = packet.Information.(*LoginData)
+		if packet.Information == nil {
+			logger.Error("packet information is nil", zap.Error(errs.ErrTR06InvalidLoginInfo))
+			return nil, 0, errs.ErrTR06InvalidLoginInfo
+		}
+
+		loginData, ok := packet.Information.(*LoginData)
+		if !ok {
+			logger.Error("packet information is not of type *LoginData", zap.Error(errs.ErrTR06InvalidLoginInfo))
+			return nil, 0, errs.ErrTR06InvalidLoginInfo
+		}
+
+		if loginData == nil {
+			logger.Error("loginData is nil", zap.Error(errs.ErrTR06InvalidLoginInfo))
+			return nil, 0, errs.ErrTR06InvalidLoginInfo
+		}
+
+		p.LoginInformation = loginData
 
 		byteBuffer := bytes.NewBuffer([]byte{})
 		err = p.sendResponse(packet, byteBuffer)
 		if err != nil {
-			logger.Error("failed to parse tr06 packet ", zap.Error(err))
+			logger.Error("failed to send response for TR06 packet", zap.Error(err))
 			return nil, 0, err
 		}
 
 		return byteBuffer.Bytes(), 0, nil // nothing to skip since the stream is already consumed
 	} else {
+		logger.Error("packet message type is not MSG_LoginData", zap.Error(errs.ErrTR06InvalidLoginInfo))
 		return nil, 0, errs.ErrTR06InvalidLoginInfo
 	}
 }
 
-func (p *Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, asyncStore chan types.DeviceStatus) error {
+func (p *TR06Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, asyncStore chan types.DeviceStatus) error {
 	for {
 		packet, err := p.parsePacket(reader)
 		if err != nil {
@@ -87,7 +105,7 @@ func (p *Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, asyncSt
 	}
 }
 
-func (p *Protocol) sendResponse(parsedPacket *Packet, writer io.Writer) error {
+func (p *TR06Protocol) sendResponse(parsedPacket *Packet, writer io.Writer) error {
 	defer func() {
 		if condition := recover(); condition != nil {
 			err := fmt.Errorf("panic: %v", condition)
@@ -113,7 +131,7 @@ func (p *Protocol) sendResponse(parsedPacket *Packet, writer io.Writer) error {
 	return nil
 }
 
-func (p *Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err error) {
+func (p *TR06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if rErr, ok := r.(error); ok {
@@ -231,7 +249,7 @@ func (p *Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err error)
 	return packet, nil
 }
 
-func (p *Protocol) parsePacketData(reader *bufio.Reader, packet *Packet) error {
+func (p *TR06Protocol) parsePacketData(reader *bufio.Reader, packet *Packet) error {
 	protocolNumByte, err := reader.ReadByte()
 	logger.Sugar().Info("parsePacketData protocol number byte: ", protocolNumByte)
 
@@ -260,7 +278,7 @@ func (p *Protocol) parsePacketData(reader *bufio.Reader, packet *Packet) error {
 	return nil
 }
 
-func (p *Protocol) consumePacket(reader *bufio.Reader) ([]byte, error) {
+func (p *TR06Protocol) consumePacket(reader *bufio.Reader) ([]byte, error) {
 	data := make([]byte, 0)
 	term := []byte{0x0d, 0x0a}
 
@@ -277,7 +295,7 @@ func (p *Protocol) consumePacket(reader *bufio.Reader) ([]byte, error) {
 	return data, nil
 }
 
-func (p *Protocol) parsePacketInformation(reader *bufio.Reader, messageType MessageType) (interface{}, error) {
+func (p *TR06Protocol) parsePacketInformation(reader *bufio.Reader, messageType MessageType) (interface{}, error) {
 	if messageType == MSG_LoginData {
 		parsedInfo, err := p.parseLoginInformation(reader)
 		return parsedInfo, err
@@ -303,24 +321,28 @@ func (p *Protocol) parsePacketInformation(reader *bufio.Reader, messageType Mess
 	}
 }
 
-func (p *Protocol) parseLoginInformation(reader *bufio.Reader) (interface{}, error) {
+func (p *TR06Protocol) parseLoginInformation(reader *bufio.Reader) (interface{}, error) {
 	var loginInfo LoginData
 
 	var imeiBytes [8]byte
 	err := binary.Read(reader, binary.BigEndian, &imeiBytes)
 	if err != nil {
+		logger.Error("failed to read IMEI bytes", zap.Error(err))
 		return nil, errs.ErrTR06InvalidLoginInfo
 	}
-	loginInfo.TerminalID = hex.EncodeToString(imeiBytes[:])[1:] // imei is 15 chars
+	loginInfo.TerminalID = hex.EncodeToString(imeiBytes[:])[1:] // IMEI is 15 chars
 
+	logger.Sugar().Info("parseLoginInformation loginInfo: ", loginInfo.TerminalID)
 	err = binary.Read(reader, binary.BigEndian, &loginInfo.TerminalType)
 	if err != nil {
+		logger.Error("failed to read terminal type", zap.Error(err))
 		return nil, errs.ErrTR06InvalidLoginInfo
 	}
 
 	var timezoneOffset int16
 	err = binary.Read(reader, binary.BigEndian, &timezoneOffset)
 	if err != nil {
+		logger.Error("failed to read timezone offset", zap.Error(err))
 		return nil, errs.ErrTR06InvalidLoginInfo
 	}
 	timezonePart := int(timezoneOffset >> 4)
@@ -334,10 +356,11 @@ func (p *Protocol) parseLoginInformation(reader *bufio.Reader) (interface{}, err
 	}
 	loginInfo.Timezone = time.FixedZone("", int(zoneOffset)*(hours*60*60+minutes*60))
 
+	logger.Sugar().Info("parseLoginInformation loginInfo: ", loginInfo)
 	return &loginInfo, nil
 }
 
-func (p *Protocol) parsePositioningData(reader *bufio.Reader) (positionInfo interface{}, err error) {
+func (p *TR06Protocol) parsePositioningData(reader *bufio.Reader) (positionInfo interface{}, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -375,7 +398,7 @@ func (p *Protocol) parsePositioningData(reader *bufio.Reader) (positionInfo inte
 	return &parsed, nil
 }
 
-func (p *Protocol) parseAlarmData(reader *bufio.Reader) (alarmInfo AlarmInformation, err error) {
+func (p *TR06Protocol) parseAlarmData(reader *bufio.Reader) (alarmInfo AlarmInformation, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -398,7 +421,7 @@ func (p *Protocol) parseAlarmData(reader *bufio.Reader) (alarmInfo AlarmInformat
 	return
 }
 
-func (p *Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat HeartbeatData, err error) {
+func (p *TR06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat HeartbeatData, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -453,7 +476,7 @@ func (p *Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat Heartbeat
 	return heartbeat, nil
 }
 
-func (p *Protocol) parseInformationTransmissionPacket(reader *bufio.Reader) (packet InformationTransmissionPacket, err error) {
+func (p *TR06Protocol) parseInformationTransmissionPacket(reader *bufio.Reader) (packet InformationTransmissionPacket, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -519,7 +542,7 @@ func checkErr(err error) {
 	}
 }
 
-func (p *Protocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo GPSInformation, err error) {
+func (p *TR06Protocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo GPSInformation, err error) {
 	timestamp, err := p.parseTimestamp(reader)
 	checkErr(err)
 	gpsInfo.Timestamp = timestamp
@@ -540,6 +563,7 @@ func (p *Protocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo GPSInforma
 
 	// speed
 	checkErr(binary.Read(reader, binary.BigEndian, &gpsInfo.Speed))
+	logger.Sugar().Info("speed from parseGPSInformation: ", gpsInfo.Speed)
 
 	// TODO: parse the 16-bit course to detailed fields
 	// course/heading
@@ -550,7 +574,7 @@ func (p *Protocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo GPSInforma
 	return
 }
 
-func (p *Protocol) parseGpsCourse(courseValue uint16) (course GPSCourse) {
+func (p *TR06Protocol) parseGpsCourse(courseValue uint16) (course GPSCourse) {
 	b1 := byte(courseValue >> 8)
 
 	course.IsRealtime = b1&0x20 == 0x00     // byte 1, bit 5 is 0
@@ -563,7 +587,7 @@ func (p *Protocol) parseGpsCourse(courseValue uint16) (course GPSCourse) {
 	return
 }
 
-func (p *Protocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time, err error) {
+func (p *TR06Protocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time, err error) {
 	year, err := reader.ReadByte()
 	checkErr(err)
 
@@ -586,7 +610,7 @@ func (p *Protocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time, er
 	return
 }
 
-func (p *Protocol) parseLBSInformation(reader *bufio.Reader) (lbsInfo LBSInformation, err error) {
+func (p *TR06Protocol) parseLBSInformation(reader *bufio.Reader) (lbsInfo LBSInformation, err error) {
 	// MCC
 	checkErr(binary.Read(reader, binary.BigEndian, &lbsInfo.MCC))
 	// MNC
@@ -598,7 +622,7 @@ func (p *Protocol) parseLBSInformation(reader *bufio.Reader) (lbsInfo LBSInforma
 	return
 }
 
-func (p *Protocol) parseStatusInformation(reader *bufio.Reader) (statusInfo StatusInformation, err error) {
+func (p *TR06Protocol) parseStatusInformation(reader *bufio.Reader) (statusInfo StatusInformation, err error) {
 	var b byte
 
 	// terminal information content
@@ -632,7 +656,7 @@ func (p *Protocol) parseStatusInformation(reader *bufio.Reader) (statusInfo Stat
 	return
 }
 
-func (p *Protocol) parseTerminalInfoFromByte(terminalInfoByte byte) (TerminalInformation, error) {
+func (p *TR06Protocol) parseTerminalInfoFromByte(terminalInfoByte byte) (TerminalInformation, error) {
 	var terminalInfo TerminalInformation
 	terminalInfo.OilElectricityConnected = terminalInfoByte&0x80 == 0x80 // bit 7
 	terminalInfo.GPSSignalAvailable = terminalInfoByte&0x40 == 0x40      // bit 6
@@ -647,7 +671,7 @@ func (p *Protocol) parseTerminalInfoFromByte(terminalInfoByte byte) (TerminalInf
 	return terminalInfo, nil
 }
 
-func (p *Protocol) IsValidHeader(reader *bufio.Reader) bool {
+func (p *TR06Protocol) IsValidHeader(reader *bufio.Reader) bool {
 	header, err := reader.Peek(2)
 	if err != nil {
 		return false
