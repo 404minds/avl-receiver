@@ -619,7 +619,8 @@ func (p *TR06Protocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time
 	checkErr(err)
 
 	timestamp = time.Date(int(year), time.Month(month), int(day), int(hour), int(minute), int(second), 0, p.LoginInformation.Timezone)
-	return
+	logger.Sugar().Info("timestamp: ", timestamp)
+	return timestamp, nil
 }
 
 func (p *TR06Protocol) parseLBSInformation(reader *bufio.Reader) (lbsInfo LBSInformation, err error) {
