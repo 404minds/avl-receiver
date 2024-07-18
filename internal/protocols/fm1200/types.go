@@ -99,12 +99,18 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Latitude = r.Record.GPSElement.Latitude
 	info.Position.Longitude = r.Record.GPSElement.Longitude
 	info.Position.Altitude = float32(r.Record.GPSElement.Altitude)
+	if r.Record.GPSElement.Speed == 0 {
+		info.Position.Speed = 0
+	}
 	info.Position.Speed = float32(r.Record.GPSElement.Speed)
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 
 	// vehicle info
 	info.VehicleStatus = &types.VehicleStatus{}
+	if TIO_DigitalInput1 == 0 {
+		info.VehicleStatus.Ignition = false
+	}
 	info.VehicleStatus.Ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0
 	info.VehicleStatus.Overspeeding = r.Record.IOElement.Properties1B[TIO_Overspeeding] > 0
 	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
