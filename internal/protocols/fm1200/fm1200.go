@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"io"
 
@@ -71,7 +72,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 	}
 	logger.Sugar().Info("consumeMessage header Zeroes: ", headerZeros)
 	if headerZeros != 0x0000 {
-		return errs.ErrFM1200BadDataPacket
+		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at header Zeroes")
 	}
 
 	var dataLen uint32
@@ -84,7 +85,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 	dataBytes := make([]byte, dataLen)
 	_, err = io.ReadFull(reader, dataBytes)
 	if err != nil {
-		return errs.ErrFM1200BadDataPacket
+		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at Data length")
 	}
 	logger.Sugar().Info("consumeMessage Data Byte: ", dataBytes)
 	dataReader := bufio.NewReader(bytes.NewReader(dataBytes))
@@ -98,7 +99,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 	logger.Sugar().Info("consumeMessage parsed Packet: ", parsedPacket)
 	err = binary.Read(reader, binary.BigEndian, &parsedPacket.CRC)
 	if err != nil {
-		return errs.ErrFM1200BadDataPacket
+		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at parsed Packet CRC")
 	}
 
 	valid := t.ValidateCrc(dataBytes, parsedPacket.CRC)
@@ -160,7 +161,7 @@ func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader) (*AvlDataPacket
 		return nil, err
 	}
 	if endNumRecords != packet.NumberOfData {
-		return nil, errs.ErrFM1200BadDataPacket
+		return nil, errors.Wrapf(errs.ErrFM1200BadDataPacket, "error end Num Records != packet.NumberOfData")
 	}
 	return &packet, nil
 }
@@ -229,19 +230,23 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader) (ioElement *IOEle
 	var err1, err2, err3, err4 error
 	ioElement.Properties1B, err1 = t.read1BProperties(reader)
 	logger.Sugar().Info("parseIOElements: properties1B: ", ioElement.Properties1B)
+	logger.Sugar().Info("parseIOElements: properties1B error: ", err1)
 
 	ioElement.Properties2B, err2 = t.read2BProperties(reader)
 	logger.Sugar().Info("parseIOElements: properties2B: ", ioElement.Properties2B)
+	logger.Sugar().Info("parseIOElements: properties2B error: ", err2)
 
 	ioElement.Properties4B, err3 = t.read4BProperties(reader)
 	logger.Sugar().Info("parseIOElements: properties4B: ", ioElement.Properties4B)
+	logger.Sugar().Info("parseIOElements: properties4B error: ", err3)
 
 	ioElement.Properties8B, err4 = t.read8BProperties(reader)
 	logger.Sugar().Info("parseIOElements: Properties8B: ", ioElement.Properties8B)
+	logger.Sugar().Info("parseIOElements: properties8B error: ", err4)
 
 
 	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
-		return nil, errs.ErrFM1200BadDataPacket
+		return nil, errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at IO elemnts")
 	}
 
 	return ioElement, nil
