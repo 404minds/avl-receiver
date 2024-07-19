@@ -89,6 +89,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 	logger.Sugar().Info("consumeMessage Data Byte: ", dataBytes)
 	dataReader := bufio.NewReader(bytes.NewReader(dataBytes))
 
+
 	parsedPacket, err := t.parseDataToRecord(dataReader)
 	if err != nil {
 		return err
@@ -131,14 +132,19 @@ func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader) (*AvlDataPacket
 	if err != nil {
 		return nil, err
 	}
+  
 	logger.Sugar().Info("parseDataRecord:  codec", packet.CodecID)
+
 	// number of data
 	packet.NumberOfData, err = reader.ReadByte()
 	if err != nil {
 		return nil, err
 	}
 
+
 	logger.Sugar().Info("parseDataRecord: NumberofData ", packet.NumberOfData)
+
+
 	// parse each record
 	for i := uint8(0); i < packet.NumberOfData; i++ {
 		record, err := t.readSingleRecord(reader)
@@ -177,6 +183,8 @@ func (t *FM1200Protocol) readSingleRecord(reader *bufio.Reader) (*AvlRecord, err
 		return nil, err
 	}
 
+	logger.Sugar().Info("readSingleRecord: ", record.Priority)
+
 	// gps element
 	gpsElement, err := t.parseGpsElement(reader)
 	if err != nil {
@@ -204,13 +212,17 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader) (ioElement *IOEle
 	if err != nil {
 		return nil, err
 	}
+
 	logger.Sugar().Info("parseIOElements: eventID: ", ioElement.EventID)
+
+
 
 	// numProperties
 	err = binary.Read(reader, binary.BigEndian, &ioElement.NumProperties)
 	if err != nil {
 		return nil, err
 	}
+
 
 	logger.Sugar().Info("parseIOElements: NumProperties: ", ioElement.NumProperties)
 
@@ -226,6 +238,7 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader) (ioElement *IOEle
 
 	ioElement.Properties8B, err4 = t.read8BProperties(reader)
 	logger.Sugar().Info("parseIOElements: Properties8B: ", ioElement.Properties8B)
+
 
 	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
 		return nil, errs.ErrFM1200BadDataPacket
