@@ -89,7 +89,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 	logger.Sugar().Info("consumeMessage Data Byte: ", dataBytes)
 	dataReader := bufio.NewReader(bytes.NewReader(dataBytes))
 
-	logger.Sugar().Info("consumeMessage Data Read: ", dataReader)
+
 	parsedPacket, err := t.parseDataToRecord(dataReader)
 	if err != nil {
 		return err
@@ -132,14 +132,19 @@ func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader) (*AvlDataPacket
 	if err != nil {
 		return nil, err
 	}
-	logger.Sugar().Info("parseDataRecord: ", packet.CodecID)
+  
+	logger.Sugar().Info("parseDataRecord:  codec", packet.CodecID)
+
 	// number of data
 	packet.NumberOfData, err = reader.ReadByte()
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Sugar().Info("parseDataRecord: ", packet.NumberOfData)
+
+	logger.Sugar().Info("parseDataRecord: NumberofData ", packet.NumberOfData)
+
+
 	// parse each record
 	for i := uint8(0); i < packet.NumberOfData; i++ {
 		record, err := t.readSingleRecord(reader)
@@ -207,7 +212,10 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader) (ioElement *IOEle
 	if err != nil {
 		return nil, err
 	}
-	logger.Sugar().Info("parseIOElements: ", ioElement.EventID)
+
+	logger.Sugar().Info("parseIOElements: eventID: ", ioElement.EventID)
+
+
 
 	// numProperties
 	err = binary.Read(reader, binary.BigEndian, &ioElement.NumProperties)
@@ -215,20 +223,22 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader) (ioElement *IOEle
 		return nil, err
 	}
 
-	logger.Sugar().Info("parseIOElements: ", ioElement.NumProperties)
+
+	logger.Sugar().Info("parseIOElements: NumProperties: ", ioElement.NumProperties)
 
 	var err1, err2, err3, err4 error
 	ioElement.Properties1B, err1 = t.read1BProperties(reader)
-	logger.Sugar().Info("parseIOElements: ", ioElement.Properties1B)
+	logger.Sugar().Info("parseIOElements: properties1B: ", ioElement.Properties1B)
 
 	ioElement.Properties2B, err2 = t.read2BProperties(reader)
-	logger.Sugar().Info("parseIOElements: ", ioElement.Properties2B)
+	logger.Sugar().Info("parseIOElements: properties2B: ", ioElement.Properties2B)
 
 	ioElement.Properties4B, err3 = t.read4BProperties(reader)
-	logger.Sugar().Info("parseIOElements: ", ioElement.Properties4B)
+	logger.Sugar().Info("parseIOElements: properties4B: ", ioElement.Properties4B)
 
 	ioElement.Properties8B, err4 = t.read8BProperties(reader)
-	logger.Sugar().Info("parseIOElements: ", ioElement.Properties8B)
+	logger.Sugar().Info("parseIOElements: Properties8B: ", ioElement.Properties8B)
+
 
 	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
 		return nil, errs.ErrFM1200BadDataPacket
