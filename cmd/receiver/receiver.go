@@ -18,7 +18,7 @@ import (
 var logger = configuredLogger.Logger
 
 func main() {
-	var port = flag.Int("port", 9000, "Port to listen on")
+	var port = flag.Int("port", 21000, "Port to listen on")
 	logger.Sugar().Info(*port)
 	var remoteStoreAddr = flag.String("remoteStoreAddr", "", "Address of the remote store")
 	logger.Sugar().Info(*remoteStoreAddr)

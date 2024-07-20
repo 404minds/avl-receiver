@@ -7,8 +7,8 @@ services:
     networks:
       - deployment_base-network
     ports:
-      - "9000:9000"
-    command: ["./receiver", "-port", "9000", "-remoteStoreAddr", "fns-consumer-grpc-server:8000"]
+      - "21000:21000"
+    command: ["./receiver", "-port", "21000", "-remoteStoreAddr", "fns-consumer-grpc-server:8000"]
 
 networks:
   deployment_base-network:
