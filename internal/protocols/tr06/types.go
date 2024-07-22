@@ -313,32 +313,25 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 
 	default:
 	}
-
+	var ignition bool
 	// Vehicle status
 	logger.Sugar().Info(packet.Information)
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
-		if !v.ACCHigh {
-			info.VehicleStatus.Ignition = false
-		}
-		info.VehicleStatus.Ignition = v.ACCHigh // (not available for 06)
+		ignition = v.ACCHigh
+		info.VehicleStatus.Ignition = &ignition // (not available for 06)
 
 	case *AlarmInformation:
-		if !v.StatusInformation.TerminalInformation.ACCHigh {
-			info.VehicleStatus.Ignition = false
-		}
-		info.VehicleStatus.Ignition = v.StatusInformation.TerminalInformation.ACCHigh
+		ignition = v.StatusInformation.TerminalInformation.ACCHigh
+		info.VehicleStatus.Ignition = &ignition
 		info.VehicleStatus.Overspeeding = v.StatusInformation.Alarm == ALV_OverSpeed
 
 	case *HeartbeatData:
-		if !v.TerminalInformation.ACCHigh {
-			info.VehicleStatus.Ignition = false
-		}
-		info.VehicleStatus.Ignition = v.TerminalInformation.ACCHigh
+
 		info.Position.Satellites = int32(v.GSMSignalStrength) // GSM signal strength from HeartbeatData
 		info.BatteryLevel = int32(v.BatteryLevel)             // Battery level from HeartbeatData
 	default:
-		info.VehicleStatus.Ignition = false // Default to false if not set
+		// Default to false if not set
 	}
 
 	// Battery strength and GSM signal strength
