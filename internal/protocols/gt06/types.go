@@ -260,7 +260,8 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
 		info.Position.Latitude = v.GpsInformation.Latitude
 		info.Position.Longitude = v.GpsInformation.Longitude
-		info.Position.Speed = float32(v.GpsInformation.Speed)
+		var speed = float32(v.GpsInformation.Speed)
+		info.Position.Speed = &speed
 	default:
 	}
 

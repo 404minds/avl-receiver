@@ -107,10 +107,11 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Latitude = r.Record.GPSElement.Latitude
 	info.Position.Longitude = r.Record.GPSElement.Longitude
 	info.Position.Altitude = float32(r.Record.GPSElement.Altitude)
-	if r.Record.GPSElement.Speed == 0 {
-		info.Position.Speed = 0
-	}
-	info.Position.Speed = float32(r.Record.GPSElement.Speed)
+	logger.Sugar().Info("parsed speed ", r.Record.GPSElement.Speed)
+	var speed = float32(r.Record.GPSElement.Speed)
+	info.Position.Speed = &speed
+	logger.Sugar().Info("sent speed ", info.Position.Speed)
+
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 
@@ -130,6 +131,6 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.RawData = &types.DeviceStatus_TeltonikaPacket{
 		TeltonikaPacket: &types.TeltonikaPacket{RawData: rawdata},
 	}
-
+	logger.Sugar().Info("info", info)
 	return info
 }

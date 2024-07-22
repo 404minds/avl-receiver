@@ -299,22 +299,16 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
 		info.Position.Latitude = v.GpsInformation.Latitude
 		info.Position.Longitude = v.GpsInformation.Longitude
-		if v.GpsInformation.Speed != 0 {
-			info.Position.Speed = float32(v.GpsInformation.Speed)
-		} else {
-			info.Position.Speed = 0
-		}
+		var speed = float32(v.GpsInformation.Speed)
+		info.Position.Speed = &speed
 		info.Position.Course = float32(v.GpsInformation.Course.Degree)
 
 	case *AlarmInformation:
 		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
 		info.Position.Latitude = v.GpsInformation.Latitude
 		info.Position.Longitude = v.GpsInformation.Longitude
-		if v.GpsInformation.Speed != 0 {
-			info.Position.Speed = float32(v.GpsInformation.Speed)
-		} else {
-			info.Position.Speed = 0
-		}
+		var speed = float32(v.GpsInformation.Speed)
+		info.Position.Speed = &speed
 		info.Position.Course = float32(v.GpsInformation.Course.Degree)
 
 	default:
