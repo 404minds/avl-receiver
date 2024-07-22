@@ -36,7 +36,7 @@ message GPSPosition {
     float latitude = 1;
     float longitude = 2;
     float altitude = 3;
-    float speed = 4;
+   optional float speed = 4 ;
     float course = 5;
     int32 satellites = 6;
 }
