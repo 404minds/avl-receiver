@@ -8,6 +8,13 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+type CodecID byte
+
+const (
+	Codec8  CodecID = 0x08
+	Codec8E CodecID = 0x8E
+)
+
 type Record struct {
 	IMEI   string    `json:"imei"`
 	Record AvlRecord `json:"record"`
@@ -37,13 +44,14 @@ type GpsElement struct {
 }
 
 type IOElement struct {
-	EventID       uint8 `json:"event_id"`
-	NumProperties uint8 `json:"num_properties"`
+	EventID       uint16 `json:"event_id"`
+	NumProperties uint16 `json:"num_properties"`
 
-	Properties1B map[IOProperty]uint8  `json:"properties_1b"`
-	Properties2B map[IOProperty]uint16 `json:"properties_2b"`
-	Properties4B map[IOProperty]uint32 `json:"properties_4b"`
-	Properties8B map[IOProperty]uint64 `json:"properties_8b"`
+	Properties1B  map[IOProperty]uint8  `json:"properties_1b"`
+	Properties2B  map[IOProperty]uint16 `json:"properties_2b"`
+	Properties4B  map[IOProperty]uint32 `json:"properties_4b"`
+	Properties8B  map[IOProperty]uint64 `json:"properties_8b"`
+	PropertiesNXB map[IOProperty][]byte `json:"properties_xb"`
 }
 
 type IOProperty int
