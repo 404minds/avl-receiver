@@ -117,10 +117,8 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 
 	// vehicle info
 	info.VehicleStatus = &types.VehicleStatus{}
-	if TIO_DigitalInput1 == 0 {
-		info.VehicleStatus.Ignition = false
-	}
-	info.VehicleStatus.Ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0
+	var ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0
+	info.VehicleStatus.Ignition = &ignition
 	info.VehicleStatus.Overspeeding = r.Record.IOElement.Properties1B[TIO_Overspeeding] > 0
 	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
 
