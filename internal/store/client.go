@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+
 	"github.com/404minds/avl-receiver/internal/types"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -13,7 +14,7 @@ type CustomAvlDataStoreClient struct {
 
 func (c CustomAvlDataStoreClient) VerifyDevice(ctx context.Context, in *VerifyDeviceRequest, opts ...grpc.CallOption) (*VerifyDeviceReply, error) {
 	out := new(VerifyDeviceReply)
-	err := c.cc.Invoke(ctx, "/AVLService/VerifyDevice", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/data.StreamService/VerifyDevice", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -22,7 +23,7 @@ func (c CustomAvlDataStoreClient) VerifyDevice(ctx context.Context, in *VerifyDe
 
 func (c CustomAvlDataStoreClient) SaveDeviceStatus(ctx context.Context, in *types.DeviceStatus, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, "/AVLService/InsertAVL", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/data.StreamService/InsertAVL", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
