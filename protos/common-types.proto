@@ -29,6 +29,7 @@ message DeviceStatus {
     oneof raw_data {
         WanwayPacket wanway_packet = 7;
         TeltonikaPacket teltonika_packet = 8;
+        ConcoxPacket  concox_packet = 9;
     }
 }
 
@@ -52,5 +53,9 @@ message WanwayPacket {
 }
 
 message TeltonikaPacket {
+    bytes raw_data = 1;
+}
+
+message ConcoxPacket{
     bytes raw_data = 1;
 }

@@ -129,6 +129,5 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.RawData = &types.DeviceStatus_TeltonikaPacket{
 		TeltonikaPacket: &types.TeltonikaPacket{RawData: rawdata},
 	}
-	logger.Sugar().Info("info", info)
 	return info
 }
