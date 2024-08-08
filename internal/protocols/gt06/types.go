@@ -10,9 +10,49 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+const (
+	StartBitValue = 0x7979
+	StopBitValue  = 0x0D0A
+)
+
+type InformationType byte
+
+const (
+	ExternalPowerVoltage InformationType = 0x00
+	TerminalStatusSync   InformationType = 0x04
+	DoorStatus           InformationType = 0x05
+)
+
+type ExternalPowerVoltageData struct {
+	Voltage float32
+}
+
+type TerminalStatusSyncData struct {
+	Status string
+}
+
+type DoorStatusData struct {
+	DoorOpen bool
+}
+
+type InformationTransmissionPacket struct {
+	StartBit                uint16
+	PacketLength            uint16
+	ProtocolNumber          byte
+	InformationContent      InformationContent
+	InformationSerialNumber uint16
+	Crc                     uint16
+	StopBits                uint16
+}
+
+type InformationContent struct {
+	InformationType InformationType
+	DataContent     uint16
+}
+
 type Packet struct {
 	StartBit                uint16
-	PacketLength            int8
+	PacketLength            byte
 	MessageType             MessageType
 	Information             interface{}
 	InformationSerialNumber uint16
@@ -118,13 +158,13 @@ const (
 	MSG_PositioningData                     = 0x22
 	MSG_HeartbeatData                       = 0x13
 	MSG_EG_HeartbeatData                    = 0x23
-	MSG_StringInformation                   = 0x21
+	MSG_StringInformation                   = 0x15
 	MSG_AlarmData                           = 0x26
 	MSG_LBSInformation                      = 0x28 // TODO: check if this is correct
 	MSG_TimezoneInformation                 = 0x27
 	MSG_GPS_PhoneNumber                     = 0x2a
 	MSG_WifiInformation                     = 0x2c
-	MSG_TransmissionInstruction             = 0x80
+	MSG_TransmissionInstruction             = 0x94
 	MSG_Invalid                             = 0xff
 )
 
@@ -253,34 +293,73 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	info.VehicleStatus = &types.VehicleStatus{}
 	info.Position = &types.GPSPosition{}
 
-	// location info
+	// Location info
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
+		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
+		info.Position.Latitude = v.GpsInformation.Latitude
+		info.Position.Longitude = v.GpsInformation.Longitude
+		var speed = float32(v.GpsInformation.Speed)
+		info.Position.Speed = &speed
+		info.Position.Course = float32(v.GpsInformation.Course.Degree)
+
 	case *AlarmInformation:
 		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
 		info.Position.Latitude = v.GpsInformation.Latitude
 		info.Position.Longitude = v.GpsInformation.Longitude
-		info.Position.Speed = float32(v.GpsInformation.Speed)
+		var speed = float32(v.GpsInformation.Speed)
+		info.Position.Speed = &speed
+		info.Position.Course = float32(v.GpsInformation.Course.Degree)
+
 	default:
 	}
-
-	// vehicle status
+	var ignition bool
+	// Vehicle status
+	logger.Sugar().Info(packet.Information)
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
-		info.VehicleStatus.Ignition = v.ACCHigh
-		info.VehicleStatus.Overspeeding = false
+		ignition = v.ACCHigh
+		info.VehicleStatus.Ignition = &ignition // (not available for 06)
+
 	case *AlarmInformation:
-		info.VehicleStatus.Ignition = v.StatusInformation.TerminalInformation.ACCHigh
+		ignition = v.StatusInformation.TerminalInformation.ACCHigh
+		info.VehicleStatus.Ignition = &ignition
 		info.VehicleStatus.Overspeeding = v.StatusInformation.Alarm == ALV_OverSpeed
+
 	case *HeartbeatData:
-		info.VehicleStatus.Ignition = v.TerminalInformation.ACCHigh
+
+		info.Position.Satellites = int32(v.GSMSignalStrength) // GSM signal strength from HeartbeatData
+		info.BatteryLevel = int32(v.BatteryLevel)             // Battery level from HeartbeatData
+	default:
+		// Default to false if not set
+	}
+
+	// Battery strength and GSM signal strength
+	switch v := packet.Information.(type) {
+	case *AlarmInformation:
+		info.BatteryLevel = int32(v.StatusInformation.BatteryLevel)
+		info.Position.Satellites = int32(v.StatusInformation.GSMSignalStrength)
+	case *HeartbeatData:
+		info.BatteryLevel = int32(v.BatteryLevel)
+		info.Position.Satellites = int32(v.GSMSignalStrength)
+	case *PositioningInformation:
+		// Assuming no battery level and GSM signal strength data in PositioningInformation
 	default:
 	}
 
 	rawdata, _ := json.Marshal(packet)
-	info.RawData = &types.DeviceStatus_WanwayPacket{
-		WanwayPacket: &types.WanwayPacket{RawData: rawdata},
+	info.RawData = &types.DeviceStatus_ConcoxPacket{
+		ConcoxPacket: &types.ConcoxPacket{RawData: rawdata},
 	}
 
 	return info
+}
+
+func checkRashDriving(eventCodes []byte) bool {
+	for _, eventCode := range eventCodes {
+		if eventCode == ALV_HarshAcceleration || eventCode == ALV_HarshBraking || eventCode == ALV_SharpLeftTurn || eventCode == ALV_SharpRightTurn {
+			return true
+		}
+	}
+	return false
 }

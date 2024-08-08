@@ -8,6 +8,13 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+type CodecID byte
+
+const (
+	Codec8  CodecID = 0x08
+	Codec8E CodecID = 0x8E
+)
+
 type Record struct {
 	IMEI   string    `json:"imei"`
 	Record AvlRecord `json:"record"`
@@ -37,13 +44,14 @@ type GpsElement struct {
 }
 
 type IOElement struct {
-	EventID       uint8 `json:"event_id"`
-	NumProperties uint8 `json:"num_properties"`
+	EventID       uint16 `json:"event_id"`
+	NumProperties uint16 `json:"num_properties"`
 
-	Properties1B map[IOProperty]uint8  `json:"properties_1b"`
-	Properties2B map[IOProperty]uint16 `json:"properties_2b"`
-	Properties4B map[IOProperty]uint32 `json:"properties_4b"`
-	Properties8B map[IOProperty]uint64 `json:"properties_8b"`
+	Properties1B  map[IOProperty]uint8  `json:"properties_1b"`
+	Properties2B  map[IOProperty]uint16 `json:"properties_2b"`
+	Properties4B  map[IOProperty]uint32 `json:"properties_4b"`
+	Properties8B  map[IOProperty]uint64 `json:"properties_8b"`
+	PropertiesNXB map[IOProperty][]byte `json:"properties_xb"`
 }
 
 type IOProperty int
@@ -99,13 +107,18 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Latitude = r.Record.GPSElement.Latitude
 	info.Position.Longitude = r.Record.GPSElement.Longitude
 	info.Position.Altitude = float32(r.Record.GPSElement.Altitude)
-	info.Position.Speed = float32(r.Record.GPSElement.Speed)
+	logger.Sugar().Info("parsed speed ", r.Record.GPSElement.Speed)
+	var speed = float32(r.Record.GPSElement.Speed)
+	info.Position.Speed = &speed
+	logger.Sugar().Info("sent speed ", info.Position.Speed)
+
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 
 	// vehicle info
 	info.VehicleStatus = &types.VehicleStatus{}
-	info.VehicleStatus.Ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0
+	var ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0
+	info.VehicleStatus.Ignition = &ignition
 	info.VehicleStatus.Overspeeding = r.Record.IOElement.Properties1B[TIO_Overspeeding] > 0
 	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
 
@@ -116,6 +129,5 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.RawData = &types.DeviceStatus_TeltonikaPacket{
 		TeltonikaPacket: &types.TeltonikaPacket{RawData: rawdata},
 	}
-
 	return info
 }

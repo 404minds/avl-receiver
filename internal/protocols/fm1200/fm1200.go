@@ -4,8 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"fmt"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"io"
+	"log"
 
 	"github.com/404minds/avl-receiver/internal/crc"
 	errs "github.com/404minds/avl-receiver/internal/errors"
@@ -69,8 +72,9 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 	if err != nil {
 		return err
 	}
+	logger.Sugar().Info("consumeMessage header Zeroes: ", headerZeros)
 	if headerZeros != 0x0000 {
-		return errs.ErrFM1200BadDataPacket
+		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at header Zeroes")
 	}
 
 	var dataLen uint32
@@ -79,21 +83,24 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 		return err
 	}
 
+	logger.Sugar().Info("consumeMessage Data length: ", dataLen)
 	dataBytes := make([]byte, dataLen)
 	_, err = io.ReadFull(reader, dataBytes)
 	if err != nil {
-		return errs.ErrFM1200BadDataPacket
+		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at Data length")
 	}
-
+	logger.Sugar().Info("consumeMessage Data Byte: ", dataBytes)
 	dataReader := bufio.NewReader(bytes.NewReader(dataBytes))
+
 	parsedPacket, err := t.parseDataToRecord(dataReader)
 	if err != nil {
 		return err
 	}
 
+	logger.Sugar().Info("consumeMessage parsed Packet: ", parsedPacket)
 	err = binary.Read(reader, binary.BigEndian, &parsedPacket.CRC)
 	if err != nil {
-		return errs.ErrFM1200BadDataPacket
+		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at parsed Packet CRC")
 	}
 
 	valid := t.ValidateCrc(dataBytes, parsedPacket.CRC)
@@ -128,32 +135,40 @@ func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader) (*AvlDataPacket
 		return nil, err
 	}
 
+	logger.Sugar().Info("parseDataToRecord:  codec: ", packet.CodecID)
+
 	// number of data
 	packet.NumberOfData, err = reader.ReadByte()
 	if err != nil {
 		return nil, err
 	}
 
+	logger.Sugar().Info("parseDataRecord: NumberofData ", packet.NumberOfData)
+
 	// parse each record
-	for i := uint8(0); i < packet.NumberOfData; i++ {
-		record, err := t.readSingleRecord(reader)
+	for i := uint8(0); i < packet.NumberOfData; i++ { //TODO range == packet.NumberOfData currently just for debugging
+
+		logger.Sugar().Info("parseDataToRecord: Data Number: ", i)
+		record, err := t.readSingleRecord(reader, packet.CodecID)
 		if err != nil {
 			return nil, err
 		}
 		packet.Data = append(packet.Data, *record)
 	}
+	logger.Sugar().Info("parseDataRecord: ", packet.Data)
 
 	endNumRecords, err := reader.ReadByte()
 	if err != nil {
 		return nil, err
 	}
+	logger.Sugar().Info("parseDataToRecord endNumRecords: ", endNumRecords)
 	if endNumRecords != packet.NumberOfData {
-		return nil, errs.ErrFM1200BadDataPacket
+		return nil, errors.Wrapf(errs.ErrFM1200BadDataPacket, "error end Num Records != packet.NumberOfData")
 	}
 	return &packet, nil
 }
 
-func (t *FM1200Protocol) readSingleRecord(reader *bufio.Reader) (*AvlRecord, error) {
+func (t *FM1200Protocol) readSingleRecord(reader *bufio.Reader, codecID uint8) (*AvlRecord, error) {
 	var record AvlRecord
 	var err error
 
@@ -163,11 +178,15 @@ func (t *FM1200Protocol) readSingleRecord(reader *bufio.Reader) (*AvlRecord, err
 		return nil, err
 	}
 
+	logger.Sugar().Info("readSingleRecord: Timestamp: ", record.Timestamp)
+
 	// priority
 	err = binary.Read(reader, binary.BigEndian, &record.Priority)
 	if err != nil {
 		return nil, err
 	}
+
+	logger.Sugar().Info("readSingleRecord: Priority: ", record.Priority)
 
 	// gps element
 	gpsElement, err := t.parseGpsElement(reader)
@@ -176,8 +195,10 @@ func (t *FM1200Protocol) readSingleRecord(reader *bufio.Reader) (*AvlRecord, err
 	}
 	record.GPSElement = gpsElement
 
+	logger.Sugar().Info("readSingleRecord: GPS Element", record.GPSElement)
+
 	// io elements
-	ioElement, err := t.parseIOElements(reader)
+	ioElement, err := t.parseIOElements(reader, codecID)
 	if err != nil {
 		return nil, err
 	}
@@ -186,35 +207,72 @@ func (t *FM1200Protocol) readSingleRecord(reader *bufio.Reader) (*AvlRecord, err
 	return &record, nil
 }
 
-func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader) (ioElement *IOElement, err error) {
-	ioElement = &IOElement{}
+func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader, codecID uint8) (*IOElement, error) {
+	ioElement := &IOElement{}
 
-	// eventId
-	err = binary.Read(reader, binary.BigEndian, &ioElement.EventID)
-	if err != nil {
-		return nil, err
+	// EventID
+	if codecID == 0x8E {
+		err := binary.Read(reader, binary.BigEndian, &ioElement.EventID)
+		if err != nil {
+			return nil, err
+		}
+		logger.Sugar().Info("parseIOElements: eventID: ", ioElement.EventID)
+	} else {
+		eventID, err := reader.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		ioElement.EventID = uint16(eventID)
+		logger.Sugar().Info("parseIOElements: eventID: ", ioElement.EventID)
 	}
 
-	// numProperties
-	err = binary.Read(reader, binary.BigEndian, &ioElement.NumProperties)
-	if err != nil {
-		return nil, err
+	// Number of properties
+	if codecID == 0x8E {
+		err := binary.Read(reader, binary.BigEndian, &ioElement.NumProperties)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		numOfProperties, err := reader.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		ioElement.NumProperties = uint16(numOfProperties)
 	}
 
-	var err1, err2, err3, err4 error
-	ioElement.Properties1B, err1 = t.read1BProperties(reader)
-	ioElement.Properties2B, err2 = t.read2BProperties(reader)
-	ioElement.Properties4B, err3 = t.read4BProperties(reader)
-	ioElement.Properties8B, err4 = t.read8BProperties(reader)
-	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
-		return nil, errs.ErrFM1200BadDataPacket
+	logger.Sugar().Info("parseIOElements: NumProperties: ", ioElement.NumProperties)
+
+	var err1, err2, err3, err4, err5 error
+	ioElement.Properties1B, err1 = t.read1BProperties(reader, codecID)
+	logger.Sugar().Info("parseIOElements: properties1B: ", ioElement.Properties1B)
+	logger.Sugar().Info("parseIOElements: properties1B error: ", err1)
+
+	ioElement.Properties2B, err2 = t.read2BProperties(reader, codecID)
+	logger.Sugar().Info("parseIOElements: properties2B: ", ioElement.Properties2B)
+	logger.Sugar().Info("parseIOElements: properties2B error: ", err2)
+
+	ioElement.Properties4B, err3 = t.read4BProperties(reader, codecID)
+	logger.Sugar().Info("parseIOElements: properties4B: ", ioElement.Properties4B)
+	logger.Sugar().Info("parseIOElements: properties4B error: ", err3)
+
+	ioElement.Properties8B, err4 = t.read8BProperties(reader, codecID)
+	logger.Sugar().Info("parseIOElements: properties8B: ", ioElement.Properties8B)
+	logger.Sugar().Info("parseIOElements: properties8B error: ", err4)
+
+	if codecID == 0x8E {
+		ioElement.PropertiesNXB, err5 = t.readNXBProperties(reader, codecID)
+		logger.Sugar().Info("parseIOElements: propertiesNXB: ", ioElement.PropertiesNXB)
+		logger.Sugar().Info("parseIOElements: propertiesNXB error: ", err5)
+	}
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil {
+		return nil, errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at IO elements")
 	}
 
 	return ioElement, nil
 }
 
-func (t *FM1200Protocol) read1BProperties(reader *bufio.Reader) (map[IOProperty]uint8, error) {
-	propertyMap, err := t.readNByteProperties(1, reader)
+func (t *FM1200Protocol) read1BProperties(reader *bufio.Reader, codecID uint8) (map[IOProperty]uint8, error) {
+	propertyMap, err := t.readNByteProperties(1, reader, codecID)
 	if err != nil {
 		return nil, err
 	}
@@ -227,8 +285,8 @@ func (t *FM1200Protocol) read1BProperties(reader *bufio.Reader) (map[IOProperty]
 	return properties, nil
 }
 
-func (t *FM1200Protocol) read2BProperties(reader *bufio.Reader) (map[IOProperty]uint16, error) {
-	propertyMap, err := t.readNByteProperties(2, reader)
+func (t *FM1200Protocol) read2BProperties(reader *bufio.Reader, codecID uint8) (map[IOProperty]uint16, error) {
+	propertyMap, err := t.readNByteProperties(2, reader, codecID)
 	if err != nil {
 		return nil, err
 	}
@@ -241,8 +299,10 @@ func (t *FM1200Protocol) read2BProperties(reader *bufio.Reader) (map[IOProperty]
 	return properties, nil
 }
 
-func (t *FM1200Protocol) read4BProperties(reader *bufio.Reader) (map[IOProperty]uint32, error) {
-	propertyMap, err := t.readNByteProperties(4, reader)
+func (t *FM1200Protocol) read4BProperties(reader *bufio.Reader, codecID uint8) (map[IOProperty]uint32, error) {
+	propertyMap, err := t.readNByteProperties(4, reader, codecID)
+	logger.Sugar().Info("read4BProperties: error ", err)
+
 	if err != nil {
 		return nil, err
 	}
@@ -255,8 +315,9 @@ func (t *FM1200Protocol) read4BProperties(reader *bufio.Reader) (map[IOProperty]
 	return properties, nil
 }
 
-func (t *FM1200Protocol) read8BProperties(reader *bufio.Reader) (map[IOProperty]uint64, error) {
-	propertyMap, err := t.readNByteProperties(8, reader)
+func (t *FM1200Protocol) read8BProperties(reader *bufio.Reader, codecID uint8) (map[IOProperty]uint64, error) {
+	propertyMap, err := t.readNByteProperties(8, reader, codecID)
+	logger.Sugar().Info("read8BProperties: error ", err)
 	if err != nil {
 		return nil, err
 	}
@@ -269,24 +330,68 @@ func (t *FM1200Protocol) read8BProperties(reader *bufio.Reader) (map[IOProperty]
 	return properties, nil
 }
 
-func (t *FM1200Protocol) readNByteProperties(n int, reader *bufio.Reader) (map[IOProperty]interface{}, error) {
-	var numProperties uint8
-	err := binary.Read(reader, binary.BigEndian, &numProperties)
+func (t *FM1200Protocol) readNXBProperties(reader *bufio.Reader, codecID uint8) (map[IOProperty][]byte, error) {
+	propertyMap, err := t.readNXByteProperties(reader, codecID)
 	if err != nil {
+		log.Println("readNXBProperties: error ", err)
 		return nil, err
 	}
 
-	properties := make(map[IOProperty]interface{})
-	for i := uint8(0); i < numProperties; i++ {
-		propertyID, err := reader.ReadByte()
+	properties := make(map[IOProperty][]byte)
+	for k, v := range propertyMap {
+		byteValue, ok := v.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for property %d: expected []byte, got %T", k, v)
+		}
+		properties[k] = byteValue
+	}
+
+	return properties, nil
+}
+
+func (t *FM1200Protocol) readNByteProperties(n int, reader *bufio.Reader, codecID uint8) (map[IOProperty]interface{}, error) {
+	var numProperties uint16
+	if codecID == 0x8E {
+		err := binary.Read(reader, binary.BigEndian, &numProperties)
 		if err != nil {
+			logger.Sugar().Info("readNByteProperties: error:  ", err)
 			return nil, err
 		}
+	} else {
+		var numProperties8 uint8
+		err := binary.Read(reader, binary.BigEndian, &numProperties8)
+		if err != nil {
+			logger.Sugar().Info("readNByteProperties: error:  ", err)
+			return nil, err
+		}
+		numProperties = uint16(numProperties8)
+	}
+
+	properties := make(map[IOProperty]interface{})
+	for i := uint16(0); i < numProperties; i++ {
+		var propertyID uint16
+		if codecID == 0x8E {
+			err := binary.Read(reader, binary.BigEndian, &propertyID)
+			if err != nil {
+				logger.Sugar().Info("readNByteProperties: error:  ", err)
+				return nil, err
+			}
+		} else {
+			var propertyID8 uint8
+			err := binary.Read(reader, binary.BigEndian, &propertyID8)
+			if err != nil {
+				logger.Sugar().Info("readNByteProperties: error:  ", err)
+				return nil, err
+			}
+			propertyID = uint16(propertyID8)
+		}
+
 		property := IOProperty(propertyID)
 
 		propBytes := make([]byte, n)
-		err = binary.Read(reader, binary.BigEndian, &propBytes)
+		err := binary.Read(reader, binary.BigEndian, &propBytes)
 		if err != nil {
+			logger.Sugar().Info("readNByteProperties: error:  ", err)
 			return nil, err
 		}
 		if n == 1 {
@@ -298,6 +403,65 @@ func (t *FM1200Protocol) readNByteProperties(n int, reader *bufio.Reader) (map[I
 		} else if n == 8 {
 			properties[property] = binary.BigEndian.Uint64(propBytes)
 		}
+	}
+
+	return properties, nil
+}
+
+func (t *FM1200Protocol) readNXByteProperties(reader *bufio.Reader, codecID uint8) (map[IOProperty]interface{}, error) {
+	var numProperties uint16
+	if codecID == 0x8E {
+		err := binary.Read(reader, binary.BigEndian, &numProperties)
+		if err != nil {
+			logger.Sugar().Info("readNXByteProperties: error:  ", err)
+			return nil, err
+		}
+	} else {
+		var numProperties8 uint8
+		err := binary.Read(reader, binary.BigEndian, &numProperties8)
+		if err != nil {
+			logger.Sugar().Info("readNXByteProperties: error:  ", err)
+			return nil, err
+		}
+		numProperties = uint16(numProperties8)
+	}
+
+	properties := make(map[IOProperty]interface{})
+	for i := uint16(0); i < numProperties; i++ {
+		var propertyID uint16
+		if codecID == 0x8E {
+			err := binary.Read(reader, binary.BigEndian, &propertyID)
+			if err != nil {
+				logger.Sugar().Info("readNXByteProperties: error:  ", err)
+				return nil, err
+			}
+		} else {
+			var propertyID8 uint8
+			err := binary.Read(reader, binary.BigEndian, &propertyID8)
+			if err != nil {
+				logger.Sugar().Info("readNXByteProperties: error:  ", err)
+				return nil, err
+			}
+			propertyID = uint16(propertyID8)
+		}
+
+		property := IOProperty(propertyID)
+
+		var valueLen uint8
+		err := binary.Read(reader, binary.BigEndian, &valueLen)
+		if err != nil {
+			logger.Sugar().Info("readNXByteProperties: error:  ", err)
+			return nil, err
+		}
+
+		propBytes := make([]byte, valueLen)
+		_, err = io.ReadFull(reader, propBytes)
+		if err != nil {
+			logger.Sugar().Info("readNXByteProperties: error:  ", err)
+			return nil, err
+		}
+
+		properties[property] = propBytes
 	}
 
 	return properties, nil

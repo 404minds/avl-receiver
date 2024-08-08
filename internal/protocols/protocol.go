@@ -28,12 +28,12 @@ func MakeProtocolForType(t types.DeviceProtocolType) DeviceProtocol {
 		return &fm1200.FM1200Protocol{}
 
 	case types.DeviceProtocolType_GT06:
-		logger.Sugar().Info("GT06 called the protocol is: ", &gt06.GT06Protocol{})
-		return &gt06.GT06Protocol{}
+		logger.Sugar().Info("GT06 called the protocol is: ", &gt06.GT06Protocol{DeviceType: types.DeviceType_CONCOX})
+		return &gt06.GT06Protocol{DeviceType: types.DeviceType_CONCOX}
 
 	case types.DeviceProtocolType_TR06:
-		logger.Sugar().Info("TR06 called the protocol is: ", &tr06.TR06Protocol{})
-		return &tr06.TR06Protocol{}
+		logger.Sugar().Info("TR06 called the protocol is: ", &tr06.TR06Protocol{DeviceType: types.DeviceType_WANWAY})
+		return &tr06.TR06Protocol{DeviceType: types.DeviceType_WANWAY}
 
 	default:
 

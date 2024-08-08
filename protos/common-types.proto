@@ -29,6 +29,7 @@ message DeviceStatus {
     oneof raw_data {
         WanwayPacket wanway_packet = 7;
         TeltonikaPacket teltonika_packet = 8;
+        ConcoxPacket  concox_packet = 9;
     }
 }
 
@@ -36,13 +37,13 @@ message GPSPosition {
     float latitude = 1;
     float longitude = 2;
     float altitude = 3;
-    float speed = 4;
+   optional float speed = 4 ;
     float course = 5;
     int32 satellites = 6;
 }
 
 message VehicleStatus {
-    bool ignition = 1;
+    optional bool ignition = 1;
     bool overspeeding = 2;
     bool rash_driving = 3;
 }
@@ -52,5 +53,9 @@ message WanwayPacket {
 }
 
 message TeltonikaPacket {
+    bytes raw_data = 1;
+}
+
+message ConcoxPacket{
     bytes raw_data = 1;
 }
