@@ -22,14 +22,14 @@ message DeviceStatus {
     string imei = 1;
     DeviceType device_type = 2;
     google.protobuf.Timestamp timestamp = 3;
-
-    GPSPosition position = 4;
-    VehicleStatus vehicle_status = 5;
-    int32 battery_level = 6;
+    string message_type = 4;
+    GPSPosition position = 5;
+    VehicleStatus vehicle_status = 6;
+    int32 battery_level = 7;
     oneof raw_data {
-        WanwayPacket wanway_packet = 7;
-        TeltonikaPacket teltonika_packet = 8;
-        ConcoxPacket  concox_packet = 9;
+        WanwayPacket wanway_packet = 8;
+        TeltonikaPacket teltonika_packet = 9;
+        ConcoxPacket  concox_packet = 10;
     }
 }
 

@@ -292,7 +292,8 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	info.Timestamp = timestamppb.New(time.Now())
 	info.VehicleStatus = &types.VehicleStatus{}
 	info.Position = &types.GPSPosition{}
-
+	info.MessageType = string(packet.MessageType)
+	logger.Sugar().Info("message type: ", info.MessageType)
 	// Location info
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
@@ -315,7 +316,6 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	}
 	var ignition bool
 	// Vehicle status
-	logger.Sugar().Info(packet.Information)
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
 		ignition = v.ACCHigh
