@@ -624,6 +624,8 @@ func (p *TR06Protocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time
 	year, err := reader.ReadByte()
 	checkErr(err)
 
+	yearInt := int(year) + 2000
+
 	month, err := reader.ReadByte()
 	checkErr(err)
 
@@ -641,7 +643,7 @@ func (p *TR06Protocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time
 
 	var timezone = time.UTC
 
-	timestamp = time.Date(int(year), time.Month(month), int(day), int(hour), int(minute), int(second), 0, timezone)
+	timestamp = time.Date(yearInt, time.Month(month), int(day), int(hour), int(minute), int(second), 0, timezone)
 	logger.Sugar().Info("timestamp: ", timestamp)
 	return timestamp, nil
 }

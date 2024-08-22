@@ -601,7 +601,10 @@ func (p *GT06Protocol) parseGpsCourse(courseValue uint16) (course GPSCourse) {
 
 func (p *GT06Protocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time, err error) {
 	year, err := reader.ReadByte()
+	logger.Sugar().Info("year: ", year)
 	checkErr(err)
+
+	yearInt := int(year) + 2000
 
 	month, err := reader.ReadByte()
 	checkErr(err)
@@ -618,7 +621,7 @@ func (p *GT06Protocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time
 	second, err := reader.ReadByte()
 	checkErr(err)
 
-	timestamp = time.Date(int(year), time.Month(month), int(day), int(hour), int(minute), int(second), 0, p.LoginInformation.Timezone)
+	timestamp = time.Date(yearInt, time.Month(month), int(day), int(hour), int(minute), int(second), 0, p.LoginInformation.Timezone)
 	logger.Sugar().Info("timestamp: ", timestamp)
 	return timestamp, nil
 }
