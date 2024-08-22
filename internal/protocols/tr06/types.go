@@ -290,7 +290,7 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	info.Timestamp = timestamppb.New(time.Now())
 	info.VehicleStatus = &types.VehicleStatus{}
 	info.Position = &types.GPSPosition{}
-	info.MessageType = string(packet.MessageType)
+	info.MessageType = packet.MessageType.String()
 	logger.Sugar().Info("message type: ", info.MessageType)
 
 	// location info
@@ -332,4 +332,33 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	}
 
 	return info
+}
+
+func (mt MessageType) String() string {
+	switch mt {
+	case MSG_LoginData:
+		return "MSG_LoginData"
+	case MSG_PositioningData:
+		return "MSG_PositioningData"
+	case MSG_HeartbeatData:
+		return "MSG_HeartbeatData"
+	case MSG_EG_HeartbeatData:
+		return "MSG_EG_HeartbeatData"
+	case MSG_StringInformation:
+		return "MSG_StringInformation"
+	case MSG_AlarmData:
+		return "MSG_AlarmData"
+	case MSG_LBSInformation:
+		return "MSG_LBSInformation"
+	case MSG_TimezoneInformation:
+		return "MSG_TimezoneInformation"
+	case MSG_GPS_PhoneNumber:
+		return "MSG_GPS_PhoneNumber"
+	case MSG_WifiInformation:
+		return "MSG_WifiInformation"
+	case MSG_TransmissionInstruction:
+		return "MSG_TransmissionInstruction"
+	default:
+		return "MSG_Invalid"
+	}
 }
