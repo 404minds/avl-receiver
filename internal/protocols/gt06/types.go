@@ -289,7 +289,6 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 
 	info.Imei = imei
 	info.DeviceType = deviceType
-	info.Timestamp = timestamppb.New(time.Now())
 	info.VehicleStatus = &types.VehicleStatus{}
 	info.Position = &types.GPSPosition{}
 
