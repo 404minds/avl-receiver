@@ -26,10 +26,11 @@ message DeviceStatus {
     GPSPosition position = 5;
     VehicleStatus vehicle_status = 6;
     int32 battery_level = 7;
+    float temperature = 8;
     oneof raw_data {
-        WanwayPacket wanway_packet = 8;
-        TeltonikaPacket teltonika_packet = 9;
-        ConcoxPacket  concox_packet = 10;
+        WanwayPacket wanway_packet = 9;
+        TeltonikaPacket teltonika_packet = 10;
+        ConcoxPacket  concox_packet = 11;
     }
 }
 

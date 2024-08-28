@@ -115,6 +115,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
+	info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature])
 
 	// vehicle info
 	info.VehicleStatus = &types.VehicleStatus{}

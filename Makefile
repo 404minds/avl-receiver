@@ -1,5 +1,5 @@
 run:
-	go run cmd/receiver/receiver.go -port 9000 -remoteStoreAddr localhost:8080
+	go run cmd/receiver/receiver.go -port 21000 -remoteStoreAddr localhost:8000
 
 run-server:
 	go run cmd/testRpcStore/testRpcStore.go -port 8080

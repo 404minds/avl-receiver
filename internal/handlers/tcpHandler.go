@@ -170,6 +170,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 		}
 
 		deviceType, err := t.VerifyDevice(deviceID, protocol.GetProtocolType())
+		logger.Sugar().Info("device Type: ", deviceType, " error: ", err)
 		if err != nil {
 			if errors.Is(err, errs.ErrUnauthorizedDevice) {
 				logger.Error("Device is not authorized", zap.String("deviceID", deviceID), zap.String("protocolType", protocol.GetProtocolType().String()))
