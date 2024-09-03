@@ -69,7 +69,9 @@ const (
 	TIO_ExternalVoltage               = 66
 	TIO_GPSPower                      = 69
 	TIO_MovementSensor                = 240
-	TIO_OdometerValue                 = 199
+	TIO_OdometerValue                 = 16
+	TIO_FuelLevel                     = 201
+	TIO_TripOdometerValue             = 199
 	TIO_GSMOperator                   = 241
 	TIO_Speed                         = 24
 	TIO_IButtonID                     = 78
@@ -112,11 +114,11 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	logger.Sugar().Info("parsed speed ", r.Record.GPSElement.Speed)
 	var speed = float32(r.Record.GPSElement.Speed)
 	info.Position.Speed = &speed
-
+	info.Odometer = int32(r.Record.IOElement.Properties4B[TIO_OdometerValue])
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 	info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature])
-
+	info.FuelLevel = int32(r.Record.IOElement.Properties2B[TIO_FuelLevel])
 	// vehicle info
 	info.VehicleStatus = &types.VehicleStatus{}
 	var ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0
