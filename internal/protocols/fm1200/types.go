@@ -68,6 +68,7 @@ const (
 	TIO_GPSHDOP                       = 182
 	TIO_ExternalVoltage               = 66
 	TIO_GPSPower                      = 69
+	TIO_Ignition                      = 239
 	TIO_MovementSensor                = 240
 	TIO_OdometerValue                 = 16
 	TIO_FuelLevel                     = 201
@@ -104,14 +105,12 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.DeviceType = types.DeviceType_TELTONIKA
 	info.Timestamp = timestamppb.New(time.Unix(int64(r.Record.Timestamp), 0))
 	info.MessageType = "MSG_PositioningData"
-	logger.Sugar().Info("message type: ", info.MessageType)
 
 	// gps info
 	info.Position = &types.GPSPosition{}
 	info.Position.Latitude = r.Record.GPSElement.Latitude
 	info.Position.Longitude = r.Record.GPSElement.Longitude
 	info.Position.Altitude = float32(r.Record.GPSElement.Altitude)
-	logger.Sugar().Info("parsed speed ", r.Record.GPSElement.Speed)
 	var speed = float32(r.Record.GPSElement.Speed)
 	info.Position.Speed = &speed
 	info.Odometer = int32(r.Record.IOElement.Properties4B[TIO_OdometerValue])
@@ -119,10 +118,12 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 	info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature])
 	info.FuelLevel = int32(r.Record.IOElement.Properties2B[TIO_FuelLevel])
+	
 	// vehicle info
 	info.VehicleStatus = &types.VehicleStatus{}
-	var ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0
+	var ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0 || r.Record.IOElement.Properties1B[TIO_Ignition] > 0
 	info.VehicleStatus.Ignition = &ignition
+
 	info.VehicleStatus.Overspeeding = r.Record.IOElement.Properties1B[TIO_Overspeeding] > 0
 	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
 
