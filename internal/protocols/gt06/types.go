@@ -285,68 +285,73 @@ func (m *GPSDataUploadMode) ToString() string {
 }
 
 func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.DeviceType) *types.DeviceStatus {
-	info := &types.DeviceStatus{}
-
-	info.Imei = imei
-	info.DeviceType = deviceType
-	info.Timestamp = timestamppb.New(time.Now())
-	info.VehicleStatus = &types.VehicleStatus{}
-	info.Position = &types.GPSPosition{}
-	info.MessageType = packet.MessageType.String()
-	logger.Sugar().Info("message type: ", info.MessageType)
-	// Location info
-	switch v := packet.Information.(type) {
-	case *PositioningInformation:
-		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
-		info.Position.Latitude = v.GpsInformation.Latitude
-		info.Position.Longitude = v.GpsInformation.Longitude
-		var speed = float32(v.GpsInformation.Speed)
-		info.Position.Speed = &speed
-		info.Position.Course = float32(v.GpsInformation.Course.Degree)
-
-	case *AlarmInformation:
-		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
-		info.Position.Latitude = v.GpsInformation.Latitude
-		info.Position.Longitude = v.GpsInformation.Longitude
-		var speed = float32(v.GpsInformation.Speed)
-		info.Position.Speed = &speed
-		info.Position.Course = float32(v.GpsInformation.Course.Degree)
-
-	default:
+	info := &types.DeviceStatus{
+		Imei:          imei,
+		DeviceType:    deviceType,
+		Timestamp:     timestamppb.New(time.Now()),
+		VehicleStatus: &types.VehicleStatus{},
+		Position:      &types.GPSPosition{},
+		MessageType:   packet.MessageType.String(),
 	}
+
+	logger.Sugar().Info("message type: ", info.MessageType)
+
+	// Variables for shared data
+	var batteryLevel int32
+	var satellites int32
 	var ignition bool
-	// Vehicle status
+
+	// Process packet information
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
+		// Set GPS and position-related data
+		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
+		info.Position.Latitude = v.GpsInformation.Latitude
+		info.Position.Longitude = v.GpsInformation.Longitude
+		speed := float32(v.GpsInformation.Speed)
+		info.Position.Speed = &speed
+		info.Position.Course = float32(v.GpsInformation.Course.Degree)
+
+		// Set ignition
 		ignition = v.ACCHigh
-		info.VehicleStatus.Ignition = &ignition // (not available for 06)
+		info.VehicleStatus.Ignition = &ignition
 
 	case *AlarmInformation:
+		// Set GPS and position-related data
+		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
+		info.Position.Latitude = v.GpsInformation.Latitude
+		info.Position.Longitude = v.GpsInformation.Longitude
+		speed := float32(v.GpsInformation.Speed)
+		info.Position.Speed = &speed
+		info.Position.Course = float32(v.GpsInformation.Course.Degree)
+
+		// Set ignition and alarm status
 		ignition = v.StatusInformation.TerminalInformation.ACCHigh
 		info.VehicleStatus.Ignition = &ignition
 		info.VehicleStatus.Overspeeding = v.StatusInformation.Alarm == ALV_OverSpeed
 
-	case *HeartbeatData:
+		// Set battery and GSM signal
+		batteryLevel = int32(v.StatusInformation.BatteryLevel)
+		satellites = int32(v.StatusInformation.GSMSignalStrength)
 
-		info.Position.Satellites = int32(v.GSMSignalStrength) // GSM signal strength from HeartbeatData
-		info.BatteryLevel = int32(v.BatteryLevel)             // Battery level from HeartbeatData
+	case *HeartbeatData:
+		// Set ignition
+		ignition = v.TerminalInformation.ACCHigh
+		info.VehicleStatus.Ignition = &ignition
+
+		// Set battery and GSM signal
+		batteryLevel = int32(v.BatteryLevel)
+		satellites = int32(v.GSMSignalStrength)
+
 	default:
-		// Default to false if not set
+		// Default behavior if packet.Information is of unknown type
 	}
 
-	// Battery strength and GSM signal strength
-	switch v := packet.Information.(type) {
-	case *AlarmInformation:
-		info.BatteryLevel = int32(v.StatusInformation.BatteryLevel)
-		info.Position.Satellites = int32(v.StatusInformation.GSMSignalStrength)
-	case *HeartbeatData:
-		info.BatteryLevel = int32(v.BatteryLevel)
-		info.Position.Satellites = int32(v.GSMSignalStrength)
-	case *PositioningInformation:
-		// Assuming no battery level and GSM signal strength data in PositioningInformation
-	default:
-	}
+	// Set battery level and GSM signal if available
+	info.BatteryLevel = resolveBatteryLevel(batteryLevel)
+	info.Position.Satellites = satellites
 
+	// Serialize raw data
 	rawdata, _ := json.Marshal(packet)
 	info.RawData = &types.DeviceStatus_ConcoxPacket{
 		ConcoxPacket: &types.ConcoxPacket{RawData: rawdata},
@@ -390,5 +395,27 @@ func (mt MessageType) String() string {
 		return "MSG_TransmissionInstruction"
 	default:
 		return "MSG_Invalid"
+	}
+}
+
+// Map battery level hex values to percentage
+func resolveBatteryLevel(level int32) int32 {
+	switch level {
+	case 0x00:
+		return 0 // No Power (shutdown)
+	case 0x01:
+		return 10 // Extremely Low Battery
+	case 0x02:
+		return 25 // Very Low Battery (Low Battery Alarm)
+	case 0x03:
+		return 40 // Low Battery (can be used normally)
+	case 0x04:
+		return 60 // Medium
+	case 0x05:
+		return 80 // High
+	case 0x06:
+		return 100 // Full
+	default:
+		return -1 // Unknown level
 	}
 }
