@@ -141,6 +141,11 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 
 // ConvertDecimalToHexAndReverse convert decimal to hex and then reverse the hex string
 func ConvertDecimalToHexAndReverse(decimalValue uint64) string {
+	// Step 0: Check if the decimal value is 0 (null equivalent for uint64)
+	if decimalValue == 0 {
+		return ""
+	}
+
 	// Step 1: Convert the decimal value to a hex string
 	hexStr := fmt.Sprintf("%016X", decimalValue)
 
