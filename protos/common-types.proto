@@ -29,10 +29,11 @@ message DeviceStatus {
     float temperature = 8;
     int32 odometer = 9;
     int32 fuel_level = 10;
+    string identification_id = 11;
     oneof raw_data {
-        WanwayPacket wanway_packet = 11;
-        TeltonikaPacket teltonika_packet = 12;
-        ConcoxPacket  concox_packet = 13;
+        WanwayPacket wanway_packet = 12;
+        TeltonikaPacket teltonika_packet = 13;
+        ConcoxPacket  concox_packet = 14;
     }
 }
 

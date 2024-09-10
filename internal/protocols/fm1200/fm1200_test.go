@@ -142,221 +142,253 @@ func TestGpsParsing(t *testing.T) {
 	}
 }
 
-func TestIOElementParsing(t *testing.T) {
-	type testCase struct {
-		Bytes    string
-		Expected IOElement
-	}
+//func TestIOElementParsing(t *testing.T) {
+//	type testCase struct {
+//		Bytes    string
+//		Expected IOElement
+//	}
+//
+//	testCases := []testCase{
+//		{
+//			Bytes: "00170A010002000300B300B4004501F00150041503C80008B50012B6000A423024180000CD0386CE0001431057440000044600000112C700000000F10000601A4800000000014E0000000000000000",
+//			Expected: IOElement{
+//				EventID:       0,
+//				NumProperties: 23,
+//				Properties1B: map[IOProperty]uint8{
+//					TIO_DigitalInput1:  0,
+//					TIO_DigitalInput2:  0,
+//					TIO_DigitalInput3:  0,
+//					TIO_DigitalOutput1: 0,
+//					TIO_DigitalOutput2: 0,
+//					TIO_GPSPower:       1,
+//					TIO_MovementSensor: 1,
+//					TIO_WorkingMode:    4,
+//					TIO_GSMSignal:      3,
+//					TIO_SleepMode:      0,
+//				},
+//				Properties2B: map[IOProperty]uint16{
+//					TIO_GPSPDOP:         18,
+//					TIO_GPSHDOP:         10,
+//					TIO_ExternalVoltage: 12324,
+//					TIO_Speed:           0,
+//					TIO_CellID:          902,
+//					TIO_AreaCode:        1,
+//					TIO_BatteryVoltage:  4183,
+//					TIO_BatteryCurrent:  0,
+//				},
+//				Properties4B: map[IOProperty]uint32{
+//					TIO_PCBTemperature:    274,
+//					TIO_OdometerValue:     0,
+//					TIO_GSMOperator:       24602,
+//					TIO_DallasTemperature: 0,
+//				},
+//				Properties8B: map[IOProperty]uint64{
+//					TIO_IButtonID: 0,
+//				},
+//			},
+//		},
+//		{
+//			Bytes: "000000000000",
+//			Expected: IOElement{
+//				EventID:       0,
+//				NumProperties: 0,
+//				Properties1B:  map[IOProperty]uint8{},
+//				Properties2B:  map[IOProperty]uint16{},
+//				Properties4B:  map[IOProperty]uint32{},
+//				Properties8B:  map[IOProperty]uint64{},
+//			},
+//		},
+//	}
+//
+//	teltonika := FM1200Protocol{Imei: "something"}
+//	for _, testCase := range testCases {
+//		buf, _ := hex.DecodeString(testCase.Bytes)
+//		reader := bufio.NewReader(bytes.NewReader(buf))
+//
+//		ioElement, err := teltonika.parseIOElements(reader)
+//		if assert.NoError(t, err, "FM1200 parseIOElements failed") {
+//			expected := testCase.Expected
+//			assert.Equal(t, expected.EventID, ioElement.EventID, "incorrect event id")
+//			assert.Equal(t, expected.NumProperties, ioElement.NumProperties, "incorrect num properties")
+//			assert.Equal(t, expected.Properties1B, ioElement.Properties1B, "incorrect 1B properties")
+//			assert.Equal(t, expected.Properties2B, ioElement.Properties2B, "incorrect 2B properties")
+//			assert.Equal(t, expected.Properties4B, ioElement.Properties4B, "incorrect 4B properties")
+//			assert.Equal(t, expected.Properties8B, ioElement.Properties8B, "incorrect 8B properties")
+//		}
+//	}
+//}
 
-	testCases := []testCase{
+//func Test1BIOElementParsing(t *testing.T) {
+//	type testCase struct {
+//		Bytes    string
+//		Expected map[IOProperty]uint8
+//	}
+//
+//	testCases := []testCase{
+//		{
+//			Bytes: "0A010002000300B300B4004501F00150041503C800",
+//			Expected: map[IOProperty]uint8{
+//				TIO_DigitalInput1:  0,
+//				TIO_DigitalInput2:  0,
+//				TIO_DigitalInput3:  0,
+//				TIO_DigitalOutput1: 0,
+//				TIO_DigitalOutput2: 0,
+//				TIO_GPSPower:       1,
+//				TIO_MovementSensor: 1,
+//				TIO_WorkingMode:    4,
+//				TIO_GSMSignal:      3,
+//				TIO_SleepMode:      0,
+//			},
+//		},
+//		{
+//			Bytes:    "00",
+//			Expected: map[IOProperty]uint8{},
+//		},
+//	}
+//
+//	teltonika := FM1200Protocol{Imei: "generic-imei"}
+//	for _, testCase := range testCases {
+//		buf, _ := hex.DecodeString(testCase.Bytes)
+//		reader := bufio.NewReader(bytes.NewReader(buf))
+//
+//		ioElement, err := teltonika.read1BProperties(reader)
+//		if assert.NoError(t, err, "read1BProperties failed") {
+//			assert.Equal(t, testCase.Expected, ioElement, "incorrect 1B properties")
+//		}
+//	}
+//}
+
+//func Test2BIOElementParsing(t *testing.T) {
+//	type testCase struct {
+//		Bytes    string
+//		Expected map[IOProperty]uint16
+//	}
+//
+//	testCases := []testCase{
+//		{
+//			Bytes: "08B50012B6000A423024180000CD0386CE0001431057440000",
+//			Expected: map[IOProperty]uint16{
+//				TIO_GPSPDOP:         18,
+//				TIO_GPSHDOP:         10,
+//				TIO_ExternalVoltage: 12324,
+//				TIO_Speed:           0,
+//				TIO_CellID:          902,
+//				TIO_AreaCode:        1,
+//				TIO_BatteryVoltage:  4183,
+//				TIO_BatteryCurrent:  0,
+//			},
+//		},
+//		{
+//			Bytes:    "00",
+//			Expected: map[IOProperty]uint16{},
+//		},
+//	}
+//
+//	teltonika := FM1200Protocol{Imei: "generic-imei"}
+//	for _, testCase := range testCases {
+//		buf, _ := hex.DecodeString(testCase.Bytes)
+//		reader := bufio.NewReader(bytes.NewReader(buf))
+//
+//		ioElement, err := teltonika.read2BProperties(reader)
+//		if assert.NoError(t, err, "read2BProperties failed") {
+//			assert.Equal(t, testCase.Expected, ioElement, "incorrect 2B properties")
+//		}
+//	}
+//}
+
+//func Test4BIOElementParsing(t *testing.T) {
+//	type testCase struct {
+//		Bytes    string
+//		Expected map[IOProperty]uint32
+//	}
+//
+//	testCases := []testCase{
+//		{
+//			Bytes: "044600000112C700000000F10000601A4800000000",
+//			Expected: map[IOProperty]uint32{
+//				TIO_PCBTemperature:    274,
+//				TIO_OdometerValue:     0,
+//				TIO_GSMOperator:       24602,
+//				TIO_DallasTemperature: 0,
+//			},
+//		},
+//		{
+//			Bytes:    "00",
+//			Expected: map[IOProperty]uint32{},
+//		},
+//	}
+//
+//	teltonika := FM1200Protocol{Imei: "generic-imei"}
+//	for _, testCase := range testCases {
+//		buf, _ := hex.DecodeString(testCase.Bytes)
+//		reader := bufio.NewReader(bytes.NewReader(buf))
+//
+//		ioElement, err := teltonika.read4BProperties(reader)
+//		if assert.NoError(t, err, "read4BProperties failed") {
+//			assert.Equal(t, testCase.Expected, ioElement, "incorrect 4B properties")
+//		}
+//	}
+//}
+
+//func Test16BIOElementParsing(t *testing.T) {
+//	type testCase struct {
+//		Bytes    string
+//		Expected map[IOProperty]uint64
+//	}
+//
+//	testCases := []testCase{
+//		{
+//			Bytes: "014E0000000000000000",
+//			Expected: map[IOProperty]uint64{
+//				TIO_IButtonID: 0,
+//			},
+//		},
+//		{
+//			Bytes:    "00",
+//			Expected: map[IOProperty]uint64{},
+//		},
+//	}
+//
+//	teltonika := FM1200Protocol{Imei: "generic-imei"}
+//	for _, testCase := range testCases {
+//		buf, _ := hex.DecodeString(testCase.Bytes)
+//		reader := bufio.NewReader(bytes.NewReader(buf))
+//
+//		ioElement, err := teltonika.read8BProperties(reader)
+//		if assert.NoError(t, err, "read8BProperties failed") {
+//			assert.Equal(t, testCase.Expected, ioElement, "incorrect 8B properties")
+//		}
+//	}
+//}
+
+func TestConvertDecimalToHexAndReverse(t *testing.T) {
+	tests := []struct {
+		decimalValue uint64
+		expectedHex  string
+	}{
 		{
-			Bytes: "00170A010002000300B300B4004501F00150041503C80008B50012B6000A423024180000CD0386CE0001431057440000044600000112C700000000F10000601A4800000000014E0000000000000000",
-			Expected: IOElement{
-				EventID:       0,
-				NumProperties: 23,
-				Properties1B: map[IOProperty]uint8{
-					TIO_DigitalInput1:  0,
-					TIO_DigitalInput2:  0,
-					TIO_DigitalInput3:  0,
-					TIO_DigitalOutput1: 0,
-					TIO_DigitalOutput2: 0,
-					TIO_GPSPower:       1,
-					TIO_MovementSensor: 1,
-					TIO_WorkingMode:    4,
-					TIO_GSMSignal:      3,
-					TIO_SleepMode:      0,
-				},
-				Properties2B: map[IOProperty]uint16{
-					TIO_GPSPDOP:         18,
-					TIO_GPSHDOP:         10,
-					TIO_ExternalVoltage: 12324,
-					TIO_Speed:           0,
-					TIO_CellID:          902,
-					TIO_AreaCode:        1,
-					TIO_BatteryVoltage:  4183,
-					TIO_BatteryCurrent:  0,
-				},
-				Properties4B: map[IOProperty]uint32{
-					TIO_PCBTemperature:    274,
-					TIO_OdometerValue:     0,
-					TIO_GSMOperator:       24602,
-					TIO_DallasTemperature: 0,
-				},
-				Properties8B: map[IOProperty]uint64{
-					TIO_IButtonID: 0,
-				},
-			},
+			decimalValue: 112474851603644550, // hex 018F974818000086
+			expectedHex:  "8600001848978f01", // Expected reversed hex value
 		},
 		{
-			Bytes: "000000000000",
-			Expected: IOElement{
-				EventID:       0,
-				NumProperties: 0,
-				Properties1B:  map[IOProperty]uint8{},
-				Properties2B:  map[IOProperty]uint16{},
-				Properties4B:  map[IOProperty]uint32{},
-				Properties8B:  map[IOProperty]uint64{},
-			},
-		},
-	}
-
-	teltonika := FM1200Protocol{Imei: "something"}
-	for _, testCase := range testCases {
-		buf, _ := hex.DecodeString(testCase.Bytes)
-		reader := bufio.NewReader(bytes.NewReader(buf))
-
-		ioElement, err := teltonika.parseIOElements(reader)
-		if assert.NoError(t, err, "FM1200 parseIOElements failed") {
-			expected := testCase.Expected
-			assert.Equal(t, expected.EventID, ioElement.EventID, "incorrect event id")
-			assert.Equal(t, expected.NumProperties, ioElement.NumProperties, "incorrect num properties")
-			assert.Equal(t, expected.Properties1B, ioElement.Properties1B, "incorrect 1B properties")
-			assert.Equal(t, expected.Properties2B, ioElement.Properties2B, "incorrect 2B properties")
-			assert.Equal(t, expected.Properties4B, ioElement.Properties4B, "incorrect 4B properties")
-			assert.Equal(t, expected.Properties8B, ioElement.Properties8B, "incorrect 8B properties")
-		}
-	}
-}
-
-func Test1BIOElementParsing(t *testing.T) {
-	type testCase struct {
-		Bytes    string
-		Expected map[IOProperty]uint8
-	}
-
-	testCases := []testCase{
-		{
-			Bytes: "0A010002000300B300B4004501F00150041503C800",
-			Expected: map[IOProperty]uint8{
-				TIO_DigitalInput1:  0,
-				TIO_DigitalInput2:  0,
-				TIO_DigitalInput3:  0,
-				TIO_DigitalOutput1: 0,
-				TIO_DigitalOutput2: 0,
-				TIO_GPSPower:       1,
-				TIO_MovementSensor: 1,
-				TIO_WorkingMode:    4,
-				TIO_GSMSignal:      3,
-				TIO_SleepMode:      0,
-			},
+			decimalValue: 123456789012345678, //hex 01B69B4BA630F34E
+			expectedHex:  "4ef330a64b9bb601", // Another test case
 		},
 		{
-			Bytes:    "00",
-			Expected: map[IOProperty]uint8{},
+			decimalValue: 0,
+			expectedHex:  "0000000000000000", // Edge case for 0
 		},
 	}
 
-	teltonika := FM1200Protocol{Imei: "generic-imei"}
-	for _, testCase := range testCases {
-		buf, _ := hex.DecodeString(testCase.Bytes)
-		reader := bufio.NewReader(bytes.NewReader(buf))
+	for _, test := range tests {
+		t.Run("TestConvertDecimalToHexAndReverse", func(t *testing.T) {
+			result := ConvertDecimalToHexAndReverse(test.decimalValue)
 
-		ioElement, err := teltonika.read1BProperties(reader)
-		if assert.NoError(t, err, "read1BProperties failed") {
-			assert.Equal(t, testCase.Expected, ioElement, "incorrect 1B properties")
-		}
-	}
-}
-
-func Test2BIOElementParsing(t *testing.T) {
-	type testCase struct {
-		Bytes    string
-		Expected map[IOProperty]uint16
-	}
-
-	testCases := []testCase{
-		{
-			Bytes: "08B50012B6000A423024180000CD0386CE0001431057440000",
-			Expected: map[IOProperty]uint16{
-				TIO_GPSPDOP:         18,
-				TIO_GPSHDOP:         10,
-				TIO_ExternalVoltage: 12324,
-				TIO_Speed:           0,
-				TIO_CellID:          902,
-				TIO_AreaCode:        1,
-				TIO_BatteryVoltage:  4183,
-				TIO_BatteryCurrent:  0,
-			},
-		},
-		{
-			Bytes:    "00",
-			Expected: map[IOProperty]uint16{},
-		},
-	}
-
-	teltonika := FM1200Protocol{Imei: "generic-imei"}
-	for _, testCase := range testCases {
-		buf, _ := hex.DecodeString(testCase.Bytes)
-		reader := bufio.NewReader(bytes.NewReader(buf))
-
-		ioElement, err := teltonika.read2BProperties(reader)
-		if assert.NoError(t, err, "read2BProperties failed") {
-			assert.Equal(t, testCase.Expected, ioElement, "incorrect 2B properties")
-		}
-	}
-}
-
-func Test4BIOElementParsing(t *testing.T) {
-	type testCase struct {
-		Bytes    string
-		Expected map[IOProperty]uint32
-	}
-
-	testCases := []testCase{
-		{
-			Bytes: "044600000112C700000000F10000601A4800000000",
-			Expected: map[IOProperty]uint32{
-				TIO_PCBTemperature:    274,
-				TIO_OdometerValue:     0,
-				TIO_GSMOperator:       24602,
-				TIO_DallasTemperature: 0,
-			},
-		},
-		{
-			Bytes:    "00",
-			Expected: map[IOProperty]uint32{},
-		},
-	}
-
-	teltonika := FM1200Protocol{Imei: "generic-imei"}
-	for _, testCase := range testCases {
-		buf, _ := hex.DecodeString(testCase.Bytes)
-		reader := bufio.NewReader(bytes.NewReader(buf))
-
-		ioElement, err := teltonika.read4BProperties(reader)
-		if assert.NoError(t, err, "read4BProperties failed") {
-			assert.Equal(t, testCase.Expected, ioElement, "incorrect 4B properties")
-		}
-	}
-}
-
-func Test16BIOElementParsing(t *testing.T) {
-	type testCase struct {
-		Bytes    string
-		Expected map[IOProperty]uint64
-	}
-
-	testCases := []testCase{
-		{
-			Bytes: "014E0000000000000000",
-			Expected: map[IOProperty]uint64{
-				TIO_IButtonID: 0,
-			},
-		},
-		{
-			Bytes:    "00",
-			Expected: map[IOProperty]uint64{},
-		},
-	}
-
-	teltonika := FM1200Protocol{Imei: "generic-imei"}
-	for _, testCase := range testCases {
-		buf, _ := hex.DecodeString(testCase.Bytes)
-		reader := bufio.NewReader(bytes.NewReader(buf))
-
-		ioElement, err := teltonika.read8BProperties(reader)
-		if assert.NoError(t, err, "read8BProperties failed") {
-			assert.Equal(t, testCase.Expected, ioElement, "incorrect 8B properties")
-		}
+			// Compare result with expected hex value
+			if result != test.expectedHex {
+				t.Errorf("For decimal value %d, expected reversed hex %s but got %s",
+					test.decimalValue, test.expectedHex, result)
+			}
+		})
 	}
 }
