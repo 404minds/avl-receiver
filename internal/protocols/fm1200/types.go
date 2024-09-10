@@ -1,7 +1,9 @@
 package fm1200
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/404minds/avl-receiver/internal/types"
@@ -118,7 +120,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 	info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature])
 	info.FuelLevel = int32(r.Record.IOElement.Properties2B[TIO_FuelLevel])
-
+	info.IdentificationId = ConvertDecimalToHexAndReverse(r.Record.IOElement.Properties8B[TIO_IButtonID])
 	// vehicle info
 	info.VehicleStatus = &types.VehicleStatus{}
 	var ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0 || r.Record.IOElement.Properties1B[TIO_Ignition] > 0
@@ -135,4 +137,27 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 		TeltonikaPacket: &types.TeltonikaPacket{RawData: rawdata},
 	}
 	return info
+}
+
+// ConvertDecimalToHexAndReverse convert decimal to hex and then reverse the hex string
+func ConvertDecimalToHexAndReverse(decimalValue uint64) string {
+	// Step 1: Convert the decimal value to a hex string
+	hexStr := fmt.Sprintf("%016X", decimalValue)
+
+	// Step 2: Convert the hex string to bytes
+	hexBytes, err := hex.DecodeString(hexStr)
+	if err != nil {
+		fmt.Println("Error decoding hex string:", err)
+		return ""
+	}
+
+	// Step 3: Reverse the byte order
+	for i, j := 0, len(hexBytes)-1; i < j; i, j = i+1, j-1 {
+		hexBytes[i], hexBytes[j] = hexBytes[j], hexBytes[i]
+	}
+
+	// Step 4: Convert the reversed bytes back to a hex string
+	reversedHexStr := hex.EncodeToString(hexBytes)
+
+	return reversedHexStr
 }
