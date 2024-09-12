@@ -10,11 +10,14 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type CodecID byte
+type CodecID uint
 
 const (
 	Codec8  CodecID = 0x08
 	Codec8E CodecID = 0x8E
+	codec12 CodecID = 0x0C
+	codec13 CodecID = 0x0D
+	codec14 CodecID = 0x0E
 )
 
 type Record struct {
@@ -78,6 +81,7 @@ const (
 	TIO_GSMOperator                   = 241
 	TIO_Speed                         = 24
 	TIO_IButtonID                     = 78
+	TIO_RFID                          = 207
 	TIO_WorkingMode                   = 80
 	TIO_GSMSignal                     = 21
 	TIO_SleepMode                     = 200
@@ -120,7 +124,14 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 	info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature])
 	info.FuelLevel = int32(r.Record.IOElement.Properties2B[TIO_FuelLevel])
-	info.IdentificationId = ConvertDecimalToHexAndReverse(r.Record.IOElement.Properties8B[TIO_IButtonID])
+	// Check if the iButtonID is available, otherwise use RFID
+	if iButtonID, exists := r.Record.IOElement.Properties8B[TIO_IButtonID]; exists && iButtonID != 0 {
+		info.IdentificationId = ConvertDecimalToHexAndReverse(iButtonID)
+	} else if rfid, exists := r.Record.IOElement.Properties8B[TIO_RFID]; exists && rfid != 0 {
+		info.IdentificationId = ConvertDecimalToHexAndReverse(rfid)
+	} else {
+		info.IdentificationId = ""
+	}
 	// vehicle info
 	info.VehicleStatus = &types.VehicleStatus{}
 	var ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0 || r.Record.IOElement.Properties1B[TIO_Ignition] > 0
