@@ -334,8 +334,6 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 
 	case *HeartbeatData:
 		// Set ignition
-		ignition = v.TerminalInformation.ACCHigh
-		info.VehicleStatus.Ignition = &ignition
 
 		// Set battery and GSM signal
 		info.BatteryLevel = resolveBatteryLevel(int32(v.BatteryLevel))
@@ -344,7 +342,7 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	default:
 		// Default behavior if packet.Information is of unknown type
 	}
-	
+
 	// Serialize raw data
 	rawdata, _ := json.Marshal(packet)
 	info.RawData = &types.DeviceStatus_ConcoxPacket{
