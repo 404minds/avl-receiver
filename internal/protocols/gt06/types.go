@@ -297,8 +297,6 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	logger.Sugar().Info("message type: ", info.MessageType)
 
 	// Variables for shared data
-	var batteryLevel int32
-	var satellites int32
 	var ignition bool
 
 	// Process packet information
@@ -340,16 +338,12 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 		info.VehicleStatus.Ignition = &ignition
 
 		// Set battery and GSM signal
-		batteryLevel = int32(v.BatteryLevel)
-		satellites = int32(v.GSMSignalStrength)
+		info.BatteryLevel = resolveBatteryLevel(int32(v.BatteryLevel))
+		info.Position.Satellites = int32(v.GSMSignalStrength)
 
 	default:
 		// Default behavior if packet.Information is of unknown type
 	}
-
-	// Set battery level and GSM signal if available
-	info.BatteryLevel = resolveBatteryLevel(batteryLevel)
-	info.Position.Satellites = satellites
 
 	// Serialize raw data
 	rawdata, _ := json.Marshal(packet)
