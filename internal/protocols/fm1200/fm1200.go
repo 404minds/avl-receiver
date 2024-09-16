@@ -72,7 +72,6 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 	if err != nil {
 		return err
 	}
-	logger.Sugar().Info("consumeMessage header Zeroes: ", headerZeros)
 	if headerZeros != 0x0000 {
 		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at header Zeroes")
 	}
@@ -97,7 +96,6 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 		return err
 	}
 
-	logger.Sugar().Info("consumeMessage parsed Packet: ", parsedPacket)
 	err = binary.Read(reader, binary.BigEndian, &parsedPacket.CRC)
 	if err != nil {
 		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at parsed Packet CRC")
@@ -155,7 +153,6 @@ func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader) (*AvlDataPacket
 		}
 		packet.Data = append(packet.Data, *record)
 	}
-	logger.Sugar().Info("parseDataRecord: ", packet.Data)
 
 	endNumRecords, err := reader.ReadByte()
 	if err != nil {
@@ -178,8 +175,6 @@ func (t *FM1200Protocol) readSingleRecord(reader *bufio.Reader, codecID uint8) (
 		return nil, err
 	}
 
-	logger.Sugar().Info("readSingleRecord: Timestamp: ", record.Timestamp)
-
 	// priority
 	err = binary.Read(reader, binary.BigEndian, &record.Priority)
 	if err != nil {
@@ -194,8 +189,6 @@ func (t *FM1200Protocol) readSingleRecord(reader *bufio.Reader, codecID uint8) (
 		return nil, err
 	}
 	record.GPSElement = gpsElement
-
-	logger.Sugar().Info("readSingleRecord: GPS Element", record.GPSElement)
 
 	// io elements
 	ioElement, err := t.parseIOElements(reader, codecID)
@@ -240,23 +233,17 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader, codecID uint8) (*
 		ioElement.NumProperties = uint16(numOfProperties)
 	}
 
-	logger.Sugar().Info("parseIOElements: NumProperties: ", ioElement.NumProperties)
-
 	var err1, err2, err3, err4, err5 error
 	ioElement.Properties1B, err1 = t.read1BProperties(reader, codecID)
-	logger.Sugar().Info("parseIOElements: properties1B: ", ioElement.Properties1B)
 	logger.Sugar().Info("parseIOElements: properties1B error: ", err1)
 
 	ioElement.Properties2B, err2 = t.read2BProperties(reader, codecID)
-	logger.Sugar().Info("parseIOElements: properties2B: ", ioElement.Properties2B)
 	logger.Sugar().Info("parseIOElements: properties2B error: ", err2)
 
 	ioElement.Properties4B, err3 = t.read4BProperties(reader, codecID)
-	logger.Sugar().Info("parseIOElements: properties4B: ", ioElement.Properties4B)
 	logger.Sugar().Info("parseIOElements: properties4B error: ", err3)
 
 	ioElement.Properties8B, err4 = t.read8BProperties(reader, codecID)
-	logger.Sugar().Info("parseIOElements: properties8B: ", ioElement.Properties8B)
 	logger.Sugar().Info("parseIOElements: properties8B error: ", err4)
 
 	if codecID == 0x8E {

@@ -333,12 +333,15 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 		info.Position.Satellites = int32(v.StatusInformation.GSMSignalStrength)
 
 	case *HeartbeatData:
-		// Set ignition
-
-		// Set battery and GSM signal
+		//	// Set ignition
+		ignition = v.TerminalInformation.ACCHigh
+		info.VehicleStatus.Ignition = &ignition
+		//Set battery and GSM signal
+		logger.Sugar().Info(v.BatteryLevel, "  ", v.GSMSignalStrength)
 		info.BatteryLevel = resolveBatteryLevel(int32(v.BatteryLevel))
+		logger.Sugar().Info("battery level: ", info.BatteryLevel)
 		info.Position.Satellites = int32(v.GSMSignalStrength)
-
+		logger.Sugar().Info("satellite level: ", info.Position.Satellites)
 	default:
 		// Default behavior if packet.Information is of unknown type
 	}
