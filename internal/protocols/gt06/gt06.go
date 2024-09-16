@@ -133,7 +133,6 @@ func (p *GT06Protocol) sendResponse(parsedPacket *Packet, writer io.Writer) erro
 
 	responsePacket.Crc = crc.CrcWanway(responsePacket.ToBytes()[2:6])
 
-	logger.Sugar().Info("Sending response packet: ", responsePacket.ToBytes())
 	_, err := writer.Write(responsePacket.ToBytes())
 	if err != nil {
 		return errors.Wrapf(err, "failed to write response packet")
@@ -193,14 +192,12 @@ func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 
 	// Packet data
 	packetData := make([]byte, packet.PacketLength-4) // 2 for CRC, 2 for serial number
-	logger.Sugar().Infof("parse packet packet data after removing 2 for CRC, 2 for serial number: %x", packetData)
 
 	_, err = io.ReadFull(reader, packetData)
 	if err != nil {
 		logger.Sugar().Errorf("parse packet Failed to read packet data: %v", err)
 		return nil, err
 	}
-	logger.Sugar().Infof("parse packet Packet data: %x", packetData)
 
 	// Packet data to packet
 	logger.Sugar().Info("Parse packet,", packetData, " packet ", packet)
@@ -216,7 +213,6 @@ func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 		logger.Sugar().Errorf("parse packet Failed to read information serial number: %v", err)
 		return nil, err
 	}
-	logger.Sugar().Infof("parse packet Information serial number: %x", packet.InformationSerialNumber)
 
 	// CRC
 	err = binary.Read(reader, binary.BigEndian, &packet.Crc)
@@ -261,10 +257,8 @@ func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 
 func (p *GT06Protocol) parsePacketData(reader *bufio.Reader, packet *Packet) error {
 	protocolNumByte, err := reader.ReadByte()
-	logger.Sugar().Info("parsePacketData protocol number byte: ", protocolNumByte)
 
 	msgType := MessageType(protocolNumByte)
-	logger.Sugar().Info("message type ", msgType)
 
 	if msgType == MSG_Invalid {
 		logger.Sugar().Errorf("Invalid message type: %x", protocolNumByte)
@@ -317,7 +311,6 @@ func (p *GT06Protocol) parsePacketInformation(reader *bufio.Reader, messageType 
 		return parsedInfo, err
 	} else if messageType == MSG_HeartbeatData {
 		parsedInfo, err := p.parseHeartbeatData(reader)
-		logger.Sugar().Info("parsePacketInformation error: ", err)
 		return parsedInfo, err
 	} else if messageType == MSG_EG_HeartbeatData {
 		parsedInfo, err := p.parseHeartbeatData(reader)
@@ -326,7 +319,6 @@ func (p *GT06Protocol) parsePacketInformation(reader *bufio.Reader, messageType 
 		parsedInfo, err := p.parseInformationTransmissionPacket(reader)
 		return parsedInfo, err
 	} else {
-		logger.Sugar().Info("error from parsePacketInformation")
 		return nil, errors.Wrapf(errs.ErrTR06BadDataPacket, "from parsePAcketInformation")
 	}
 }
@@ -396,7 +388,6 @@ func (p *GT06Protocol) parsePositioningData(reader *bufio.Reader) (positionInfo 
 	var b byte
 	checkErr(binary.Read(reader, binary.BigEndian, &b))
 	parsed.ACCHigh = b == 0x01 // 00 is low, 01 is high
-	logger.Sugar().Info("parsePositioningData Ignition ", parsed.ACCHigh)
 
 	// data reporting mode
 	checkErr(binary.Read(reader, binary.BigEndian, &parsed.DataReportingMode))
@@ -508,7 +499,6 @@ func (p *GT06Protocol) parseInformationTransmissionPacket(reader *bufio.Reader) 
 	logger.Sugar().Info("parseInformationTransmissionPacket: ", packet.InformationContent.InformationType)
 
 	dataContent := make([]byte, 2)
-	logger.Sugar().Info("parseInformationTransmissionPacket: Reading data content: ", dataContent)
 	if _, err := io.ReadFull(reader, dataContent); err != nil {
 		logger.Sugar().Info("parseInformationTransmissionPacket: Failed to read data content ", err)
 		return packet, err
@@ -575,7 +565,6 @@ func (p *GT06Protocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo GPSInf
 
 	// speed
 	checkErr(binary.Read(reader, binary.BigEndian, &gpsInfo.Speed))
-	logger.Sugar().Info("speed from parseGPSInformation: ", gpsInfo.Speed)
 
 	// TODO: parse the 16-bit course to detailed fields
 	// course/heading
@@ -601,7 +590,6 @@ func (p *GT06Protocol) parseGpsCourse(courseValue uint16) (course GPSCourse) {
 
 func (p *GT06Protocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time, err error) {
 	year, err := reader.ReadByte()
-	logger.Sugar().Info("year: ", year)
 	checkErr(err)
 
 	yearInt := int(year) + 2000
@@ -622,7 +610,6 @@ func (p *GT06Protocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time
 	checkErr(err)
 
 	timestamp = time.Date(yearInt, time.Month(month), int(day), int(hour), int(minute), int(second), 0, p.LoginInformation.Timezone)
-	logger.Sugar().Info("timestamp: ", timestamp)
 	return timestamp, nil
 }
 
