@@ -300,8 +300,10 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	var ignition bool
 
 	// Process packet information
+	logger.Sugar().Info("packet.Information type %t", packet.Information)
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
+		logger.Sugar().Info("we are in gps positioning")
 		// Set GPS and position-related data
 		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
 		info.Position.Latitude = v.GpsInformation.Latitude
