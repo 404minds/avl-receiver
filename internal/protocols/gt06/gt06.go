@@ -423,10 +423,11 @@ func (p *GT06Protocol) parseAlarmData(reader *bufio.Reader) (alarmInfo AlarmInfo
 	return
 }
 
-func (p *GT06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat HeartbeatData, err error) {
+func (p *GT06Protocol) parseHeartbeatData(reader *bufio.Reader) (interface{}, error) {
+	var err error
 	defer func() {
 		if r := recover(); r != nil {
-			err = r.(error)
+			err := r.(error)
 			if err != io.EOF {
 				logger.Sugar().Info("error from parseHeartbeatData 1 err: ", err)
 				err = errors.Wrapf(errs.ErrTR06BadDataPacket, "from parseHeartbeatData")
@@ -434,50 +435,56 @@ func (p *GT06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat Heart
 		}
 	}()
 
+	var heartbeat HeartbeatData
+
+	// Terminal Info Byte
 	var terminalInfoByte byte
 	if err := binary.Read(reader, binary.BigEndian, &terminalInfoByte); err != nil {
-		return heartbeat, err
+		return nil, err
 	}
 	logger.Sugar().Infof("parseHeartbeatData Terminal Info Byte: %x", terminalInfoByte)
 	heartbeat.TerminalInformation, err = p.parseTerminalInfoFromByte(terminalInfoByte)
 	if err != nil {
-		return heartbeat, err
+		return nil, err
 	}
 
+	// Battery Level
 	var batteryLevelByte byte
 	if err := binary.Read(reader, binary.BigEndian, &batteryLevelByte); err != nil {
-		return heartbeat, err
+		return nil, err
 	}
 	logger.Sugar().Infof("parseHeartbeatData  Battery Level Byte: %x", batteryLevelByte)
 	heartbeat.BatteryLevel = BatteryLevel(batteryLevelByte)
-	logger.Sugar().Info("heartbeat.batteryLevel: ", heartbeat.BatteryLevel)
 	if heartbeat.BatteryLevel == VL_Invalid {
-		return heartbeat, errs.ErrTR06InvalidVoltageLevel
+		return nil, errs.ErrTR06InvalidVoltageLevel
 	}
 
+	// GSM Signal Strength
 	var gsmSignalStrengthByte byte
 	if err := binary.Read(reader, binary.BigEndian, &gsmSignalStrengthByte); err != nil {
-		return heartbeat, err
+		return nil, err
 	}
 	logger.Sugar().Infof("parseHeartbeatData GSM Signal Strength Byte: %x", gsmSignalStrengthByte)
 	heartbeat.GSMSignalStrength = GSMSignalStrength(gsmSignalStrengthByte)
-	logger.Sugar().Info("heartbeat.GSMSignalStrength: ", heartbeat.GSMSignalStrength)
 	if heartbeat.GSMSignalStrength == GSM_Invalid {
-		return heartbeat, errs.ErrTR06InvalidGSMSignalStrength
+		return nil, errs.ErrTR06InvalidGSMSignalStrength
 	}
 
+	// Extended Port Status
 	if err := binary.Read(reader, binary.BigEndian, &heartbeat.ExtendedPortStatus); err != nil {
-		return heartbeat, err
+		return nil, err
 	}
 	logger.Sugar().Infof("parseHeartbeatData Extended Port Status Byte: %x", heartbeat.ExtendedPortStatus)
 
+	// Check for extra bytes
 	if _, err := reader.Peek(1); err != io.EOF {
 		logger.Sugar().Errorf("parseHeartbeatData Extra bytes detected in packet")
 		logger.Sugar().Info("error from parseHeartbeatData 2")
-		return heartbeat, errors.Wrapf(errs.ErrTR06BadDataPacket, "from parseHeartbeatData 2")
+		return nil, errors.Wrapf(errs.ErrTR06BadDataPacket, "from parseHeartbeatData 2")
 	}
-	logger.Sugar().Info("heart beat data: ", heartbeat)
-	return heartbeat, nil
+
+	// Return heartbeat as interface{}
+	return &heartbeat, nil
 }
 
 func (p *GT06Protocol) parseInformationTransmissionPacket(reader *bufio.Reader) (packet InformationTransmissionPacket, err error) {
