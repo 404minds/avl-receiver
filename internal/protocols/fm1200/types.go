@@ -110,7 +110,6 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Imei = r.IMEI
 	info.DeviceType = types.DeviceType_TELTONIKA
 	info.Timestamp = timestamppb.New(time.Unix(int64(r.Record.Timestamp), 0))
-	info.MessageType = "MSG_PositioningData"
 
 	// gps info
 	info.Position = &types.GPSPosition{}

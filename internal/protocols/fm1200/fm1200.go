@@ -235,16 +235,24 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader, codecID uint8) (*
 
 	var err1, err2, err3, err4, err5 error
 	ioElement.Properties1B, err1 = t.read1BProperties(reader, codecID)
-	logger.Sugar().Info("parseIOElements: properties1B error: ", err1)
+	if err1 != nil {
+		logger.Sugar().Info("parseIOElements: properties1B error: ", err1)
+	}
 
 	ioElement.Properties2B, err2 = t.read2BProperties(reader, codecID)
-	logger.Sugar().Info("parseIOElements: properties2B error: ", err2)
+	if err2 != nil {
+		logger.Sugar().Info("parseIOElements: properties2B error: ", err2)
+	}
 
 	ioElement.Properties4B, err3 = t.read4BProperties(reader, codecID)
-	logger.Sugar().Info("parseIOElements: properties4B error: ", err3)
+	if err3 != nil {
+		logger.Sugar().Info("parseIOElements: properties4B error: ", err3)
+	}
 
 	ioElement.Properties8B, err4 = t.read8BProperties(reader, codecID)
-	logger.Sugar().Info("parseIOElements: properties8B error: ", err4)
+	if err4 != nil {
+		logger.Sugar().Info("parseIOElements: properties8B error: ", err4)
+	}
 
 	if codecID == 0x8E {
 		ioElement.PropertiesNXB, err5 = t.readNXBProperties(reader, codecID)
@@ -288,12 +296,9 @@ func (t *FM1200Protocol) read2BProperties(reader *bufio.Reader, codecID uint8) (
 
 func (t *FM1200Protocol) read4BProperties(reader *bufio.Reader, codecID uint8) (map[IOProperty]uint32, error) {
 	propertyMap, err := t.readNByteProperties(4, reader, codecID)
-	logger.Sugar().Info("read4BProperties: error ", err)
-
 	if err != nil {
 		return nil, err
 	}
-
 	properties := make(map[IOProperty]uint32)
 	for k, v := range propertyMap {
 		properties[k] = v.(uint32)
@@ -304,7 +309,6 @@ func (t *FM1200Protocol) read4BProperties(reader *bufio.Reader, codecID uint8) (
 
 func (t *FM1200Protocol) read8BProperties(reader *bufio.Reader, codecID uint8) (map[IOProperty]uint64, error) {
 	propertyMap, err := t.readNByteProperties(8, reader, codecID)
-	logger.Sugar().Info("read8BProperties: error ", err)
 	if err != nil {
 		return nil, err
 	}
