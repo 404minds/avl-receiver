@@ -450,6 +450,7 @@ func (p *GT06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat Heart
 	}
 	logger.Sugar().Infof("parseHeartbeatData  Battery Level Byte: %x", batteryLevelByte)
 	heartbeat.BatteryLevel = BatteryLevel(batteryLevelByte)
+	logger.Sugar().Info("heartbeat.batteryLevel: ", heartbeat.BatteryLevel)
 	if heartbeat.BatteryLevel == VL_Invalid {
 		return heartbeat, errs.ErrTR06InvalidVoltageLevel
 	}
@@ -460,6 +461,7 @@ func (p *GT06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat Heart
 	}
 	logger.Sugar().Infof("parseHeartbeatData GSM Signal Strength Byte: %x", gsmSignalStrengthByte)
 	heartbeat.GSMSignalStrength = GSMSignalStrength(gsmSignalStrengthByte)
+	logger.Sugar().Info("heartbeat.GSMSignalStrength: ", heartbeat.GSMSignalStrength)
 	if heartbeat.GSMSignalStrength == GSM_Invalid {
 		return heartbeat, errs.ErrTR06InvalidGSMSignalStrength
 	}
@@ -474,7 +476,7 @@ func (p *GT06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat Heart
 		logger.Sugar().Info("error from parseHeartbeatData 2")
 		return heartbeat, errors.Wrapf(errs.ErrTR06BadDataPacket, "from parseHeartbeatData 2")
 	}
-
+	logger.Sugar().Info("heart beat data: ", heartbeat)
 	return heartbeat, nil
 }
 

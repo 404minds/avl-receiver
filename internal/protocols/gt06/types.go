@@ -334,6 +334,8 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 
 	case *HeartbeatData:
 		//	// Set ignition
+		logger.Sugar().Info("heartbeat data", v.GSMSignalStrength, v.BatteryLevel)
+
 		ignition = v.TerminalInformation.ACCHigh
 		info.VehicleStatus.Ignition = &ignition
 		//Set battery and GSM signal
