@@ -160,7 +160,6 @@ func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 
 	// Start bit
 	err = binary.Read(reader, binary.BigEndian, &packet.StartBit)
-	logger.Sugar().Infof("parse packet Start bit: %x", packet.StartBit)
 	if err != nil {
 		logger.Sugar().Errorf("parse packet Failed to read start bit: %v", err)
 		return nil, err
@@ -175,7 +174,6 @@ func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 			return nil, err
 		}
 		packet.PacketLength = byte(packetLength)
-		logger.Sugar().Infof("parse packet Packet length: %d", packet.PacketLength)
 
 	} else if packet.StartBit == 0x7878 {
 		var packetLength uint8
@@ -185,7 +183,6 @@ func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 			return nil, err
 		}
 		packet.PacketLength = packetLength
-		logger.Sugar().Infof("parse packet Packet length: %d", packet.PacketLength)
 	} else {
 		return nil, errors.Wrapf(errs.ErrTR06BadDataPacket, "from parsePacket Invalid StartBit packet.StartBit: %d", packet.StartBit) // Invalid start bit
 	}
@@ -200,7 +197,6 @@ func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 	}
 
 	// Packet data to packet
-	logger.Sugar().Info("Parse packet,", packetData, " packet ", packet)
 	err = p.parsePacketData(bufio.NewReader(bytes.NewReader(packetData)), packet)
 	if err != nil {
 		logger.Sugar().Errorf("parse packet Failed to parse packet data: %v", err)
@@ -220,7 +216,6 @@ func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 		logger.Sugar().Errorf("parse packet Failed to read CRC: %v", err)
 		return nil, err
 	}
-	logger.Sugar().Infof("parse packet CRC: %x", packet.Crc)
 
 	// Stop bits
 	err = binary.Read(reader, binary.BigEndian, &packet.StopBits)
@@ -228,7 +223,6 @@ func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 		logger.Sugar().Errorf("parse packet Failed to read stop bits: %v", err)
 		return nil, err
 	}
-	logger.Sugar().Infof("parse packet Stop bits: %x", packet.StopBits)
 
 	if packet.StopBits != 0x0d0a {
 		err = errors.Wrapf(errs.ErrTR06BadDataPacket, "from parsePacket 3")
@@ -442,7 +436,6 @@ func (p *GT06Protocol) parseHeartbeatData(reader *bufio.Reader) (interface{}, er
 	if err := binary.Read(reader, binary.BigEndian, &terminalInfoByte); err != nil {
 		return nil, err
 	}
-	logger.Sugar().Infof("parseHeartbeatData Terminal Info Byte: %x", terminalInfoByte)
 	heartbeat.TerminalInformation, err = p.parseTerminalInfoFromByte(terminalInfoByte)
 	if err != nil {
 		return nil, err
@@ -453,7 +446,6 @@ func (p *GT06Protocol) parseHeartbeatData(reader *bufio.Reader) (interface{}, er
 	if err := binary.Read(reader, binary.BigEndian, &batteryLevelByte); err != nil {
 		return nil, err
 	}
-	logger.Sugar().Infof("parseHeartbeatData  Battery Level Byte: %x", batteryLevelByte)
 	heartbeat.BatteryLevel = BatteryLevel(batteryLevelByte)
 	if heartbeat.BatteryLevel == VL_Invalid {
 		return nil, errs.ErrTR06InvalidVoltageLevel
@@ -464,7 +456,6 @@ func (p *GT06Protocol) parseHeartbeatData(reader *bufio.Reader) (interface{}, er
 	if err := binary.Read(reader, binary.BigEndian, &gsmSignalStrengthByte); err != nil {
 		return nil, err
 	}
-	logger.Sugar().Infof("parseHeartbeatData GSM Signal Strength Byte: %x", gsmSignalStrengthByte)
 	heartbeat.GSMSignalStrength = GSMSignalStrength(gsmSignalStrengthByte)
 	if heartbeat.GSMSignalStrength == GSM_Invalid {
 		return nil, errs.ErrTR06InvalidGSMSignalStrength
@@ -474,7 +465,6 @@ func (p *GT06Protocol) parseHeartbeatData(reader *bufio.Reader) (interface{}, er
 	if err := binary.Read(reader, binary.BigEndian, &heartbeat.ExtendedPortStatus); err != nil {
 		return nil, err
 	}
-	logger.Sugar().Infof("parseHeartbeatData Extended Port Status Byte: %x", heartbeat.ExtendedPortStatus)
 
 	// Check for extra bytes
 	if _, err := reader.Peek(1); err != io.EOF {
