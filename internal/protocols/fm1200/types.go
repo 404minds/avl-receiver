@@ -119,7 +119,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Altitude = float32(r.Record.GPSElement.Altitude)
 	var speed = float32(r.Record.GPSElement.Speed)
 	info.Position.Speed = &speed
-	info.Odometer = int32(r.Record.IOElement.Properties4B[TIO_OdometerValue])
+	info.Odometer = int32(r.Record.IOElement.Properties4B[TIO_OdometerValue] / 1000)
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 	info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature])

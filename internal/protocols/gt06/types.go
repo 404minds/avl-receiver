@@ -300,10 +300,8 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	var ignition bool
 
 	// Process packet information
-	logger.Sugar().Info("packet.Information type %t", packet.Information)
 	switch v := packet.Information.(type) {
 	case *PositioningInformation:
-		logger.Sugar().Info("we are in gps positioning")
 		// Set GPS and position-related data
 		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
 		info.Position.Latitude = v.GpsInformation.Latitude
@@ -336,17 +334,14 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 
 	case *HeartbeatData:
 		//	// Set ignition
-		logger.Sugar().Info("heartbeat data", v)
-		logger.Sugar().Info("we are in heartbeat")
 
 		ignition = v.TerminalInformation.ACCHigh
 		info.VehicleStatus.Ignition = &ignition
 		//Set battery and GSM signal
 		logger.Sugar().Info(v.BatteryLevel, "  ", v.GSMSignalStrength)
 		info.BatteryLevel = resolveBatteryLevel(int32(v.BatteryLevel))
-		logger.Sugar().Info("battery level: ", info.BatteryLevel)
 		info.Position.Satellites = int32(v.GSMSignalStrength)
-		logger.Sugar().Info("satellite level: ", info.Position.Satellites)
+
 	default:
 		// Default behavior if packet.Information is of unknown type
 	}
