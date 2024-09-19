@@ -596,19 +596,9 @@ func (t *FM1200Protocol) SendCommand(writer io.Writer) error {
 	return nil
 }
 
-func (t *FM1200Protocol) ParseDeviceResponse(reader *bufio.Reader, dataLen uint32) (*DeviceResponse, error) {
+func (t *FM1200Protocol) ParseDeviceResponse(dataReader *bufio.Reader, dataLen uint32) (*DeviceResponse, error) {
 	var response DeviceResponse
 	var err error
-
-	// Read the actual data bytes based on the length
-	dataBytes := make([]byte, dataLen)
-	_, err = io.ReadFull(reader, dataBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a reader for the data bytes
-	dataReader := bufio.NewReader(bytes.NewReader(dataBytes))
 
 	// Read Response Quantity 1
 	response.ResponseQuantity1, err = dataReader.ReadByte()
@@ -653,6 +643,7 @@ func (t *FM1200Protocol) ParseDeviceResponse(reader *bufio.Reader, dataLen uint3
 	if err != nil {
 		return nil, err
 	}
+	response.CodecID = 0x0C
 
 	// Log the parsed response
 	logger.Sugar().Infof("Device Response Parsed: %+v", response)
