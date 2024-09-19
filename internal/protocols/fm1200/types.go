@@ -165,7 +165,13 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 }
 
 func (r *Response) ToProtobufDeviceResponse() *types.DeviceResponse {
-	asciiMessage := string(r.Reply)
+	decodedReply, err := hex.DecodeString(string(r.Reply))
+	if err != nil {
+		logger.Sugar().Error("Error decoding hex data: ", err)
+		return nil
+	}
+
+	asciiMessage := string(decodedReply)
 	logger.Sugar().Info("Response : ", asciiMessage)
 	return &types.DeviceResponse{
 		Imei:     r.IMEI,
