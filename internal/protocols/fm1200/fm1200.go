@@ -109,6 +109,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 
 	// Check if it's a normal AVL Data Packet or a Device Response based on Codec ID
 	if codecID == 0x0C { // Codec12
+		logger.Sugar().Info("Received response from the device")
 		// Check if this is a response (Type field == 0x06) or a normal packet
 		nextByte, err := dataReader.ReadByte()
 		if err != nil {
