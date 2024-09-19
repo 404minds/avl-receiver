@@ -30,6 +30,11 @@ type DeviceResponse struct {
 	CRC               uint32 // CRC-16 checksum
 }
 
+type Response struct {
+	IMEI  string
+	Reply byte
+}
+
 type Record struct {
 	IMEI   string    `json:"imei"`
 	Record AvlRecord `json:"record"`
@@ -157,6 +162,13 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 		TeltonikaPacket: &types.TeltonikaPacket{RawData: rawdata},
 	}
 	return info
+}
+
+func (r *Response) ToProtobufDeviceResponse() *types.DeviceResponse {
+	logger.Sugar().Info(r.Reply)
+	return &types.DeviceResponse{
+		Imei: r.IMEI,
+	}
 }
 
 // ConvertDecimalToHexAndReverse convert decimal to hex and then reverse the hex string

@@ -6,6 +6,7 @@ import (
 	"github.com/404minds/avl-receiver/internal/protocols/fm1200"
 	"github.com/404minds/avl-receiver/internal/protocols/gt06"
 	"github.com/404minds/avl-receiver/internal/protocols/tr06"
+	"github.com/404minds/avl-receiver/internal/store"
 	"io"
 
 	"github.com/404minds/avl-receiver/internal/types"
@@ -19,7 +20,7 @@ type DeviceProtocol interface {
 	GetProtocolType() types.DeviceProtocolType
 	GetDeviceID() string
 	Login(*bufio.Reader) ([]byte, int, error)
-	ConsumeStream(*bufio.Reader, io.Writer, chan types.DeviceStatus) error
+	ConsumeStream(*bufio.Reader, io.Writer, store.Store) error
 }
 
 func MakeProtocolForType(t types.DeviceProtocolType) DeviceProtocol {

@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"github.com/404minds/avl-receiver/internal/store"
 	"go.uber.org/zap"
 	"io"
 	"time"
@@ -95,7 +96,7 @@ func (p *GT06Protocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int, 
 	}
 }
 
-func (p *GT06Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, asyncStore chan types.DeviceStatus) error {
+func (p *GT06Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, dataStore store.Store) error {
 	for {
 		packet, err := p.parsePacket(reader)
 		if err != nil {
@@ -109,6 +110,8 @@ func (p *GT06Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, asy
 				return err
 			}
 		}
+
+		asyncStore := dataStore.GetProcessChan()
 
 		protoPacket := packet.ToProtobufDeviceStatus(p.GetDeviceID(), p.DeviceType)
 		asyncStore <- *protoPacket

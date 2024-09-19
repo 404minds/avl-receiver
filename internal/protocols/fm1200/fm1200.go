@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"io"
@@ -54,9 +55,9 @@ func (t *FM1200Protocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip in
 	return []byte{0x01}, bytesToSkip, nil
 }
 
-func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, asyncStore chan types.DeviceStatus) error {
+func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, dataStore store.Store) error {
 	for {
-		err := t.consumeMessage(reader, asyncStore, responseWriter)
+		err := t.consumeMessage(reader, dataStore, responseWriter)
 		if err != nil {
 			if err != io.EOF {
 				logger.Error("failed to consume message", zap.Error(err))
@@ -66,7 +67,7 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 	}
 }
 
-func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan types.DeviceStatus, responseWriter io.Writer) (err error) {
+func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.Store, responseWriter io.Writer) (err error) {
 	// Read the preamble (first 4 bytes), should be 0x00000000
 	err = t.SendCommand(responseWriter)
 	if err != nil {
@@ -120,6 +121,14 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 		}
 
 		logger.Sugar().Infof("Parsed response from device: %+v", response)
+		for _, reply := range response.ResponseData {
+			r := Response{
+				Reply: reply,
+				IMEI:  t.Imei,
+			}
+			protoReply := r.ToProtobufDeviceResponse()
+			dataStore.GetResponseChan() <- *protoReply
+		}
 
 	}
 
@@ -146,6 +155,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 			Record: record,
 			IMEI:   t.Imei,
 		}
+		asyncStore := dataStore.GetProcessChan()
 		protoRecord := r.ToProtobufDeviceStatus()
 		asyncStore <- *protoRecord
 	}

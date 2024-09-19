@@ -57,7 +57,7 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		return
 	}
 
-	err = deviceProtocol.ConsumeStream(reader, conn, dataStore.GetProcessChan())
+	err = deviceProtocol.ConsumeStream(reader, conn, dataStore)
 	if err != nil && err != io.EOF {
 		logger.Error("Failure while reading from stream", zap.String("remoteAddr", remoteAddr), zap.Error(err))
 		return
@@ -83,6 +83,7 @@ func (t *TcpHandler) makeAsyncStore(deviceProtocol devices.DeviceProtocol) store
 func makeRemoteRpcStore(remoteStoreClient store.CustomAvlDataStoreClient) store.Store {
 	return &store.RemoteRpcStore{
 		ProcessChan:       make(chan types.DeviceStatus, 200),
+		ResponseChan:      make(chan types.DeviceResponse, 200),
 		CloseChan:         make(chan bool, 200),
 		RemoteStoreClient: remoteStoreClient,
 	}
@@ -116,10 +117,11 @@ func makeJsonStore(destDir string, deviceIdentifier string) store.Store {
 	logger.Sugar().Infof("[deviceId: %s] Created json file store at %s", deviceIdentifier, file.Name())
 
 	return &store.JsonLinesStore{
-		File:        file,
-		ProcessChan: make(chan types.DeviceStatus, 200),
-		CloseChan:   make(chan bool, 200),
-		DeviceID:    deviceIdentifier,
+		File:         file,
+		ProcessChan:  make(chan types.DeviceStatus, 200),
+		ResponseChan: make(chan types.DeviceResponse, 200),
+		CloseChan:    make(chan bool, 200),
+		DeviceID:     deviceIdentifier,
 	}
 }
 
