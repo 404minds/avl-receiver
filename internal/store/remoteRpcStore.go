@@ -10,6 +10,7 @@ import (
 
 type RemoteRpcStore struct {
 	ProcessChan       chan types.DeviceStatus // TODO: change to a more specific type
+	ResponseChan      chan types.DeviceResponse
 	CloseChan         chan bool
 	RemoteStoreClient CustomAvlDataStoreClient
 	DeviceIdentifier  string
@@ -17,6 +18,10 @@ type RemoteRpcStore struct {
 
 func (s *RemoteRpcStore) GetProcessChan() chan types.DeviceStatus {
 	return s.ProcessChan
+}
+
+func (s *RemoteRpcStore) GetResponseChan() chan types.DeviceResponse {
+	return s.ResponseChan
 }
 
 func (s *RemoteRpcStore) GetCloseChan() chan bool {
@@ -37,5 +42,19 @@ func (s *RemoteRpcStore) Process() {
 			logger.Sugar().Info("async remote rpc store shutting down for device")
 			return
 		}
+	}
+}
+
+func (s *RemoteRpcStore) Response() {
+	for {
+		select {
+		case deviceResponse := <-s.ResponseChan:
+			logger.Sugar().Info(deviceResponse.String())
+
+		case <-s.CloseChan:
+			logger.Sugar().Info("async remote rpc store shutting down for device")
+			return
+		}
+
 	}
 }
