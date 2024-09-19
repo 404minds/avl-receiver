@@ -166,6 +166,9 @@ const (
 	MSG_WifiInformation                     = 0x2c
 	MSG_TransmissionInstruction             = 0x94
 	MSG_Invalid                             = 0xff
+	MSG_OnlineCommand                       = 0x80
+	MSG_TerminalReply                       = 0x21
+	MSG_TerminalReply_JM                    = 0x15
 )
 
 type AlarmType uint8 // alarm type is 3 bit info, trying to encode it to 8 bit
