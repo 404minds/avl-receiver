@@ -90,6 +90,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 	}
 
 	logger.Sugar().Info("consumeMessage Data length: ", dataLen)
+
 	dataBytes := make([]byte, dataLen)
 	_, err = io.ReadFull(reader, dataBytes)
 	if err != nil {
@@ -111,82 +112,52 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, asyncStore chan ty
 	if codecID == 0x0C { // Codec12
 		logger.Sugar().Info("Received response from the device")
 		// Check if this is a response (Type field == 0x06) or a normal packet
-		nextByte, err := dataReader.ReadByte()
+
+		logger.Sugar().Info("Parsing Device Response")
+		response, err := t.ParseDeviceResponse(dataReader, dataLen)
 		if err != nil {
 			return err
 		}
 
-		if nextByte == 0x06 { // Response packet
-			logger.Sugar().Info("Parsing Device Response")
-			response, err := t.ParseDeviceResponse(dataReader)
-			if err != nil {
-				return err
-			}
+		logger.Sugar().Infof("Parsed response from device: %+v", response)
 
-			logger.Sugar().Infof("Parsed response from device: %+v", response)
-
-			// Write back to device if needed (ACK, etc.)
-			err = binary.Write(responseWriter, binary.BigEndian, int32(response.ResponseQuantity2))
-			if err != nil {
-				return err
-			}
-
-		} else {
-			// Normal GPS AVL packet processing
-			logger.Sugar().Info("Parsing normal AVL packet")
-			parsedPacket, err := t.parseDataToRecord(dataReader)
-			if err != nil {
-				return err
-			}
-
-			// Validate CRC
-			err = binary.Read(reader, binary.BigEndian, &parsedPacket.CRC)
-			if err != nil {
-				return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at parsed Packet CRC")
-			}
-
-			valid := t.ValidateCrc(dataBytes, parsedPacket.CRC)
-			if !valid {
-				return errs.ErrBadCrc
-			}
-
-			// Store records
-			for _, record := range parsedPacket.Data {
-				r := Record{
-					Record: record,
-					IMEI:   t.Imei,
-				}
-				protoRecord := r.ToProtobufDeviceStatus()
-				asyncStore <- *protoRecord
-			}
-			logger.Sugar().Infof("stored %d records", len(parsedPacket.Data))
-
-			// Write back number of data to responseWriter
-			err = binary.Write(responseWriter, binary.BigEndian, int32(parsedPacket.NumberOfData))
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		// Handle other codec types if necessary (you can extend here for more codec types)
-		logger.Sugar().Info("Unknown codec, handle accordingly")
-		return errs.ErrFM1200BadDataPacket
 	}
 
+	logger.Sugar().Info("Parsing normal AVL packet")
+	parsedPacket, err := t.parseDataToRecord(dataReader, codecID)
+	if err != nil {
+		return err
+	}
+
+	// Validate CRC
+	err = binary.Read(reader, binary.BigEndian, &parsedPacket.CRC)
+	if err != nil {
+		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at parsed Packet CRC")
+	}
+
+	valid := t.ValidateCrc(dataBytes, parsedPacket.CRC)
+	if !valid {
+		return errs.ErrBadCrc
+	}
+
+	// Store records
+	for _, record := range parsedPacket.Data {
+		r := Record{
+			Record: record,
+			IMEI:   t.Imei,
+		}
+		protoRecord := r.ToProtobufDeviceStatus()
+		asyncStore <- *protoRecord
+	}
+	logger.Sugar().Infof("stored %d records", len(parsedPacket.Data))
 	return nil
 }
 
-func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader) (*AvlDataPacket, error) {
+func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader, codecId uint8) (*AvlDataPacket, error) {
 	var packet AvlDataPacket
 	var err error
 
-	// coded id
-	packet.CodecID, err = reader.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-
-	logger.Sugar().Info("parseDataToRecord:  codec: ", packet.CodecID)
+	logger.Sugar().Info("parseDataToRecord:  codec: ", codecId)
 
 	// number of data
 	packet.NumberOfData, err = reader.ReadByte()
@@ -200,7 +171,7 @@ func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader) (*AvlDataPacket
 	for i := uint8(0); i < packet.NumberOfData; i++ { //TODO range == packet.NumberOfData currently just for debugging
 
 		logger.Sugar().Info("parseDataToRecord: Data Number: ", i)
-		record, err := t.readSingleRecord(reader, packet.CodecID)
+		record, err := t.readSingleRecord(reader, codecId)
 		if err != nil {
 			return nil, err
 		}
@@ -615,23 +586,9 @@ func (t *FM1200Protocol) SendCommand(writer io.Writer) error {
 	return nil
 }
 
-func (t *FM1200Protocol) ParseDeviceResponse(reader *bufio.Reader) (*DeviceResponse, error) {
+func (t *FM1200Protocol) ParseDeviceResponse(reader *bufio.Reader, dataLen uint32) (*DeviceResponse, error) {
 	var response DeviceResponse
-
-	// Read header zeros (first 4 bytes, which are 0x00000000)
-	var headerZeros uint32
-	err := binary.Read(reader, binary.BigEndian, &headerZeros)
-	if err != nil {
-		return nil, err
-	}
-
-	// Read the length of the data (next 4 bytes)
-	var dataLen uint32
-	err = binary.Read(reader, binary.BigEndian, &dataLen)
-	if err != nil {
-		return nil, err
-	}
-	logger.Sugar().Info("Parsed Data Length: ", dataLen)
+	var err error
 
 	// Read the actual data bytes based on the length
 	dataBytes := make([]byte, dataLen)
@@ -643,23 +600,19 @@ func (t *FM1200Protocol) ParseDeviceResponse(reader *bufio.Reader) (*DeviceRespo
 	// Create a reader for the data bytes
 	dataReader := bufio.NewReader(bytes.NewReader(dataBytes))
 
-	// Read Codec ID
-	response.CodecID, err = dataReader.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-
 	// Read Response Quantity 1
 	response.ResponseQuantity1, err = dataReader.ReadByte()
 	if err != nil {
 		return nil, err
 	}
+	logger.Sugar().Info("Response Quantity: ", response.ResponseQuantity1)
 
 	// Read Response Type
 	response.Type, err = dataReader.ReadByte()
 	if err != nil {
 		return nil, err
 	}
+	logger.Sugar().Info("Response Type: ", response.Type)
 
 	// Read Response Size
 	err = binary.Read(dataReader, binary.BigEndian, &response.ResponseSize)
@@ -667,18 +620,23 @@ func (t *FM1200Protocol) ParseDeviceResponse(reader *bufio.Reader) (*DeviceRespo
 		return nil, err
 	}
 
+	logger.Sugar().Info("Response Size: ", response.ResponseSize)
+
 	// Read the actual Response Data (based on Response Size)
 	response.ResponseData = make([]byte, response.ResponseSize)
 	_, err = io.ReadFull(dataReader, response.ResponseData)
 	if err != nil {
 		return nil, err
 	}
+	logger.Sugar().Info("Response Data: ", response.ResponseData)
 
 	// Read Response Quantity 2
 	response.ResponseQuantity2, err = dataReader.ReadByte()
 	if err != nil {
 		return nil, err
 	}
+
+	logger.Sugar().Info("Response Quantity: ", response.ResponseQuantity2)
 
 	// Read CRC-16 checksum
 	err = binary.Read(dataReader, binary.BigEndian, &response.CRC)
