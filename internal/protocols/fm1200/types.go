@@ -32,7 +32,7 @@ type DeviceResponse struct {
 
 type Response struct {
 	IMEI  string
-	Reply byte
+	Reply []byte
 }
 
 type Record struct {
@@ -165,14 +165,10 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 }
 
 func (r *Response) ToProtobufDeviceResponse() *types.DeviceResponse {
-	decodedReply, err := hex.DecodeString(string(r.Reply))
-	if err != nil {
-		logger.Sugar().Error("Error decoding hex data: ", err)
-		return nil
-	}
+	asciiMessage := string(r.Reply)
 
-	asciiMessage := string(decodedReply)
-	logger.Sugar().Info("Response : ", asciiMessage)
+	// Log the entire decoded message as a single string, not character by character
+	logger.Sugar().Infof("Full Response: %s", asciiMessage)
 
 	return &types.DeviceResponse{
 		Imei:     r.IMEI,
