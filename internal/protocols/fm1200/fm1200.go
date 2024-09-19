@@ -130,6 +130,15 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 			dataStore.GetResponseChan() <- *protoReply
 		}
 
+		err = binary.Read(reader, binary.BigEndian, &response.CRC)
+		if err != nil {
+			return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at parsed Packet CRC")
+		}
+		valid := t.ValidateCrc(dataBytes, response.CRC)
+		if !valid {
+			return errs.ErrBadCrc
+		}
+		return nil
 	}
 
 	logger.Sugar().Info("Parsing normal AVL packet")
@@ -638,11 +647,6 @@ func (t *FM1200Protocol) ParseDeviceResponse(dataReader *bufio.Reader, dataLen u
 
 	logger.Sugar().Info("Response Quantity: ", response.ResponseQuantity2)
 
-	// Read CRC-16 checksum
-	err = binary.Read(dataReader, binary.BigEndian, &response.CRC)
-	if err != nil {
-		return nil, err
-	}
 	response.CodecID = 0x0C
 
 	// Log the parsed response

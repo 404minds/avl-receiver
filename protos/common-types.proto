@@ -66,5 +66,5 @@ message ConcoxPacket{
 
 message DeviceResponse {
     string imei = 1;
-    
+    string response = 2;
 }

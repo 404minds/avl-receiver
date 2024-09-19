@@ -165,9 +165,11 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 }
 
 func (r *Response) ToProtobufDeviceResponse() *types.DeviceResponse {
-	logger.Sugar().Info(r.Reply)
+	asciiMessage := string(r.Reply)
+	logger.Sugar().Info("Response : ", asciiMessage)
 	return &types.DeviceResponse{
-		Imei: r.IMEI,
+		Imei:     r.IMEI,
+		Response: asciiMessage,
 	}
 }
 
