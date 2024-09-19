@@ -173,6 +173,7 @@ func (r *Response) ToProtobufDeviceResponse() *types.DeviceResponse {
 
 	asciiMessage := string(decodedReply)
 	logger.Sugar().Info("Response : ", asciiMessage)
+
 	return &types.DeviceResponse{
 		Imei:     r.IMEI,
 		Response: asciiMessage,
