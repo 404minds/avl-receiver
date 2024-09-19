@@ -20,6 +20,16 @@ const (
 	codec14 CodecID = 0x0E
 )
 
+type DeviceResponse struct {
+	CodecID           byte   // Codec ID (always 0x0C for Codec12)
+	ResponseQuantity1 byte   // Response Quantity 1
+	Type              byte   // Response Type (0x06 for response)
+	ResponseSize      uint32 // Response Size in bytes
+	ResponseData      []byte // Actual response data (in bytes)
+	ResponseQuantity2 byte   // Response Quantity 2 (should match Response Quantity 1)
+	CRC               uint32 // CRC-16 checksum
+}
+
 type Record struct {
 	IMEI   string    `json:"imei"`
 	Record AvlRecord `json:"record"`
