@@ -630,6 +630,7 @@ func (t *FM1200Protocol) ParseDeviceResponse(dataReader *bufio.Reader, dataLen u
 
 	logger.Sugar().Info("Response Size: ", response.ResponseSize)
 
+	//todo: try to parse response data based on response quantity
 	// Read the actual Response Data (based on Response Size)
 	response.ResponseData = make([]byte, response.ResponseSize)
 	_, err = io.ReadFull(dataReader, response.ResponseData)

@@ -1,5 +1,4 @@
 ## build environment
-
 FROM golang:1.22.0 as builder
 
 WORKDIR /avl-receiver
@@ -11,17 +10,15 @@ COPY . ./
 
 RUN CGO_ENABLED=0 go build ./cmd/receiver/receiver.go
 
-
 ## execution environment
-
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /avl-receiver
 COPY --from=builder /avl-receiver .
 
+# Expose both TCP and gRPC ports
 EXPOSE 21000
+EXPOSE 22000
 
-
-CMD ["./receiver", "-port", "9000"]
-
+CMD ["./receiver", "-port", "21000", "-grpcPort", "22000", "-remoteStoreAddr", "fns-consumer-grpc-server:8000"]
