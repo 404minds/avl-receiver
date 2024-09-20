@@ -13,6 +13,21 @@ service AvlDataStore {
     rpc SaveDeviceStatus(types.DeviceStatus) returns (google.protobuf.Empty) {}
 }
 
+service AvlReceiverService {
+    rpc SendCommand(SendCommandRequest) returns (SendCommandResponse);
+}
+
+message SendCommandRequest {
+    string imei = 1;
+    string command = 2;
+}
+
+message SendCommandResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+
 message VerifyDeviceRequest {
     string imei = 1;
 }

@@ -23,8 +23,10 @@ func startGrpcServer(port int) {
 		logger.Sugar().Fatalf("Failed to listen on port %d: %v", port, err)
 	}
 	grpcServer := grpc.NewServer()
-	// Register your gRPC services here, for example:
-	// pb.RegisterMyServiceServer(grpcServer, &myService{})
+	serverInstance := &server{}
+
+	store.RegisterAvlReceiverServiceServer(grpcServer, serverInstance)
+	
 	logger.Sugar().Infof("gRPC server listening on port %d", port)
 	if err := grpcServer.Serve(listener); err != nil {
 		logger.Sugar().Fatalf("Failed to serve gRPC on port %d: %v", port, err)
@@ -89,4 +91,8 @@ func main() {
 
 	// Keep the main function running
 	select {}
+}
+
+type server struct {
+	store.AvlReceiverServiceServer
 }
