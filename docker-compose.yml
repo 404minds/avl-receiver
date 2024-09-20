@@ -7,9 +7,10 @@ services:
     networks:
       - deployment_base-network
     ports:
-      - "21000:21000"
-    command: ["./receiver", "-port", "21000", "-remoteStoreAddr", "fns-consumer-grpc-server:8000"]
+      - "21000:21000" # TCP server port
+      - "22000:22000" # gRPC server port
+    command: ["./receiver", "-port", "21000", "-grpcPort", "22000", "-remoteStoreAddr", "fns-consumer-grpc-server:8000"]
 
 networks:
   deployment_base-network:
-   external: true
+    external: true
