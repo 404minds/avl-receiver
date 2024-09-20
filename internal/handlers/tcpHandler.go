@@ -21,12 +21,18 @@ import (
 
 var logger = configuredLogger.Logger
 
+type DeviceConnectionInfo struct {
+	Conn     net.Conn
+	Protocol devices.DeviceProtocol
+}
+
 type TcpHandler struct {
 	connToProtocolMap map[string]devices.DeviceProtocol // make this an LRU cache to evict stale connections
 	allowedProtocols  []types.DeviceProtocolType
 	connToStoreMap    map[string]store.Store
 	remoteStoreClient store.CustomAvlDataStoreClient
 	storeType         string
+	imeiToConnMap     map[string]DeviceConnectionInfo
 }
 
 func (t *TcpHandler) HandleConnection(conn net.Conn) {
@@ -36,6 +42,12 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	defer func() {
 		delete(t.connToProtocolMap, remoteAddr)
 		delete(t.connToStoreMap, remoteAddr)
+		for imei, info := range t.imeiToConnMap {
+			if info.Conn == conn {
+				delete(t.imeiToConnMap, imei)
+				break
+			}
+		}
 	}()
 
 	reader := bufio.NewReader(conn)
@@ -46,6 +58,16 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	}
 
 	t.connToProtocolMap[remoteAddr] = deviceProtocol
+	deviceID := deviceProtocol.GetDeviceID()
+	// Store the IMEI, connection, and protocol type in the combined map
+	if deviceID != "" {
+		t.imeiToConnMap[deviceID] = DeviceConnectionInfo{
+			Conn:     conn,
+			Protocol: deviceProtocol,
+		}
+		logger.Sugar().Infof("Mapped deviceID %s to connection %v and protocol %v", deviceID, conn, deviceProtocol)
+	}
+
 	dataStore := t.makeAsyncStore(deviceProtocol)
 	go dataStore.Process()
 	defer func() { dataStore.GetCloseChan() <- true }()

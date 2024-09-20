@@ -13,5 +13,6 @@ func NewTcpHandler(remoteStoreClient store.CustomAvlDataStoreClient, storeType s
 		connToStoreMap:    make(map[string]store.Store),
 		remoteStoreClient: remoteStoreClient,
 		storeType:         storeType,
+		imeiToConnMap:     make(map[string]DeviceConnectionInfo),
 	}
 }
