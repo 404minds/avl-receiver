@@ -65,7 +65,7 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 			Conn:     conn,
 			Protocol: deviceProtocol,
 		}
-		logger.Sugar().Infof("Mapped deviceID %s to connection %v and protocol %v", deviceID, conn, deviceProtocol)
+		logger.Sugar().Infof("Mapped deviceID %s to connection %v and protocol %v", deviceID, conn.RemoteAddr().String(), deviceProtocol)
 	}
 
 	dataStore := t.makeAsyncStore(deviceProtocol)
