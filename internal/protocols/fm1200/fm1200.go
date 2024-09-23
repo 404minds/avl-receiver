@@ -592,12 +592,13 @@ func (t *FM1200Protocol) SendCommandToDevice(writer io.Writer, command string) e
 	//{0 0 0 0 0   0   0   0F  0C 01 05 00 00 00 07 67  65  74  69  6E  66  6F  01 00 00 43 12
 	//[0 0 0 0 255 255 255 248 12 1  5   0  0  0  7 103 101 116 105 110 102 111 1  0  0  64 12]
 	// Preamble (4 bytes)
+	dataSize := commandSize + 8
 	commandHex = append(commandHex, 0x00, 0x00, 0x00, 0x00)
 
 	//dataSize(4 bytes)
-	dataSize := len(commandHex) - 8 - 4 // Exclude preamble (4 bytes) and CRC (4 bytes)
-
-	commandHex = append(commandHex, byte(uint32(dataSize)>>24), byte(uint32(dataSize)>>16), byte(uint32(dataSize)>>8), byte(uint32(dataSize)))
+	// Exclude preamble (4 bytes) and CRC (4 bytes)
+	logger.Sugar().Info(dataSize)
+	commandHex = append(commandHex, 0x00, 0x00, 0x00, byte(dataSize))
 
 	// Codec ID (1 byte)
 	commandHex = append(commandHex, 0x0C) // Codec ID for Codec12
