@@ -590,7 +590,7 @@ func (t *FM1200Protocol) SendCommandToDevice(writer io.Writer, command string) e
 	commandHex := make([]byte, 0, 20+commandSize) // Preallocate slice with total size 4 preamble, 4 data size, 1 codec Id, 1 byte response quantity, 1 byte type,
 	//4 byte response size , x response size, 1 response quantity 2 , 4 byte crc
 	//{0 0 0 0 0   0   0   0F  0C 01 05 00 00 00 07 67  65  74  69  6E  66  6F  01 00 00 43 12
-	//[0 0 0 0 255 255 255 248 12 1  5   0  0  0  7 103 101 116 105 110 102 111 1  0  0  64 12]
+	// [0 0 0 0 0 0 0 15 12 1 5 0 0 0 7 103 101 116 105 110 102 111 1 0 0 64 12]
 	// Preamble (4 bytes)
 	dataSize := commandSize + 8
 	commandHex = append(commandHex, 0x00, 0x00, 0x00, 0x00)
@@ -598,7 +598,7 @@ func (t *FM1200Protocol) SendCommandToDevice(writer io.Writer, command string) e
 	//dataSize(4 bytes)
 	// Exclude preamble (4 bytes) and CRC (4 bytes)
 	logger.Sugar().Info(dataSize)
-	commandHex = append(commandHex, 0x00, 0x00, 0x00, byte(dataSize))
+	commandHex = append(commandHex, byte(uint32(dataSize)>>24), byte(uint32(dataSize)>>16), byte(uint32(dataSize)>>8), byte(uint32(dataSize)))
 
 	// Codec ID (1 byte)
 	commandHex = append(commandHex, 0x0C) // Codec ID for Codec12
@@ -619,6 +619,8 @@ func (t *FM1200Protocol) SendCommandToDevice(writer io.Writer, command string) e
 	commandHex = append(commandHex, 0x01) // Command Quantity 2
 
 	// Calculate the CRC-16 checksum (from Codec ID onward, which is byte 5)
+	logger.Sugar().Infof("Bytes passed for CRC calculation: %x", commandHex[8:len(commandHex)-4])
+
 	crcR := crc.CrcTeltonika(commandHex[8 : len(commandHex)-4]) // Start CRC calculation from codec to before CRC
 
 	commandHex = append(commandHex, 0x00)
