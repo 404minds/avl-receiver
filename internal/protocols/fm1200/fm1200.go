@@ -586,10 +586,16 @@ func (t *FM1200Protocol) SendCommandToDevice(writer io.Writer, command string) e
 	}
 
 	// Construct the command
-	commandHex := make([]byte, 0, 4+10+commandSize+2) // Preallocate slice with total size
+	commandHex := make([]byte, 0, 20+commandSize) // Preallocate slice with total size 4 preamble, 4 data size, 1 codec Id, 1 byte response quantity, 1 byte type,
+	//4 byte response size , x response size, 1 response quantity 2 , 4 byte crc
 
 	// Preamble (4 bytes)
 	commandHex = append(commandHex, 0x00, 0x00, 0x00, 0x00)
+
+	//dataSize(4 bytes)
+	dataSize := len(commandHex) - 8 - 4 // Exclude preamble (4 bytes) and CRC (4 bytes)
+
+	commandHex = append(commandHex, byte(dataSize>>24), byte(dataSize>>16), byte(dataSize>>8), byte(dataSize))
 
 	// Codec ID (1 byte)
 	commandHex = append(commandHex, 0x0C) // Codec ID for Codec12
@@ -609,23 +615,14 @@ func (t *FM1200Protocol) SendCommandToDevice(writer io.Writer, command string) e
 	// Command Quantity 2 (1 byte)
 	commandHex = append(commandHex, 0x01) // Command Quantity 2
 
+	// Calculate the CRC-16 checksum (from Codec ID onward, which is byte 5)
+	crcR := crc.CrcTeltonika(commandHex[8 : len(commandHex)-4]) // Start CRC calculation from Data Size to before CRC
+
+	commandHex = append(commandHex, 0x0000)
 	// Placeholder for CRC-16 checksum (2 bytes)
-	commandHex = append(commandHex, 0x00, 0x00) // Initial placeholder for CRC
+	commandHex = append(commandHex, byte(crcR>>8), byte(crcR)) // Initial placeholder for CRC
 
 	// Calculate the Data Size (total size from Codec ID to Command Quantity 2)
-	dataSize := len(commandHex) - 4 - 2 // Exclude preamble (4 bytes) and CRC (2 bytes)
-	// Update Data Size field (4 bytes)
-	commandHex[4] = byte(dataSize >> 24)
-	commandHex[5] = byte(dataSize >> 16)
-	commandHex[6] = byte(dataSize >> 8)
-	commandHex[7] = byte(dataSize)
-
-	// Calculate the CRC-16 checksum (from Codec ID onward, which is byte 5)
-	crc := crc.CrcTeltonika(commandHex[4 : len(commandHex)-2]) // Start CRC calculation from Data Size to before CRC
-
-	// Append the CRC-16 checksum (2 bytes)
-	commandHex[len(commandHex)-2] = byte(crc & 0xFF)
-	commandHex[len(commandHex)-1] = byte(crc >> 8)
 
 	// Send the command over the network
 	logger.Sugar().Info(commandHex)
