@@ -576,41 +576,57 @@ func (t *FM1200Protocol) ValidateCrc(data []byte, expectedCrc uint32) bool {
 //send command
 
 func (t *FM1200Protocol) SendCommandToDevice(writer io.Writer, command string) error {
-	// Convert the command string to a byte array (equivalent to HEX representation)
+	// Convert the command string to a byte array
 	commandBytes := []byte(command)
-
-	// Calculate the command size dynamically
 	commandSize := len(commandBytes)
 
-	// Ensure command size fits in 4 bytes (0x00000000 to 0xFFFFFFFF)
+	// Ensure command size fits in 4 bytes
 	if commandSize > 0xFFFFFFFF {
 		return fmt.Errorf("command too large")
 	}
 
-	// Construct the full command
-	commandHex := []byte{
-		0x00, 0x00, 0x00, 0x00, // Preamble
-		0x00, 0x00, 0x00, byte(11 + commandSize), // Data Size (11 bytes + command size)
-		0x0C, // Codec ID for Codec12
-		0x01, // Command Quantity 1
-		0x05, // Command Type (0x05 for command)
-	}
+	// Construct the command
+	commandHex := make([]byte, 0, 4+10+commandSize+2) // Preallocate slice with total size
 
-	// Append the 4-byte command size
+	// Preamble (4 bytes)
+	commandHex = append(commandHex, 0x00, 0x00, 0x00, 0x00)
+
+	// Codec ID (1 byte)
+	commandHex = append(commandHex, 0x0C) // Codec ID for Codec12
+
+	// Command Quantity 1 (1 byte)
+	commandHex = append(commandHex, 0x01) // Command Quantity 1
+
+	// Command Type (1 byte)
+	commandHex = append(commandHex, 0x05) // Command Type (0x05 for command)
+
+	// Command Size (4 bytes)
 	commandHex = append(commandHex, byte(commandSize>>24), byte(commandSize>>16), byte(commandSize>>8), byte(commandSize))
 
 	// Append the actual command bytes
 	commandHex = append(commandHex, commandBytes...)
 
-	// Add the remaining fields (Command Quantity 2 and CRC placeholder)
-	commandHex = append(commandHex, 0x01)                   // Command Quantity 2
-	commandHex = append(commandHex, 0x00, 0x00, 0x00, 0x00) // Placeholder for CRC-16 checksum
+	// Command Quantity 2 (1 byte)
+	commandHex = append(commandHex, 0x01) // Command Quantity 2
 
-	// Calculate the CRC-16 checksum (excluding the 4-byte preamble)
-	crc := crc.CrcTeltonika(commandHex[4:]) // Start CRC calculation from Data Size (byte 4 onwards)
+	// Placeholder for CRC-16 checksum (2 bytes)
+	commandHex = append(commandHex, 0x00, 0x00) // Initial placeholder for CRC
+
+	// Calculate the Data Size (total size from Codec ID to Command Quantity 2)
+	dataSize := len(commandHex) - 4 - 2 // Exclude preamble (4 bytes) and CRC (2 bytes)
+	// Update Data Size field (4 bytes)
+	commandHex[4] = byte(dataSize >> 24)
+	commandHex[5] = byte(dataSize >> 16)
+	commandHex[6] = byte(dataSize >> 8)
+	commandHex[7] = byte(dataSize)
+
+	// Calculate the CRC-16 checksum (from Codec ID onward, which is byte 5)
+	crc := crc.CrcTeltonika(commandHex[4 : len(commandHex)-2]) // Start CRC calculation from Data Size to before CRC
 
 	// Append the CRC-16 checksum (2 bytes)
-	commandHex = append(commandHex, byte(crc&0xFF), byte(crc>>8))
+	commandHex[len(commandHex)-2] = byte(crc & 0xFF)
+	commandHex[len(commandHex)-1] = byte(crc >> 8)
+
 	// Send the command over the network
 	logger.Sugar().Info(commandHex)
 	_, err := writer.Write(commandHex)
