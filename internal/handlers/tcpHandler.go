@@ -212,3 +212,9 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 	logger.Sugar().Error("All protocols failed, unknown device type")
 	return nil, nil, errs.ErrUnknownDeviceType
 }
+
+// Getter for connection info by IMEI
+func (t *TcpHandler) GetConnInfoByIMEI(imei string) (DeviceConnectionInfo, bool) {
+	info, exists := t.imeiToConnMap[imei]
+	return info, exists
+}

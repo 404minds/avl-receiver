@@ -21,6 +21,7 @@ type DeviceProtocol interface {
 	GetDeviceID() string
 	Login(*bufio.Reader) ([]byte, int, error)
 	ConsumeStream(*bufio.Reader, io.Writer, store.Store) error
+	SendCommandToDevice(writer io.Writer, command string) error
 }
 
 func MakeProtocolForType(t types.DeviceProtocolType) DeviceProtocol {

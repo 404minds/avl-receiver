@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"net"
@@ -17,16 +19,23 @@ import (
 
 var logger = configuredLogger.Logger
 
-func startGrpcServer(port int) {
+type server struct {
+	store.AvlReceiverServiceServer
+	tcpHandler *handlers.TcpHandler
+}
+
+func startGrpcServer(port int, tcpHandler *handlers.TcpHandler) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		logger.Sugar().Fatalf("Failed to listen on port %d: %v", port, err)
 	}
 	grpcServer := grpc.NewServer()
-	serverInstance := &server{}
+	serverInstance := &server{
+		tcpHandler: tcpHandler,
+	}
 
 	store.RegisterAvlReceiverServiceServer(grpcServer, serverInstance)
-	
+
 	logger.Sugar().Infof("gRPC server listening on port %d", port)
 	if err := grpcServer.Serve(listener); err != nil {
 		logger.Sugar().Fatalf("Failed to serve gRPC on port %d: %v", port, err)
@@ -64,6 +73,7 @@ func main() {
 	remoteStoreClient := store.NewCustomAvlDataStoreClient(storeConn)
 	tcpHandler := handlers.NewTcpHandler(*remoteStoreClient, *storeType)
 
+	logger.Sugar().Info(tcpHandler.GetConnInfoByIMEI("867440066302308"))
 	// Start TCP Server
 	go func() {
 		listener, err := net.Listen("tcp4", fmt.Sprintf(":%d", *port))
@@ -87,12 +97,45 @@ func main() {
 	}()
 
 	// Start gRPC Server
-	go startGrpcServer(*grpcPort)
+	go startGrpcServer(*grpcPort, &tcpHandler)
 
 	// Keep the main function running
 	select {}
 }
 
-type server struct {
-	store.AvlReceiverServiceServer
+func (s *server) SendCommand(ctx context.Context, req *store.SendCommandRequest) (*store.SendCommandResponse, error) {
+	// Access the imeiToConnMap through the TcpHandler
+	info, exists := s.tcpHandler.GetConnInfoByIMEI(req.Imei)
+	if !exists {
+		return &store.SendCommandResponse{
+			Success: false,
+			Message: "Device not found",
+		}, nil
+	}
+
+	conn := info.Conn
+	protocol := info.Protocol
+
+	// Prepare to send the command to the device
+	writer := bufio.NewWriter(conn) // You can adjust this as needed
+	err := protocol.SendCommandToDevice(writer, req.Command)
+	if err != nil {
+		return &store.SendCommandResponse{
+			Success: false,
+			Message: "Failed to send command: " + err.Error(),
+		}, nil
+	}
+
+	// Flush the writer to ensure the command is sent
+	if err := writer.Flush(); err != nil {
+		return &store.SendCommandResponse{
+			Success: false,
+			Message: "Failed to flush writer: " + err.Error(),
+		}, nil
+	}
+
+	return &store.SendCommandResponse{
+		Success: true,
+		Message: "Command sent successfully",
+	}, nil
 }

@@ -69,11 +69,6 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 
 func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.Store, responseWriter io.Writer) (err error) {
 	// Read the preamble (first 4 bytes), should be 0x00000000
-	err = t.SendCommand(responseWriter)
-	if err != nil {
-		return err
-	}
-
 	var headerZeros uint32
 	err = binary.Read(reader, binary.BigEndian, &headerZeros)
 	if err != nil {
@@ -580,27 +575,50 @@ func (t *FM1200Protocol) ValidateCrc(data []byte, expectedCrc uint32) bool {
 
 //send command
 
-func (t *FM1200Protocol) SendCommand(writer io.Writer) error {
-	// Command in HEX for "getinfo"
-	commandHex := []byte{
-		0x00, 0x00, 0x00, 0x00, // Preamble
-		0x00, 0x00, 0x00, 0x0F, // Data Size (15 bytes from Codec ID to Command Quantity 2)
-		0x0C,                   // Codec ID for Codec12
-		0x01,                   // Command Quantity 1
-		0x05,                   // Command Type (0x05 for command)
-		0x00, 0x00, 0x00, 0x07, // Command Size (7 bytes)
-		0x67, 0x65, 0x74, 0x69, 0x6E, 0x66, 0x6F, // Command "getinfo" in HEX
-		0x01,                   // Command Quantity 2
-		0x00, 0x00, 0x43, 0x12, // CRC-16 checksum
+func (t *FM1200Protocol) SendCommandToDevice(writer io.Writer, command string) error {
+	// Convert the command string to a byte array (equivalent to HEX representation)
+	commandBytes := []byte(command)
+
+	// Calculate the command size dynamically
+	commandSize := len(commandBytes)
+
+	// Ensure command size fits in 4 bytes (0x00000000 to 0xFFFFFFFF)
+	if commandSize > 0xFFFFFFFF {
+		return fmt.Errorf("command too large")
 	}
 
+	// Construct the full command
+	commandHex := []byte{
+		0x00, 0x00, 0x00, 0x00, // Preamble
+		0x00, 0x00, 0x00, byte(11 + commandSize), // Data Size (11 bytes + command size)
+		0x0C, // Codec ID for Codec12
+		0x01, // Command Quantity 1
+		0x05, // Command Type (0x05 for command)
+	}
+
+	// Append the 4-byte command size
+	commandHex = append(commandHex, byte(commandSize>>24), byte(commandSize>>16), byte(commandSize>>8), byte(commandSize))
+
+	// Append the actual command bytes
+	commandHex = append(commandHex, commandBytes...)
+
+	// Add the remaining fields (Command Quantity 2 and CRC placeholder)
+	commandHex = append(commandHex, 0x01)                   // Command Quantity 2
+	commandHex = append(commandHex, 0x00, 0x00, 0x00, 0x00) // Placeholder for CRC-16 checksum
+
+	// Calculate the CRC-16 checksum (excluding the 4-byte preamble)
+	crc := crc.CrcTeltonika(commandHex[4:]) // Start CRC calculation from Data Size (byte 4 onwards)
+
+	// Append the CRC-16 checksum (2 bytes)
+	commandHex = append(commandHex, byte(crc&0xFF), byte(crc>>8))
 	// Send the command over the network
 	_, err := writer.Write(commandHex)
 	if err != nil {
 		logger.Error("Failed to send command", zap.Error(err))
 		return err
 	}
-	logger.Info("getinfo command sent successfully")
+
+	logger.Sugar().Infof("Command %s sent successfully", command)
 	return nil
 }
 
