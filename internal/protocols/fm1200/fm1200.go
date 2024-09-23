@@ -612,6 +612,7 @@ func (t *FM1200Protocol) SendCommandToDevice(writer io.Writer, command string) e
 	// Append the CRC-16 checksum (2 bytes)
 	commandHex = append(commandHex, byte(crc&0xFF), byte(crc>>8))
 	// Send the command over the network
+	logger.Sugar().Info(commandHex)
 	_, err := writer.Write(commandHex)
 	if err != nil {
 		logger.Error("Failed to send command", zap.Error(err))

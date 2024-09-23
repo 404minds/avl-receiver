@@ -116,6 +116,8 @@ func (s *server) SendCommand(ctx context.Context, req *store.SendCommandRequest)
 	conn := info.Conn
 	protocol := info.Protocol
 
+	logger.Sugar().Infof("Sending command to remote device %s", conn.RemoteAddr().String())
+	logger.Sugar().Info("protocol: ", protocol)
 	// Prepare to send the command to the device
 	writer := bufio.NewWriter(conn) // You can adjust this as needed
 	err := protocol.SendCommandToDevice(writer, req.Command)
