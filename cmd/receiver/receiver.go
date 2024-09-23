@@ -20,7 +20,7 @@ import (
 var logger = configuredLogger.Logger
 
 type server struct {
-	store.AvlReceiverServiceServer
+	store.UnimplementedAvlReceiverServiceServer
 	tcpHandler *handlers.TcpHandler
 }
 
