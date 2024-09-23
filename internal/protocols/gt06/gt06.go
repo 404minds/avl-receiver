@@ -687,3 +687,9 @@ func (p *GT06Protocol) IsValidHeader(reader *bufio.Reader) bool {
 	}
 	return false
 }
+
+// send command to device
+func (p *GT06Protocol) SendCommandToDevice(writer io.Writer, command string) error {
+	// Command in HEX for "getinfo"
+	return nil
+}

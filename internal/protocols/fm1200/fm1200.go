@@ -69,11 +69,6 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 
 func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.Store, responseWriter io.Writer) (err error) {
 	// Read the preamble (first 4 bytes), should be 0x00000000
-	err = t.SendCommand(responseWriter)
-	if err != nil {
-		return err
-	}
-
 	var headerZeros uint32
 	err = binary.Read(reader, binary.BigEndian, &headerZeros)
 	if err != nil {
@@ -580,7 +575,7 @@ func (t *FM1200Protocol) ValidateCrc(data []byte, expectedCrc uint32) bool {
 
 //send command
 
-func (t *FM1200Protocol) SendCommand(writer io.Writer) error {
+func (t *FM1200Protocol) SendCommandToDevice(writer io.Writer, command string) error {
 	// Command in HEX for "getinfo"
 	commandHex := []byte{
 		0x00, 0x00, 0x00, 0x00, // Preamble
