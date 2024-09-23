@@ -29,15 +29,15 @@ func startGrpcServer(port int, tcpHandler *handlers.TcpHandler) {
 	if err != nil {
 		logger.Sugar().Fatalf("Failed to listen on port %d: %v", port, err)
 	}
-	grpcServer := grpc.NewServer()
+	s := grpc.NewServer()
 	serverInstance := &server{
 		tcpHandler: tcpHandler,
 	}
 
-	store.RegisterAvlReceiverServiceServer(grpcServer, serverInstance)
+	store.RegisterAvlReceiverServiceServer(s, serverInstance)
 
 	logger.Sugar().Infof("gRPC server listening on port %d", port)
-	if err := grpcServer.Serve(listener); err != nil {
+	if err := s.Serve(listener); err != nil {
 		logger.Sugar().Fatalf("Failed to serve gRPC on port %d: %v", port, err)
 	}
 }

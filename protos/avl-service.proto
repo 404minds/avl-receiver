@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+
+option go_package = "github.com/404minds/avl-receiver/internal/store;store";
+
+package store;
+
+
+
+service AvlReceiverService {
+  rpc SendCommand(SendCommandRequest) returns (SendCommandResponse);
+}
+
+message SendCommandRequest {
+  string imei = 1;
+  string command = 2;
+}
+
+message SendCommandResponse {
+  bool success = 1;
+  string message = 2;
+}
