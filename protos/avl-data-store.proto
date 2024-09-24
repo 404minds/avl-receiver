@@ -4,6 +4,8 @@ syntax = "proto3";
 option go_package = "github.com/404minds/avl-receiver/internal/store;store";
 
 import "google/protobuf/empty.proto";
+
+
 package store;
 
 import "common-types.proto";
@@ -11,6 +13,7 @@ import "common-types.proto";
 service AvlDataStore {
     rpc VerifyDevice(VerifyDeviceRequest) returns (VerifyDeviceReply) {}
     rpc SaveDeviceStatus(types.DeviceStatus) returns (google.protobuf.Empty) {}
+    rpc SaveDeviceReply(types.DeviceResponse)returns (google.protobuf.Empty){}
 }
 
 
