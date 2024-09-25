@@ -50,6 +50,11 @@ func (s *RemoteRpcStore) Response() {
 		select {
 		case deviceResponse := <-s.ResponseChan:
 			logger.Sugar().Info(deviceResponse.String())
+			ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+			_, err := s.RemoteStoreClient.SaveDeviceResponse(ctx, &deviceResponse)
+			if err != nil {
+				logger.Error("failed to save device status", zap.String("imei", deviceResponse.Imei), zap.Error(err))
+			}
 
 		case <-s.CloseChan:
 			logger.Sugar().Info("async remote rpc store shutting down for device")
