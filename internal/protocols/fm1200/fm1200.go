@@ -122,7 +122,9 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 			IMEI:  t.Imei,
 		}
 		protoReply := r.ToProtobufDeviceResponse()
-		dataStore.GetResponseChan() <- *protoReply
+		logger.Sugar().Info("proto reply device response", protoReply)
+		asyncResponseStore := dataStore.GetResponseChan()
+		asyncResponseStore <- *protoReply
 
 		err = binary.Read(reader, binary.BigEndian, &response.CRC)
 		if err != nil {
@@ -684,9 +686,6 @@ func (t *FM1200Protocol) ParseDeviceResponse(dataReader *bufio.Reader, dataLen u
 	logger.Sugar().Info("Response Quantity: ", response.ResponseQuantity2)
 
 	response.CodecID = 0x0C
-
-	// Log the parsed response
-	logger.Sugar().Infof("Device Response Parsed: %+v", response)
 
 	return &response, nil
 }

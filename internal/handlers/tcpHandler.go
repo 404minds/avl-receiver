@@ -70,6 +70,7 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 
 	dataStore := t.makeAsyncStore(deviceProtocol)
 	go dataStore.Process()
+	go dataStore.Response()
 	defer func() { dataStore.GetCloseChan() <- true }()
 
 	t.connToStoreMap[remoteAddr] = dataStore
