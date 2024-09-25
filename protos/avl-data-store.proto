@@ -11,6 +11,7 @@ import "common-types.proto";
 service AvlDataStore {
     rpc VerifyDevice(VerifyDeviceRequest) returns (VerifyDeviceReply) {}
     rpc SaveDeviceStatus(types.DeviceStatus) returns (google.protobuf.Empty) {}
+    rpc SavedeviceResponse(types.DeviceResponse) returns (google.protobuf.Empty){}
 }
 
 
