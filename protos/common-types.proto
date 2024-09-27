@@ -30,10 +30,12 @@ message DeviceStatus {
     int32 odometer = 9;
     int32 fuel_level = 10;
     string identification_id = 11;
+    string vin = 12;
+    int32 rpm = 13;
     oneof raw_data {
-        WanwayPacket wanway_packet = 12;
-        TeltonikaPacket teltonika_packet = 13;
-        ConcoxPacket  concox_packet = 14;
+        WanwayPacket wanway_packet = 14;
+        TeltonikaPacket teltonika_packet = 15;
+        ConcoxPacket  concox_packet = 16;
     }
 }
 

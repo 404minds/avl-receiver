@@ -455,39 +455,22 @@ func (t *FM1200Protocol) readNXByteProperties(reader *bufio.Reader, codecID uint
 			logger.Sugar().Info("readNXByteProperties: error:  ", err)
 			return nil, err
 		}
-	} else {
-		var numProperties8 uint8
-		err := binary.Read(reader, binary.BigEndian, &numProperties8)
-		if err != nil {
-			logger.Sugar().Info("readNXByteProperties: error:  ", err)
-			return nil, err
-		}
-		numProperties = uint16(numProperties8)
 	}
 
 	properties := make(map[IOProperty]interface{})
 	for i := uint16(0); i < numProperties; i++ {
 		var propertyID uint16
-		if codecID == 0x8E {
-			err := binary.Read(reader, binary.BigEndian, &propertyID)
-			if err != nil {
-				logger.Sugar().Info("readNXByteProperties: error:  ", err)
-				return nil, err
-			}
-		} else {
-			var propertyID8 uint8
-			err := binary.Read(reader, binary.BigEndian, &propertyID8)
-			if err != nil {
-				logger.Sugar().Info("readNXByteProperties: error:  ", err)
-				return nil, err
-			}
-			propertyID = uint16(propertyID8)
+
+		err := binary.Read(reader, binary.BigEndian, &propertyID)
+		if err != nil {
+			logger.Sugar().Info("readNXByteProperties: error:  ", err)
+			return nil, err
 		}
 
 		property := IOProperty(propertyID)
 
-		var valueLen uint8
-		err := binary.Read(reader, binary.BigEndian, &valueLen)
+		var valueLen uint16
+		err = binary.Read(reader, binary.BigEndian, &valueLen)
 		if err != nil {
 			logger.Sugar().Info("readNXByteProperties: error:  ", err)
 			return nil, err
