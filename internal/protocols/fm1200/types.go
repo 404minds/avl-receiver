@@ -117,6 +117,8 @@ const (
 	TIO_GreenDrivingStatus            = 253
 	TIO_GreenDrivingValue             = 254
 	TIO_Overspeeding                  = 255
+	TIO_VIN                           = 256
+	TIO_RPM                           = 36
 )
 
 func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
@@ -153,7 +155,8 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 
 	info.VehicleStatus.Overspeeding = r.Record.IOElement.Properties1B[TIO_Overspeeding] > 0
 	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
-
+	info.Rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM])
+	info.Vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN])
 	//battery level
 	info.BatteryLevel = int32(r.Record.IOElement.Properties2B[TIO_BatteryVoltage] / 300)
 
