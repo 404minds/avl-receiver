@@ -58,13 +58,13 @@ func (t *FM1200Protocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip in
 func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, dataStore store.Store) error {
 
 	for {
-		rawMessage, err := reader.Peek(reader.Buffered())
+		rawMessage, err := reader.Peek(200)
 		logger.Sugar().Info("raw message: ", string(rawMessage))
 		if err != nil && err != io.EOF {
 			logger.Error("failed to peek message from reader", zap.Error(err))
 			return err
 		}
-		
+
 		err = t.consumeMessage(reader, dataStore, responseWriter)
 		if err != nil {
 			if err != io.EOF {
