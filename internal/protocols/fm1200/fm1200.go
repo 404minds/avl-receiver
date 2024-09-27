@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/pkg/errors"
@@ -60,14 +59,12 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 
 	for {
 		rawMessage, err := reader.Peek(reader.Buffered())
+		logger.Sugar().Info("raw message: ", string(rawMessage))
 		if err != nil && err != io.EOF {
 			logger.Error("failed to peek message from reader", zap.Error(err))
 			return err
 		}
-
-		// Log the raw packet in hexadecimal format
-		logger.Info("Received packet in hex", zap.String("packet_hex", hex.EncodeToString(rawMessage)))
-
+		
 		err = t.consumeMessage(reader, dataStore, responseWriter)
 		if err != nil {
 			if err != io.EOF {
