@@ -59,7 +59,7 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 
 	for {
 		rawMessage, err := reader.Peek(200)
-		logger.Sugar().Info("raw message: ", string(rawMessage))
+		logger.Sugar().Info("raw message: ", rawMessage)
 		if err != nil && err != io.EOF {
 			logger.Error("failed to peek message from reader", zap.Error(err))
 			return err
