@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/pkg/errors"
@@ -56,8 +57,18 @@ func (t *FM1200Protocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip in
 }
 
 func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, dataStore store.Store) error {
+
 	for {
-		err := t.consumeMessage(reader, dataStore, responseWriter)
+		rawMessage, err := reader.Peek(reader.Buffered())
+		if err != nil && err != io.EOF {
+			logger.Error("failed to peek message from reader", zap.Error(err))
+			return err
+		}
+
+		// Log the raw packet in hexadecimal format
+		logger.Info("Received packet in hex", zap.String("packet_hex", hex.EncodeToString(rawMessage)))
+
+		err = t.consumeMessage(reader, dataStore, responseWriter)
 		if err != nil {
 			if err != io.EOF {
 				logger.Error("failed to consume message", zap.Error(err))
@@ -126,8 +137,6 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 		logger.Sugar().Info("proto reply device response", protoReply)
 		asyncResponseStore := dataStore.GetResponseChan()
 		asyncResponseStore <- *protoReply
-
-
 
 		err = binary.Read(reader, binary.BigEndian, &response.CRC)
 		if err != nil {
@@ -594,15 +603,13 @@ func (t *FM1200Protocol) SendCommandToDevice(writer io.Writer, command string) e
 
 	commandHex := make([]byte, 0, 20+commandSize) // Preallocate slice with total size 4 preamble, 4 data size, 1 codec Id, 1 byte response quantity, 1 byte type,
 	//4 byte response size , x response size, 1 response quantity 2 , 4 byte crc
-	//{0 0 0 0 0   0   0   0F  0C 01 05 00 00 00 07 67  65  74  69  6E  66  6F  01 00 00 43 12
-	//[0 0 0 0 255 255 255 248 12 1  5   0  0  0  7 103 101 116 105 110 102 111 1  0  0  64 12]
+
 	// Preamble (4 bytes)
 	dataSize := commandSize + 8
 	commandHex = append(commandHex, 0x00, 0x00, 0x00, 0x00)
 
 	//dataSize(4 bytes)
 	// Exclude preamble (4 bytes) and CRC (4 bytes)
-	logger.Sugar().Info(dataSize)
 	commandHex = append(commandHex, byte(uint32(dataSize)>>24), byte(uint32(dataSize)>>16), byte(uint32(dataSize)>>8), byte(uint32(dataSize)))
 
 	// Codec ID (1 byte)
