@@ -139,7 +139,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 	info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature])
-	info.FuelLevel = int32(r.Record.IOElement.Properties4B[TIO_FuelLevel] / 10)
+	info.FuelLtr = int32(r.Record.IOElement.Properties4B[TIO_FuelLevel] / 10)
 	// Check if the iButtonID is available, otherwise use RFID
 	if iButtonID, exists := r.Record.IOElement.Properties8B[TIO_IButtonID]; exists && iButtonID != 0 {
 		info.IdentificationId = ConvertDecimalToHexAndReverse(iButtonID)
@@ -158,7 +158,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM])
 	info.Vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN])
 	//battery level
-	info.BatteryLevel = int32(r.Record.IOElement.Properties2B[TIO_BatteryVoltage] / 300)
+	info.BatteryLevel = int32(r.Record.IOElement.Properties2B[TIO_BatteryVoltage] / 41)
 
 	rawdata, _ := json.Marshal(r)
 	info.RawData = &types.DeviceStatus_TeltonikaPacket{

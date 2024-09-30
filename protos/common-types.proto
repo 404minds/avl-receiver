@@ -28,7 +28,7 @@ message DeviceStatus {
     int32 battery_level = 7;
     float temperature = 8;
     int32 odometer = 9;
-    int32 fuel_level = 10;
+    int32 fuel_ltr = 10;
     string identification_id = 11;
     string vin = 12;
     int32 rpm = 13;
