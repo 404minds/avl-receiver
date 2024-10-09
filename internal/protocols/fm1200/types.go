@@ -91,6 +91,7 @@ const (
 	TIO_Ignition                      = 239
 	TIO_MovementSensor                = 240
 	TIO_OdometerValue                 = 16
+	TIO_OdmTotalMileage               = 389
 	TIO_FuelLevel                     = 390
 	TIO_TripOdometerValue             = 199
 	TIO_GSMOperator                   = 241
@@ -140,6 +141,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 	info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature])
 	info.FuelLtr = int32(r.Record.IOElement.Properties4B[TIO_FuelLevel] / 10)
+	info.OdometerFmb = int32(r.Record.IOElement.Properties4B[TIO_OdmTotalMileage])
 	// Check if the iButtonID is available, otherwise use RFID
 	if iButtonID, exists := r.Record.IOElement.Properties8B[TIO_IButtonID]; exists && iButtonID != 0 {
 		info.IdentificationId = ConvertDecimalToHexAndReverse(iButtonID)

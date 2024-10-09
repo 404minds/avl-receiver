@@ -24,6 +24,7 @@ const (
 	AvlDataStore_VerifyDevice_FullMethodName       = "/store.AvlDataStore/VerifyDevice"
 	AvlDataStore_SaveDeviceStatus_FullMethodName   = "/store.AvlDataStore/SaveDeviceStatus"
 	AvlDataStore_SavedeviceResponse_FullMethodName = "/store.AvlDataStore/SavedeviceResponse"
+	AvlDataStore_FetchDeviceModel_FullMethodName   = "/store.AvlDataStore/FetchDeviceModel"
 )
 
 // AvlDataStoreClient is the client API for AvlDataStore service.
@@ -33,6 +34,7 @@ type AvlDataStoreClient interface {
 	VerifyDevice(ctx context.Context, in *VerifyDeviceRequest, opts ...grpc.CallOption) (*VerifyDeviceReply, error)
 	SaveDeviceStatus(ctx context.Context, in *types.DeviceStatus, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	SavedeviceResponse(ctx context.Context, in *types.DeviceResponse, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	FetchDeviceModel(ctx context.Context, in *FetchDeviceModelRequest, opts ...grpc.CallOption) (*FetchDeviceModelResponse, error)
 }
 
 type avlDataStoreClient struct {
@@ -73,6 +75,16 @@ func (c *avlDataStoreClient) SavedeviceResponse(ctx context.Context, in *types.D
 	return out, nil
 }
 
+func (c *avlDataStoreClient) FetchDeviceModel(ctx context.Context, in *FetchDeviceModelRequest, opts ...grpc.CallOption) (*FetchDeviceModelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FetchDeviceModelResponse)
+	err := c.cc.Invoke(ctx, AvlDataStore_FetchDeviceModel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AvlDataStoreServer is the server API for AvlDataStore service.
 // All implementations must embed UnimplementedAvlDataStoreServer
 // for forward compatibility.
@@ -80,6 +92,7 @@ type AvlDataStoreServer interface {
 	VerifyDevice(context.Context, *VerifyDeviceRequest) (*VerifyDeviceReply, error)
 	SaveDeviceStatus(context.Context, *types.DeviceStatus) (*emptypb.Empty, error)
 	SavedeviceResponse(context.Context, *types.DeviceResponse) (*emptypb.Empty, error)
+	FetchDeviceModel(context.Context, *FetchDeviceModelRequest) (*FetchDeviceModelResponse, error)
 	mustEmbedUnimplementedAvlDataStoreServer()
 }
 
@@ -98,6 +111,9 @@ func (UnimplementedAvlDataStoreServer) SaveDeviceStatus(context.Context, *types.
 }
 func (UnimplementedAvlDataStoreServer) SavedeviceResponse(context.Context, *types.DeviceResponse) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SavedeviceResponse not implemented")
+}
+func (UnimplementedAvlDataStoreServer) FetchDeviceModel(context.Context, *FetchDeviceModelRequest) (*FetchDeviceModelResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FetchDeviceModel not implemented")
 }
 func (UnimplementedAvlDataStoreServer) mustEmbedUnimplementedAvlDataStoreServer() {}
 func (UnimplementedAvlDataStoreServer) testEmbeddedByValue()                      {}
@@ -174,6 +190,24 @@ func _AvlDataStore_SavedeviceResponse_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AvlDataStore_FetchDeviceModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FetchDeviceModelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AvlDataStoreServer).FetchDeviceModel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AvlDataStore_FetchDeviceModel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AvlDataStoreServer).FetchDeviceModel(ctx, req.(*FetchDeviceModelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AvlDataStore_ServiceDesc is the grpc.ServiceDesc for AvlDataStore service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -192,6 +226,10 @@ var AvlDataStore_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SavedeviceResponse",
 			Handler:    _AvlDataStore_SavedeviceResponse_Handler,
+		},
+		{
+			MethodName: "FetchDeviceModel",
+			Handler:    _AvlDataStore_FetchDeviceModel_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
