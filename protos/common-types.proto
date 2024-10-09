@@ -32,10 +32,11 @@ message DeviceStatus {
     string identification_id = 11;
     string vin = 12;
     int32 rpm = 13;
+    int32 odometer_fmb = 14;
     oneof raw_data {
-        WanwayPacket wanway_packet = 14;
-        TeltonikaPacket teltonika_packet = 15;
-        ConcoxPacket  concox_packet = 16;
+        WanwayPacket wanway_packet = 15;
+        TeltonikaPacket teltonika_packet = 16;
+        ConcoxPacket  concox_packet = 17;
     }
 }
 
@@ -69,4 +70,12 @@ message ConcoxPacket{
 message DeviceResponse {
     string imei = 1;
     string response = 2;
+}
+
+message FetchDeviceModelRequest{
+    string imei = 1;
+}
+
+message FetchDeviceModelResponse{
+    string model = 1;
 }

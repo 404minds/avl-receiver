@@ -12,10 +12,17 @@ service AvlDataStore {
     rpc VerifyDevice(VerifyDeviceRequest) returns (VerifyDeviceReply) {}
     rpc SaveDeviceStatus(types.DeviceStatus) returns (google.protobuf.Empty) {}
     rpc SavedeviceResponse(types.DeviceResponse) returns (google.protobuf.Empty){}
+    rpc FetchDeviceModel(FetchDeviceModelRequest)returns (FetchDeviceModelResponse){}
 }
 
 
+message FetchDeviceModelRequest{
+    string imei = 1;
+}
 
+message FetchDeviceModelResponse{
+    string model = 1;
+}
 
 message VerifyDeviceRequest {
     string imei = 1;

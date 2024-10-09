@@ -38,6 +38,15 @@ func (c CustomAvlDataStoreClient) SaveDeviceResponse(ctx context.Context, in *ty
 	return out, nil
 }
 
+func (c CustomAvlDataStoreClient) FetchDeviceModel(ctx context.Context, in *types.FetchDeviceModelRequest, opts ...grpc.CallOption) (*FetchDeviceModelResponse, error) {
+	out := new(FetchDeviceModelResponse)
+	err := c.cc.Invoke(ctx, "/AVLService/FetchDeviceModel", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func NewCustomAvlDataStoreClient(cc grpc.ClientConnInterface) *CustomAvlDataStoreClient {
 	return &CustomAvlDataStoreClient{cc: cc}
 }
