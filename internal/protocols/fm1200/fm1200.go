@@ -164,7 +164,8 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 	}
 
 	// Store records
-	for _, record := range parsedPacket.Data {
+	for i := len(parsedPacket.Data) - 1; i >= 0; i-- {
+		record := parsedPacket.Data[i]
 		r := Record{
 			Record: record,
 			IMEI:   t.Imei,
@@ -199,8 +200,8 @@ func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader, codecId uint8) 
 		if err != nil {
 			return nil, err
 		}
-		// Prepend the record to the front of the slice
-		packet.Data = append([]AvlRecord{*record}, packet.Data...)
+		// Prepend the record to the end of the slice
+		packet.Data = append(packet.Data, *record)
 	}
 
 	endNumRecords, err := reader.ReadByte()
