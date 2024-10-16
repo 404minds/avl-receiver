@@ -199,7 +199,8 @@ func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader, codecId uint8) 
 		if err != nil {
 			return nil, err
 		}
-		packet.Data = append(packet.Data, *record)
+		// Prepend the record to the front of the slice
+		packet.Data = append([]AvlRecord{*record}, packet.Data...)
 	}
 
 	endNumRecords, err := reader.ReadByte()
