@@ -97,7 +97,7 @@ func main() {
 	}()
 
 	// Start gRPC Server
-	go startGrpcServer(*grpcPort, &tcpHandler)
+	//go startGrpcServer(*grpcPort, &tcpHandler)
 
 	// Keep the main function running
 	select {}

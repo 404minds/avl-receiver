@@ -38,7 +38,12 @@ type TcpHandler struct {
 func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	var remoteAddr = conn.RemoteAddr().String()
 
-	defer conn.Close()
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+
+		}
+	}(conn)
 	defer func() {
 		delete(t.connToProtocolMap, remoteAddr)
 		delete(t.connToStoreMap, remoteAddr)
@@ -257,6 +262,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 }
 
 // Getter for connection info by IMEI
+
 func (t *TcpHandler) GetConnInfoByIMEI(imei string) (DeviceConnectionInfo, bool) {
 	info, exists := t.imeiToConnMap[imei]
 	return info, exists
