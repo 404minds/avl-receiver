@@ -44,7 +44,7 @@ func startGrpcServer(port int, tcpHandler *handlers.TcpHandler) {
 
 func main() {
 	var port = flag.Int("port", 21000, "Port to listen on")
-	var grpcPort = flag.Int("grpcPort", 15000, "Port for gRPC server")
+	//var grpcPort = flag.Int("grpcPort", 15000, "Port for gRPC server")
 	var remoteStoreAddr = flag.String("remoteStoreAddr", "", "Address of the remote store")
 	var storeType = flag.String("storeType", "remote", "Store type - one of local or remote")
 	flag.Parse()
