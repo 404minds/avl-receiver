@@ -9,8 +9,8 @@ import (
 )
 
 type RemoteRpcStore struct {
-	ProcessChan       chan types.DeviceStatus // TODO: change to a more specific type
-	ResponseChan      chan types.DeviceResponse
+	ProcessChan chan types.DeviceStatus // TODO: change to a more specific type
+	//ResponseChan      chan types.DeviceResponse
 	CloseChan         chan bool
 	RemoteStoreClient CustomAvlDataStoreClient
 	DeviceIdentifier  string
@@ -20,9 +20,9 @@ func (s *RemoteRpcStore) GetProcessChan() chan types.DeviceStatus {
 	return s.ProcessChan
 }
 
-func (s *RemoteRpcStore) GetResponseChan() chan types.DeviceResponse {
-	return s.ResponseChan
-}
+//func (s *RemoteRpcStore) GetResponseChan() chan types.DeviceResponse {
+//	return s.ResponseChan
+//}
 
 func (s *RemoteRpcStore) GetCloseChan() chan bool {
 	return s.CloseChan
@@ -45,21 +45,21 @@ func (s *RemoteRpcStore) Process() {
 	}
 }
 
-func (s *RemoteRpcStore) Response() {
-	for {
-		select {
-		case deviceResponse := <-s.ResponseChan:
-			logger.Sugar().Info(deviceResponse.String())
-			ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
-			_, err := s.RemoteStoreClient.SaveDeviceResponse(ctx, &deviceResponse)
-			if err != nil {
-				logger.Error("failed to save device status", zap.String("imei", deviceResponse.Imei), zap.Error(err))
-			}
-
-		case <-s.CloseChan:
-			logger.Sugar().Info("async remote rpc store shutting down for device")
-			return
-		}
-
-	}
-}
+//func (s *RemoteRpcStore) Response() {
+//	for {
+//		select {
+//		case deviceResponse := <-s.ResponseChan:
+//			logger.Sugar().Info(deviceResponse.String())
+//			ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+//			_, err := s.RemoteStoreClient.SaveDeviceResponse(ctx, &deviceResponse)
+//			if err != nil {
+//				logger.Error("failed to save device status", zap.String("imei", deviceResponse.Imei), zap.Error(err))
+//			}
+//
+//		case <-s.CloseChan:
+//			logger.Sugar().Info("async remote rpc store shutting down for device")
+//			return
+//		}
+//
+//	}
+//}
