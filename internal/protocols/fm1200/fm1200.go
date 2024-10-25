@@ -56,7 +56,7 @@ func (t *FM1200Protocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip in
 }
 
 func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, dataStore store.Store) error {
-
+	logger.Sugar().Info("consumer stream called")
 	for {
 		rawMessage, err := reader.Peek(200)
 		logger.Sugar().Info("raw message: ", rawMessage)
