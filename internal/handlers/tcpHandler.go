@@ -56,9 +56,10 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		logger.Error("failed to identify device", zap.String("remoteAddr", remoteAddr), zap.Error(err))
 		return
 	}
-
+	logger.Sugar().Info("we have done login")
 	t.connToProtocolMap[remoteAddr] = deviceProtocol
 	deviceID := deviceProtocol.GetDeviceID()
+
 	// Store the IMEI, connection, and protocol type in the combined map
 	if deviceID != "" {
 		t.imeiToConnMap[deviceID] = DeviceConnectionInfo{
@@ -68,10 +69,40 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		logger.Sugar().Infof("Mapped deviceID %s to connection %v and protocol %v", deviceID, conn.RemoteAddr().String(), deviceProtocol)
 	}
 
+	logger.Sugar().Info("creating data store")
 	dataStore := t.makeAsyncStore(deviceProtocol)
-	go dataStore.Process()
-	go dataStore.Response()
-	defer func() { dataStore.GetCloseChan() <- true }()
+
+	// Create an error channel to capture errors from goroutines
+	errorChan := make(chan error, 2) // Buffered to avoid blocking
+
+	// Run Process in a goroutine and send errors to the error channel
+	go func() {
+		for {
+			select {
+			case status := <-dataStore.GetProcessChan():
+				// Handle the received status
+				// If you want to process and can detect an error condition here, send an error to errorChan
+				_ = status // Placeholder for actual handling
+			}
+		}
+	}()
+
+	// Run Response in a goroutine and send errors to the error channel
+	go func() {
+		for {
+			select {
+			case response := <-dataStore.GetResponseChan():
+				// Handle the received response
+				// If you want to process and can detect an error condition here, send an error to errorChan
+				_ = response // Placeholder for actual handling
+			}
+		}
+	}()
+
+	defer func() {
+		dataStore.GetCloseChan() <- true
+		close(errorChan) // Close the error channel when done
+	}()
 
 	t.connToStoreMap[remoteAddr] = dataStore
 	_, err = conn.Write(ack)
@@ -80,6 +111,15 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		return
 	}
 
+	// Check for errors from the goroutines
+	go func() {
+		for err := range errorChan {
+			logger.Error("Error in async operation", zap.Error(err))
+			// You can handle additional cleanup or notification here
+		}
+	}()
+
+	logger.Sugar().Info("reached to consume stream")
 	err = deviceProtocol.ConsumeStream(reader, conn, dataStore)
 	if err != nil && err != io.EOF {
 		logger.Error("Failure while reading from stream", zap.String("remoteAddr", remoteAddr), zap.Error(err))
