@@ -4,10 +4,8 @@ import "github.com/404minds/avl-receiver/internal/types"
 
 type Store interface {
 	Process()
-	//Response()
-
+	Response()
 	GetProcessChan() chan types.DeviceStatus
-	//GetResponseChan() chan types.DeviceResponse
-
+	GetResponseChan() chan types.DeviceResponse
 	GetCloseChan() chan bool
 }

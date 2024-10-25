@@ -93,16 +93,16 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	}()
 
 	// Run Response in a goroutine and send errors to the error channel
-	//go func() {
-	//	for {
-	//		select {
-	//		case response := <-dataStore.GetResponseChan():
-	//			// Handle the received response
-	//			// If you want to process and can detect an error condition here, send an error to errorChan
-	//			_ = response // Placeholder for actual handling
-	//		}
-	//	}
-	//}()
+	go func() {
+		for {
+			select {
+			case response := <-dataStore.GetResponseChan():
+				// Handle the received response
+				// If you want to process and can detect an error condition here, send an error to errorChan
+				_ = response // Placeholder for actual handling
+			}
+		}
+	}()
 
 	defer func() {
 		dataStore.GetCloseChan() <- true
@@ -152,8 +152,8 @@ func (t *TcpHandler) makeAsyncStore(deviceProtocol devices.DeviceProtocol) store
 
 func makeRemoteRpcStore(remoteStoreClient store.CustomAvlDataStoreClient) store.Store {
 	return &store.RemoteRpcStore{
-		ProcessChan: make(chan types.DeviceStatus, 200),
-		//ResponseChan:      make(chan types.DeviceResponse, 200),
+		ProcessChan:       make(chan types.DeviceStatus, 200),
+		ResponseChan:      make(chan types.DeviceResponse, 200),
 		CloseChan:         make(chan bool, 200),
 		RemoteStoreClient: remoteStoreClient,
 	}
@@ -187,11 +187,11 @@ func makeJsonStore(destDir string, deviceIdentifier string) store.Store {
 	logger.Sugar().Infof("[deviceId: %s] Created json file store at %s", deviceIdentifier, file.Name())
 
 	return &store.JsonLinesStore{
-		File:        file,
-		ProcessChan: make(chan types.DeviceStatus, 200),
-		//ResponseChan: make(chan types.DeviceResponse, 200),
-		CloseChan: make(chan bool, 200),
-		DeviceID:  deviceIdentifier,
+		File:         file,
+		ProcessChan:  make(chan types.DeviceStatus, 200),
+		ResponseChan: make(chan types.DeviceResponse, 200),
+		CloseChan:    make(chan bool, 200),
+		DeviceID:     deviceIdentifier,
 	}
 }
 
