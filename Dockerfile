@@ -19,6 +19,7 @@ COPY --from=builder /avl-receiver .
 
 # Expose both TCP and gRPC ports
 EXPOSE 21000
-EXPOSE 15000
+##EXPOSE 15000
 
-CMD ["./receiver", "-port", "21000", "-grpcPort", "15000", "-remoteStoreAddr", "fns-consumer-grpc-server:8000"]
+##CMD ["./receiver", "-port", "21000", "-grpcPort", "15000", "-remoteStoreAddr", "fns-consumer-grpc-server:8000"]
+CMD ["./receiver", "-port", "21000",  "-remoteStoreAddr", "fns-consumer-grpc-server:8000"]
