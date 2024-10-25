@@ -121,6 +121,7 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 
 	logger.Sugar().Info("reached to consume stream")
 	err = deviceProtocol.ConsumeStream(reader, conn, dataStore)
+	logger.Sugar().Info("passed consume stream")
 	if err != nil && err != io.EOF {
 		logger.Error("Failure while reading from stream", zap.String("remoteAddr", remoteAddr), zap.Error(err))
 		return
@@ -128,6 +129,7 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		logger.Sugar().Infof("Connection %s closed", conn.RemoteAddr().String())
 		return
 	}
+	logger.Sugar().Info("no error in consume stream")
 }
 
 func (t *TcpHandler) makeAsyncStore(deviceProtocol devices.DeviceProtocol) store.Store {
