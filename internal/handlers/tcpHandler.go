@@ -73,41 +73,13 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		}
 		logger.Sugar().Infof("Mapped deviceID %s to connection %v and protocol %v", deviceID, conn.RemoteAddr().String(), deviceProtocol)
 	}
-
 	logger.Sugar().Info("creating data store")
 	dataStore := t.makeAsyncStore(deviceProtocol)
-
-	// Create an error channel to capture errors from goroutines
-	errorChan := make(chan error, 2) // Buffered to avoid blocking
-
-	// Run Process in a goroutine and send errors to the error channel
-	go func() {
-		for {
-			select {
-			case status := <-dataStore.GetProcessChan():
-				// Handle the received status
-				// If you want to process and can detect an error condition here, send an error to errorChan
-				_ = status // Placeholder for actual handling
-			}
-		}
-	}()
-
-	// Run Response in a goroutine and send errors to the error channel
-	//go func() {
-	//	for {
-	//		select {
-	//		case response := <-dataStore.GetResponseChan():
-	//			// Handle the received response
-	//			// If you want to process and can detect an error condition here, send an error to errorChan
-	//			_ = response // Placeholder for actual handling
-	//		}
-	//	}
-	//}()
-
-	defer func() {
-		dataStore.GetCloseChan() <- true
-		close(errorChan) // Close the error channel when done
-	}()
+	logger.Sugar().Info("running a go routine to start process")
+	go dataStore.Process()
+	logger.Sugar().Info("running a go routine to start response process")
+	go dataStore.Response()
+	defer func() { dataStore.GetCloseChan() <- true }()
 
 	t.connToStoreMap[remoteAddr] = dataStore
 	_, err = conn.Write(ack)
@@ -116,17 +88,7 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		return
 	}
 
-	// Check for errors from the goroutines
-	go func() {
-		for err := range errorChan {
-			logger.Error("Error in async operation", zap.Error(err))
-			// You can handle additional cleanup or notification here
-		}
-	}()
-
-	logger.Sugar().Info("reached to consume stream")
 	err = deviceProtocol.ConsumeStream(reader, conn, dataStore)
-	logger.Sugar().Info("passed consume stream")
 	if err != nil && err != io.EOF {
 		logger.Error("Failure while reading from stream", zap.String("remoteAddr", remoteAddr), zap.Error(err))
 		return
@@ -134,7 +96,6 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		logger.Sugar().Infof("Connection %s closed", conn.RemoteAddr().String())
 		return
 	}
-	logger.Sugar().Info("no error in consume stream")
 }
 
 func (t *TcpHandler) makeAsyncStore(deviceProtocol devices.DeviceProtocol) store.Store {
@@ -152,8 +113,8 @@ func (t *TcpHandler) makeAsyncStore(deviceProtocol devices.DeviceProtocol) store
 
 func makeRemoteRpcStore(remoteStoreClient store.CustomAvlDataStoreClient) store.Store {
 	return &store.RemoteRpcStore{
-		ProcessChan: make(chan types.DeviceStatus, 200),
-		//ResponseChan:      make(chan types.DeviceResponse, 200),
+		ProcessChan:       make(chan types.DeviceStatus, 200),
+		ResponseChan:      make(chan types.DeviceResponse, 200),
 		CloseChan:         make(chan bool, 200),
 		RemoteStoreClient: remoteStoreClient,
 	}
@@ -187,11 +148,11 @@ func makeJsonStore(destDir string, deviceIdentifier string) store.Store {
 	logger.Sugar().Infof("[deviceId: %s] Created json file store at %s", deviceIdentifier, file.Name())
 
 	return &store.JsonLinesStore{
-		File:        file,
-		ProcessChan: make(chan types.DeviceStatus, 200),
-		//ResponseChan: make(chan types.DeviceResponse, 200),
-		CloseChan: make(chan bool, 200),
-		DeviceID:  deviceIdentifier,
+		File:         file,
+		ProcessChan:  make(chan types.DeviceStatus, 200),
+		ResponseChan: make(chan types.DeviceResponse, 200),
+		CloseChan:    make(chan bool, 200),
+		DeviceID:     deviceIdentifier,
 	}
 }
 
