@@ -132,11 +132,11 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 			IMEI:  t.Imei,
 		}
 		logger.Sugar().Info(r)
-		//protoReply := r.ToProtobufDeviceResponse()
+		protoReply := r.ToProtobufDeviceResponse()
 
-		//logger.Sugar().Info("proto reply device response", protoReply)
-		//asyncResponseStore := dataStore.GetResponseChan()
-		//asyncResponseStore <- *protoReply
+		logger.Sugar().Info("proto reply device response", protoReply)
+		asyncResponseStore := dataStore.GetResponseChan()
+		asyncResponseStore <- *protoReply
 
 		err = binary.Read(reader, binary.BigEndian, &response.CRC)
 		if err != nil {
@@ -178,6 +178,11 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 		asyncStore <- *protoRecord
 	}
 	logger.Sugar().Infof("stored %d records", len(parsedPacket.Data))
+
+	err = binary.Write(responseWriter, binary.BigEndian, int32(parsedPacket.NumberOfData))
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

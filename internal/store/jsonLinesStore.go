@@ -13,16 +13,16 @@ import (
 var logger = configuredLogger.Logger
 
 type JsonLinesStore struct {
-	File        *os.File
-	ProcessChan chan types.DeviceStatus
-	//ResponseChan chan types.DeviceResponse
-	CloseChan chan bool
-	DeviceID  string
+	File         *os.File
+	ProcessChan  chan types.DeviceStatus
+	ResponseChan chan types.DeviceResponse
+	CloseChan    chan bool
+	DeviceID     string
 }
 
-//func (s *JsonLinesStore) GetResponseChan() chan types.DeviceResponse {
-//	return s.ResponseChan
-//}
+func (s *JsonLinesStore) GetResponseChan() chan types.DeviceResponse {
+	return s.ResponseChan
+}
 
 func (s *JsonLinesStore) GetProcessChan() chan types.DeviceStatus {
 	return s.ProcessChan
@@ -48,18 +48,18 @@ func (s *JsonLinesStore) Process() {
 	}
 }
 
-//func (s *JsonLinesStore) Response() {
-//	for {
-//		select {
-//		case data := <-s.ResponseChan:
-//			b, err := json.Marshal(data)
-//			if err != nil {
-//				logger.Error("failed to write record to file", zap.String("deviceId", s.DeviceID), zap.Error(err))
-//			}
-//			fmt.Fprintln(s.File, string(b))
-//			s.File.Sync()
-//		case <-s.CloseChan:
-//			return
-//		}
-//	}
-//}
+func (s *JsonLinesStore) Response() {
+	for {
+		select {
+		case data := <-s.ResponseChan:
+			b, err := json.Marshal(data)
+			if err != nil {
+				logger.Error("failed to write record to file", zap.String("deviceId", s.DeviceID), zap.Error(err))
+			}
+			fmt.Fprintln(s.File, string(b))
+			s.File.Sync()
+		case <-s.CloseChan:
+			return
+		}
+	}
+}
