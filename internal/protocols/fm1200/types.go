@@ -159,7 +159,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM])
 	info.Vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN])
 	//battery level
-	info.BatteryLevel = int32(r.Record.IOElement.Properties2B[TIO_BatteryVoltage] / 41)
+	info.BatteryLevel = int32(r.Record.IOElement.Properties2B[TIO_BatteryVoltage] / 42)
 
 	rawdata, _ := json.Marshal(r)
 	info.RawData = &types.DeviceStatus_TeltonikaPacket{

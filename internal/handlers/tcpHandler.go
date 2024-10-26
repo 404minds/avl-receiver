@@ -44,6 +44,7 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 
 		}
 	}(conn)
+	
 	defer func() {
 		delete(t.connToProtocolMap, remoteAddr)
 		delete(t.connToStoreMap, remoteAddr)
