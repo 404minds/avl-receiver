@@ -103,11 +103,11 @@ func main() {
 	select {}
 }
 
-func (s *server) SendCommand(ctx context.Context, req *store.SendCommandRequest) (*store.SendCommandResponse, error) {
+func (s *server) SendCommand(ctx context.Context, req *store.SendCommandRequestAVL) (*store.SendCommandResponseAVL, error) {
 	// Access the imeiToConnMap through the TcpHandler
 	info, exists := s.tcpHandler.GetConnInfoByIMEI(req.Imei)
 	if !exists {
-		return &store.SendCommandResponse{
+		return &store.SendCommandResponseAVL{
 			Success: false,
 			Message: "Device not found",
 		}, nil
@@ -122,7 +122,7 @@ func (s *server) SendCommand(ctx context.Context, req *store.SendCommandRequest)
 	writer := bufio.NewWriter(conn) // You can adjust this as needed
 	err := protocol.SendCommandToDevice(writer, req.Command)
 	if err != nil {
-		return &store.SendCommandResponse{
+		return &store.SendCommandResponseAVL{
 			Success: false,
 			Message: "Failed to send command: " + err.Error(),
 		}, nil
@@ -130,13 +130,13 @@ func (s *server) SendCommand(ctx context.Context, req *store.SendCommandRequest)
 
 	// Flush the writer to ensure the command is sent
 	if err := writer.Flush(); err != nil {
-		return &store.SendCommandResponse{
+		return &store.SendCommandResponseAVL{
 			Success: false,
 			Message: "Failed to flush writer: " + err.Error(),
 		}, nil
 	}
 
-	return &store.SendCommandResponse{
+	return &store.SendCommandResponseAVL{
 		Success: true,
 		Message: "Command sent successfully",
 	}, nil
