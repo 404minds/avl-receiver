@@ -8,15 +8,15 @@ package store;
 
 
 service AvlReceiverService {
-  rpc SendCommand(SendCommandRequest) returns (SendCommandResponse);
+  rpc SendCommand(SendCommandRequestAVL) returns (SendCommandResponseAVL);
 }
 
-message SendCommandRequest {
+message SendCommandRequestAVL {
   string imei = 1;
   string command = 2;
 }
 
-message SendCommandResponse {
+message SendCommandResponseAVL {
   bool success = 1;
   string message = 2;
 }
