@@ -37,6 +37,7 @@ message DeviceStatus {
         TeltonikaPacket teltonika_packet = 15;
         ConcoxPacket  concox_packet = 16;
     }
+    float ambient_temperature = 17;
 }
 
 message GPSPosition {

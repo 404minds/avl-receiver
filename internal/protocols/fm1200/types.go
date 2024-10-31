@@ -104,6 +104,7 @@ const (
 	TIO_CellID                        = 205
 	TIO_AreaCode                      = 206
 	TIO_DallasTemperature             = 72
+	TIO_AmbientAirTemperature         = 53
 	TIO_BatteryVoltage                = 67
 	TIO_BatteryCurrent                = 68
 	TIO_AutoGeofence                  = 175
@@ -140,6 +141,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 	info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature])
+	info.AmbientTemperature = float32(r.Record.IOElement.Properties1B[TIO_AmbientAirTemperature])
 	info.FuelLtr = int32(r.Record.IOElement.Properties4B[TIO_FuelLevel] / 10)
 	// Check if the iButtonID is available, otherwise use RFID
 	if iButtonID, exists := r.Record.IOElement.Properties8B[TIO_IButtonID]; exists && iButtonID != 0 {

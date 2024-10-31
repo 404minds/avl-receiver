@@ -124,19 +124,20 @@ type DeviceStatus struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Imei             string                 `protobuf:"bytes,1,opt,name=imei,proto3" json:"imei,omitempty"`
-	DeviceType       DeviceType             `protobuf:"varint,2,opt,name=device_type,json=deviceType,proto3,enum=types.DeviceType" json:"device_type,omitempty"`
-	Timestamp        *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	MessageType      string                 `protobuf:"bytes,4,opt,name=message_type,json=messageType,proto3" json:"message_type,omitempty"`
-	Position         *GPSPosition           `protobuf:"bytes,5,opt,name=position,proto3" json:"position,omitempty"`
-	VehicleStatus    *VehicleStatus         `protobuf:"bytes,6,opt,name=vehicle_status,json=vehicleStatus,proto3" json:"vehicle_status,omitempty"`
-	BatteryLevel     int32                  `protobuf:"varint,7,opt,name=battery_level,json=batteryLevel,proto3" json:"battery_level,omitempty"`
-	Temperature      float32                `protobuf:"fixed32,8,opt,name=temperature,proto3" json:"temperature,omitempty"`
-	Odometer         int32                  `protobuf:"varint,9,opt,name=odometer,proto3" json:"odometer,omitempty"`
-	FuelLtr          int32                  `protobuf:"varint,10,opt,name=fuel_ltr,json=fuelLtr,proto3" json:"fuel_ltr,omitempty"`
-	IdentificationId string                 `protobuf:"bytes,11,opt,name=identification_id,json=identificationId,proto3" json:"identification_id,omitempty"`
-	Vin              string                 `protobuf:"bytes,12,opt,name=vin,proto3" json:"vin,omitempty"`
-	Rpm              int32                  `protobuf:"varint,13,opt,name=rpm,proto3" json:"rpm,omitempty"`
+	Imei               string                 `protobuf:"bytes,1,opt,name=imei,proto3" json:"imei,omitempty"`
+	DeviceType         DeviceType             `protobuf:"varint,2,opt,name=device_type,json=deviceType,proto3,enum=types.DeviceType" json:"device_type,omitempty"`
+	Timestamp          *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	MessageType        string                 `protobuf:"bytes,4,opt,name=message_type,json=messageType,proto3" json:"message_type,omitempty"`
+	Position           *GPSPosition           `protobuf:"bytes,5,opt,name=position,proto3" json:"position,omitempty"`
+	VehicleStatus      *VehicleStatus         `protobuf:"bytes,6,opt,name=vehicle_status,json=vehicleStatus,proto3" json:"vehicle_status,omitempty"`
+	BatteryLevel       int32                  `protobuf:"varint,7,opt,name=battery_level,json=batteryLevel,proto3" json:"battery_level,omitempty"`
+	Temperature        float32                `protobuf:"fixed32,8,opt,name=temperature,proto3" json:"temperature,omitempty"`
+	Odometer           int32                  `protobuf:"varint,9,opt,name=odometer,proto3" json:"odometer,omitempty"`
+	FuelLtr            int32                  `protobuf:"varint,10,opt,name=fuel_ltr,json=fuelLtr,proto3" json:"fuel_ltr,omitempty"`
+	IdentificationId   string                 `protobuf:"bytes,11,opt,name=identification_id,json=identificationId,proto3" json:"identification_id,omitempty"`
+	Vin                string                 `protobuf:"bytes,12,opt,name=vin,proto3" json:"vin,omitempty"`
+	Rpm                int32                  `protobuf:"varint,13,opt,name=rpm,proto3" json:"rpm,omitempty"`
+	AmbientTemperature float32                `protobuf:"fixed32,17,opt,name=ambient_temperature,proto3" json:"ambient_temperature,omitempty"`
 	// Types that are assignable to RawData:
 	//
 	//	*DeviceStatus_WanwayPacket
@@ -229,6 +230,13 @@ func (x *DeviceStatus) GetBatteryLevel() int32 {
 func (x *DeviceStatus) GetTemperature() float32 {
 	if x != nil {
 		return x.Temperature
+	}
+	return 0
+}
+
+func (x *DeviceStatus) GetAmbientTemperature() float32 {
+	if x != nil {
+		return x.AmbientTemperature
 	}
 	return 0
 }
