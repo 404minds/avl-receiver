@@ -1,0 +1,278 @@
+/*Protocols->help to build a connection on frontend on the consumer side at the port assigned value
+    types of protocols->fl1200,gt-6,tr06
+    fm1200
+
+ */
+//this function get the device id as a string
+func (t *FM1200Protocol) GetDeviceID() string {
+	return t.Imei
+}
+//this function get the device type
+func (p *FM1200Protocol) GetDeviceType() types.DeviceType {
+	return p.DeviceType
+}
+
+func (p *FM1200Protocol) SetDeviceType(t types.DeviceType) {
+	p.DeviceType = t
+}
+ */
+    //this function checks if the person thats  wanting to login is an authorazed person
+ func (t *FM1200Protocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip int, e error) {
+imei, bytesToSkip, err := t.peekImei(reader)
+if err != nil {
+return nil, bytesToSkip, err
+}
+// TODO: in case of unauthorized device, reply with 0x00 ack
+if !t.isImeiAuthorized(imei) {
+return nil, bytesToSkip, errs.ErrUnauthorizedDevice
+}
+
+t.Imei = imei // maybe store this in redis if stream consume happens in a different process
+
+return []byte{0x01}, bytesToSkip, nil
+}
+ */
+    //after successfull authentication this  function reads the information that is sent by the consumer and store it
+    //also send the data to the consumer if needed
+ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, dataStore store.Store) error {
+
+for {
+logger.Sugar().Info("entering loop")
+
+err := t.consumeMessage(reader, dataStore, responseWriter)
+if err != nil {
+if err != io.EOF {
+logger.Error("failed to consume message", zap.Error(err))
+}
+return err
+}
+}
+}
+    TCP HANDLER
+it tells which protocol is being used and handles that protocol working like authentication
+
+//first, this function checks if the remote address associated with device matches or not if not
+//thn it del the connection
+//it checks the device connection and then attempt login
+//after successful login it sends an acknowledgement and
+//establishes a connection and maps  the connection id
+//and protocol used
+
+func (t *TcpHandler) HandleConnection(conn net.Conn) {
+var remoteAddr = conn.RemoteAddr().String()
+
+defer func(conn net.Conn) {
+err := conn.Close()
+if err != nil {
+
+}
+}(conn)
+
+defer func() {
+delete(t.connToProtocolMap, remoteAddr)
+delete(t.connToStoreMap, remoteAddr)
+for imei, info := range t.imeiToConnMap {
+if info.Conn == conn {
+delete(t.imeiToConnMap, imei)
+break
+}
+}
+}()
+
+reader := bufio.NewReader(conn)
+deviceProtocol, ack, err := t.attemptDeviceLogin(reader)
+if err != nil {
+logger.Error("failed to identify device", zap.String("remoteAddr", remoteAddr), zap.Error(err))
+return
+}
+logger.Sugar().Info("we have done login")
+t.connToProtocolMap[remoteAddr] = deviceProtocol
+deviceID := deviceProtocol.GetDeviceID()
+
+// Store the IMEI, connection, and protocol type in the combined map
+if deviceID != "" {
+t.imeiToConnMap[deviceID] = DeviceConnectionInfo{
+Conn:     conn,
+Protocol: deviceProtocol,
+}
+logger.Sugar().Infof("Mapped deviceID %s to connection %v and protocol %v", deviceID, conn.RemoteAddr().String(), deviceProtocol)
+}
+logger.Sugar().Info("creating data store")
+dataStore := t.makeAsyncStore(deviceProtocol)
+logger.Sugar().Info("running a go routine to start process")
+go dataStore.Process()
+logger.Sugar().Info("running a go routine to start response process")
+go dataStore.Response()
+defer func() { dataStore.GetCloseChan() <- true }()
+
+t.connToStoreMap[remoteAddr] = dataStore
+_, err = conn.Write(ack)
+if err != nil {
+logger.Error("Error while writing login ack", zap.Error(err))
+return
+}
+
+err = deviceProtocol.ConsumeStream(reader, conn, dataStore)
+if err != nil && err != io.EOF {
+logger.Error("Failure while reading from stream", zap.String("remoteAddr", remoteAddr), zap.Error(err))
+return
+} else if err == io.EOF {
+logger.Sugar().Infof("Connection %s closed", conn.RemoteAddr().String())
+return
+}
+}
+
+//this function verify the device info so that no unauthorized person can login to the system
+func (t *TcpHandler) VerifyDevice(deviceID string, detectedProtocol types.DeviceProtocolType) (types.DeviceType, error) {
+if t.storeType == "local" {
+return devices.GetDeviceTypesForProtocol(detectedProtocol)[0], nil
+} else {
+req := store.VerifyDeviceRequest{Imei: deviceID}
+reply, err := t.remoteStoreClient.VerifyDevice(context.Background(), &req)
+if err != nil {
+logger.Error("Failed to verify device", zap.String("deviceID", deviceID), zap.String("detectedProtocol", detectedProtocol.String()), zap.Error(err))
+return 0, err
+}
+
+if reply.GetImei() != deviceID ||
+!slices.Contains(devices.GetDeviceTypesForProtocol(detectedProtocol), reply.GetDeviceType()) {
+return 0, errs.ErrUnauthorizedDevice
+}
+return reply.GetDeviceType(), nil
+}
+}
+
+//this function attempts login of device and if there is a successful connection.
+func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.DeviceProtocol, ack []byte, err error) {
+defer func() {
+if r := recover(); r != nil {
+logger.Sugar().Error("Panic occurred during protocol login: ", r)
+err = fmt.Errorf("panic occurred during protocol login: %v", r)
+}
+}()
+
+for _, protocolType := range t.allowedProtocols {
+logger.Sugar().Info("Attempting device login with ProtocolType: ", protocolType)
+protocol = devices.MakeProtocolForType(protocolType)
+logger.Sugar().Info("Created Protocol: ", protocol)
+
+if protocol == nil {
+logger.Sugar().Error("Unsupported ProtocolType: ", protocolType)
+continue
+}
+
+logger.Sugar().Info("Attempting to login with protocol: ", protocolType)
+ack, bytesToSkip, err := protocol.Login(reader)
+logger.Sugar().Infof("Acknowledgement: %v for bytes to skip: %d and error: %v", ack, bytesToSkip, err)
+
+if err != nil {
+if errors.Is(err, errs.ErrUnknownProtocol) {
+logger.Sugar().Error("Unknown protocol error: ", err)
+continue // try another device
+}
+logger.Sugar().Error("Error during login: ", err)
+return nil, nil, err
+}
+
+// Only call GetDeviceID after a successful login
+deviceID := protocol.GetDeviceID()
+logger.Sugar().Infof("Device ID: %s", deviceID)
+
+if deviceID == "" {
+logger.Error("Device ID is empty after successful login")
+continue
+}
+
+logger.Info("Device identified", zap.String("protocol", protocolType.String()), zap.String("deviceID", deviceID), zap.Int("bytesToSkip", bytesToSkip))
+if _, err := reader.Discard(bytesToSkip); err != nil {
+logger.Sugar().Error("Error discarding bytes: ", err)
+return nil, nil, err
+}
+
+deviceType, err := t.VerifyDevice(deviceID, protocol.GetProtocolType())
+logger.Sugar().Info("device Type: ", deviceType, " error: ", err)
+if err != nil {
+if errors.Is(err, errs.ErrUnauthorizedDevice) {
+logger.Error("Device is not authorized", zap.String("deviceID", deviceID), zap.String("protocolType", protocol.GetProtocolType().String()))
+return nil, nil, err
+}
+logger.Sugar().Error("Error verifying device: ", err)
+return nil, nil, err
+}
+
+protocol.SetDeviceType(deviceType)
+logger.Info("Login successful", zap.String("deviceID", deviceID), zap.String("deviceType", deviceType.String()))
+return protocol, ack, nil
+}
+
+logger.Sugar().Error("All protocols failed, unknown device type")
+return nil, nil, errs.ErrUnknownDeviceType
+}
+    LOGGER FILE
+//it helps in converting the data more in human-readable form
+func zapLogger() *zap.Logger {
+logger, _ := zap.NewDevelopment(
+//zap.AddStacktrace(zap.PanicLevel)
+)
+return logger
+}
+    RECIEVER FILE
+//This function establish connection on grpc server as it is fast
+    func startGrpcServer(port int, tcpHandler *handlers.TcpHandler) {
+listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+if err != nil {
+logger.Sugar().Fatalf("Failed to listen on port %d: %v", port, err)
+}
+s := grpc.NewServer()
+serverInstance := &server{
+tcpHandler: tcpHandler,
+}
+
+store.RegisterAvlReceiverServiceServer(s, serverInstance)
+
+logger.Sugar().Infof("gRPC server listening on port %d", port)
+if err := s.Serve(listener); err != nil {
+logger.Sugar().Fatalf("Failed to serve gRPC on port %d: %v", port, err)
+}
+}
+
+
+//this function control all the commands that are to be send to the device if there is any need
+func (s *server) SendCommand(ctx context.Context, req *store.SendCommandRequestAVL) (*store.SendCommandResponseAVL, error) {
+// Access the imeiToConnMap through the TcpHandler
+info, exists := s.tcpHandler.GetConnInfoByIMEI(req.Imei)
+if !exists {
+return &store.SendCommandResponseAVL{
+Success: false,
+Message: "Device not found",
+}, nil
+}
+
+conn := info.Conn
+protocol := info.Protocol
+
+logger.Sugar().Infof("Sending command to remote device %s", conn.RemoteAddr().String())
+logger.Sugar().Info("protocol: ", protocol)
+// Prepare to send the command to the device
+writer := bufio.NewWriter(conn) // You can adjust this as needed
+err := protocol.SendCommandToDevice(writer, req.Command)
+if err != nil {
+return &store.SendCommandResponseAVL{
+Success: false,
+Message: "Failed to send command: " + err.Error(),
+}, nil
+}
+
+// Flush the writer to ensure the command is sent
+if err := writer.Flush(); err != nil {
+return &store.SendCommandResponseAVL{
+Success: false,
+Message: "Failed to flush writer: " + err.Error(),
+}, nil
+}
+
+return &store.SendCommandResponseAVL{
+Success: true,
+Message: "Command sent successfully",
+}, nil
+}
