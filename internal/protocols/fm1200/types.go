@@ -140,7 +140,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Odometer = int32(r.Record.IOElement.Properties4B[TIO_OdmTotalMileage])
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
-	info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature]) ||  float32(r.Record.IOElement.Properties1B[TIO_AmbientAirTemperature])
+	info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature]) ||  (float32(r.Record.IOElement.Properties1B[TIO_AmbientAirTemperature]) * 10)
 	info.FuelLtr = int32(r.Record.IOElement.Properties4B[TIO_FuelLevel] / 10)
 	// Check if the iButtonID is available, otherwise use RFID
 	if iButtonID, exists := r.Record.IOElement.Properties8B[TIO_IButtonID]; exists && iButtonID != 0 {
