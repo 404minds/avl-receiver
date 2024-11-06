@@ -233,7 +233,6 @@ func (x *DeviceStatus) GetTemperature() float32 {
 	return 0
 }
 
-
 func (x *DeviceStatus) GetOdometer() int32 {
 	if x != nil {
 		return x.Odometer
