@@ -1,0 +1,23 @@
+AVL receiver works is device that is used to track the information about the device and
+monitor the important parts of vehicle.
+
+First it establish a connection with a consumer vehicle by a tcp protocols.
+there are three major protocols that are used to establish a hand shake connection.
+Telefonica devices uses fm1200 protocol but there are two more protocols gt06 and tr06
+for establishing a connection.
+
+ Imei unique id is sent by the consumer and is verified by the the protocol and if the user
+ is authenticated the acknowledgement is sent to the consumer that the connection is
+ been established.
+
+ After establishing a connection TCP protocol gets the information of the device  like
+ vehicle type and name. after getting some information about the device the fm1200 tries
+ to get data byte with the codec length which tell about the length of the data packet
+ and if the data is sent by the consumer or is going to be sent to the consumer by codec id.
+
+ TCPHandler handles all the information like which type of protocol is being used,
+  attempts login with the device and if the user is authorized or not and device
+  identification too.
+
+  Codec-id tell about how many package are of data and which type of packet length
+  contain which type of data.  
