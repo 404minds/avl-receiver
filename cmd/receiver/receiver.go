@@ -73,7 +73,6 @@ func main() {
 	remoteStoreClient := store.NewCustomAvlDataStoreClient(storeConn)
 	tcpHandler := handlers.NewTcpHandler(*remoteStoreClient, *storeType)
 
-	logger.Sugar().Info(tcpHandler.GetConnInfoByIMEI("867440066302308"))
 	// Start TCP Server
 	go func() {
 		listener, err := net.Listen("tcp4", fmt.Sprintf(":%d", *port))
