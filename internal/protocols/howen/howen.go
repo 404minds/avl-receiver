@@ -4,13 +4,11 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/pkg/errors"
-	"go.uber.org/zap"
-
 	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
 	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/404minds/avl-receiver/internal/types"
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 	"io"
 )
 
@@ -52,44 +50,51 @@ func (p *HOWENWS) SendCommandToDevice(writer io.Writer, command string) error {
 
 func (p *HOWENWS) ConsumeConnection(conn *websocket.Conn, dataStore store.Store) error {
 
-	err := p.ConsumeMessage(conn, dataStore)
-	if err != nil {
-		return err
-	}
+	for {
+		err := p.ConsumeMessage(conn, dataStore)
+		logger.Sugar().Info(err)
+		if err != nil {
+			return err
+		}
 
-	return nil
+		return nil
+	}
 }
 
 func (p *HOWENWS) ConsumeMessage(conn *websocket.Conn, dataStore store.Store) error {
 	for {
+		// Read message from WebSocket
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			return errors.Wrap(err, "error reading WebSocket message")
+			logger.Sugar().Info("consumer message", err)
+			return errors.Wrap(err, "error reading WebSocket message: ")
 		}
+
+		logger.Sugar().Info(string(message))
 
 		// Unmarshal the message to check the action type
 		var actionData ActionData
 		if err := json.Unmarshal(message, &actionData); err != nil {
-			return errors.Wrap(err, "error unmarshaling action data")
+			return errors.Wrap(err, "error unmarshaling action data: ")
 		}
 
-		// Handle the message in a new goroutine to avoid blocking
-
+		// Check if action type is 80003 (GPS data)
 		if actionData.Action == "80003" {
+			// Parse the GPS data
+
 			gpsPacket, err := p.parseGPSPacket(message)
 			if err != nil {
-				logger.Error("error parsing GPS packet:", zap.Error(err))
-				return err
+				return errors.Wrap(err, "error parsing GPS packet: ")
 			}
 			asyncStore := dataStore.GetProcessChan()
 			protoReply := gpsPacket.ToProtobufDeviceStatusGPS()
 			asyncStore <- *protoReply
+			// Process the parsed GPS packet (e.g., save to dataStore)
 		} else if actionData.Action == "80004" {
 			logger.Sugar().Infof("Alarm data received")
 		} else {
 			logger.Sugar().Infof("Unhandled action type: %s", actionData.Action)
 		}
-		// pass parameters to avoid race conditions
 	}
 }
 
