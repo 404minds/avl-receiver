@@ -16,3 +16,13 @@ func NewTcpHandler(remoteStoreClient store.CustomAvlDataStoreClient, storeType s
 		imeiToConnMap:     make(map[string]DeviceConnectionInfo),
 	}
 }
+
+func NewWebSocketHandler(remoteStoreClient store.CustomAvlDataStoreClient, storeType string) WebSocketHandler {
+	return WebSocketHandler{
+		connToProtocolMap: make(map[string]protocols.DeviceProtocol),
+		allowedProtocols:  []types.DeviceProtocolType{types.DeviceProtocolType_HOWENWS},
+		remoteStoreClient: remoteStoreClient,
+		storeType:         storeType,
+		connToStoreMap:    make(map[string]store.Store),
+	}
+}

@@ -2,10 +2,17 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/gorilla/websocket"
+	"io/ioutil"
+	"log"
 	"net"
+	"net/http"
 	"os"
 	"time"
 
@@ -72,7 +79,7 @@ func main() {
 
 	remoteStoreClient := store.NewCustomAvlDataStoreClient(storeConn)
 	tcpHandler := handlers.NewTcpHandler(*remoteStoreClient, *storeType)
-
+	websocketHandler := handlers.NewWebSocketHandler(*remoteStoreClient, *storeType)
 	// Start TCP Server
 	go func() {
 		listener, err := net.Listen("tcp4", fmt.Sprintf(":%d", *port))
@@ -97,6 +104,9 @@ func main() {
 
 	// Start gRPC Server
 	go startGrpcServer(*grpcPort, &tcpHandler)
+
+	// Start WebSocket connection for real-time data
+	go startWebSocket(&websocketHandler)
 
 	// Keep the main function running
 	select {}
@@ -139,4 +149,114 @@ func (s *server) SendCommand(ctx context.Context, req *store.SendCommandRequestA
 		Success: true,
 		Message: "Command sent successfully",
 	}, nil
+}
+
+const (
+	httpLoginURL = "https://vss.howentech.com/vss/user/apiLogin.action"
+	wsURL        = "ws://47.252.16.64:36300"
+)
+
+type LoginResponse struct {
+	Status int         `json:"status"`
+	Msg    string      `json:"msg"`
+	Error  interface{} `json:"error"`
+	Data   struct {
+		Token string `json:"token"`
+		PID   string `json:"pid"`
+	} `json:"data"`
+	Count int `json:"count"`
+}
+
+type LoginMessage struct {
+	Action  string `json:"action"`
+	Payload struct {
+		Username string `json:"username"`
+		Token    string `json:"token"`
+		PID      string `json:"pid"`
+	} `json:"payload"`
+}
+
+type SubscribeMessage struct {
+	Action string `json:"action"`
+}
+
+func getAuthToken(username, password string) (string, string, error) {
+	data := "username=" + username + "&password=" + password
+	req, err := http.NewRequest("POST", httpLoginURL, bytes.NewBufferString(data))
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", err
+	}
+
+	var loginResponse LoginResponse
+	err = json.Unmarshal(body, &loginResponse)
+	if err != nil {
+		return "", "", err
+	}
+
+	return loginResponse.Data.Token, loginResponse.Data.PID, nil
+}
+
+func startWebSocket(websockethandler *handlers.WebSocketHandler) {
+	token, pid, err := getAuthToken("INEITest", "964b4035ac5a3987036692d517eaf7fb")
+	if err != nil {
+		log.Fatal("Error during HTTP login:", err)
+		return
+	}
+
+	logger.Sugar().Info("token: ", token)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		log.Fatal("Error connecting to WebSocket:", err)
+		return
+	}
+	defer conn.Close()
+
+	// Send login message using WebSocket
+	login := LoginMessage{
+		Action: "80000",
+		Payload: struct {
+			Username string `json:"username"`
+			Token    string `json:"token"`
+			PID      string `json:"pid"`
+		}{
+			Username: "INEITest",
+			Token:    token,
+			PID:      pid,
+		},
+	}
+	if err := conn.WriteJSON(login); err != nil {
+		log.Fatal("Error sending login message:", err)
+	}
+	log.Println("Login message sent")
+
+	// Wait before sending the subscription message
+	//time.Sleep(25 * time.Minute)
+
+	// Send subscription message
+	//subscribe := SubscribeMessage{Action: "80001"}
+	//if err := conn.WriteJSON(subscribe); err != nil {
+	//	log.Fatal("Error sending subscription message:", err)
+	//}
+	//log.Println("Subscription message sent")
+
+	// Listen for incoming messages
+
+	go websockethandler.HandleMessage(conn)
+
 }

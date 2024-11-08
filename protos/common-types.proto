@@ -10,12 +10,14 @@ enum DeviceType {
     TELTONIKA = 0;
     WANWAY = 1;
     CONCOX = 2;
+    HOWEN  = 3;
 }
 
 enum DeviceProtocolType {
     FM1200 = 0;
     GT06 = 1;
     TR06 = 2;
+    HOWENWS =3;
 }
 
 message DeviceStatus {
@@ -36,6 +38,7 @@ message DeviceStatus {
         WanwayPacket wanway_packet = 14;
         TeltonikaPacket teltonika_packet = 15;
         ConcoxPacket  concox_packet = 16;
+        HowenPacket   howen_packet = 17;
     }
 }
 
@@ -65,6 +68,11 @@ message TeltonikaPacket {
 message ConcoxPacket{
     bytes raw_data = 1;
 }
+
+message HowenPacket{
+    bytes raw_data = 1;
+}
+
 
 message DeviceResponse {
     string imei = 1;

@@ -3,6 +3,7 @@ module github.com/404minds/avl-receiver
 go 1.22.0
 
 require (
+	github.com/gorilla/websocket v1.5.3
 	github.com/pkg/errors v0.9.1
 	go.uber.org/zap v1.26.0
 	google.golang.org/grpc v1.64.0
