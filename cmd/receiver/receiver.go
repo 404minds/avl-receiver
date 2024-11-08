@@ -106,7 +106,7 @@ func main() {
 	go startGrpcServer(*grpcPort, &tcpHandler)
 
 	// Start WebSocket connection for real-time data
-	//go startWebSocket(&websocketHandler)
+	go startWebSocket(&websocketHandler)
 
 	// Keep the main function running
 	select {}
@@ -243,7 +243,8 @@ func startWebSocket(websockethandler *handlers.WebSocketHandler) {
 		log.Fatal("Error sending login message:", err)
 	}
 	logger.Sugar().Info("Login message sent")
-
+	_, message, err := conn.ReadMessage()
+	logger.Sugar().Info(string(message))
 	// Wait before sending the subscription message
 	//time.Sleep(25 * time.Minute)
 
@@ -256,6 +257,8 @@ func startWebSocket(websockethandler *handlers.WebSocketHandler) {
 
 	// Listen for incoming messages
 
-	go websockethandler.HandleMessage(conn)
+	for {
+		websockethandler.HandleMessage(conn)
+	}
 
 }

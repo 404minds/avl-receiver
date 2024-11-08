@@ -49,7 +49,7 @@ func (p *HOWENWS) SendCommandToDevice(writer io.Writer, command string) error {
 }
 
 func (p *HOWENWS) ConsumeConnection(conn *websocket.Conn, dataStore store.Store) error {
-
+	logger.Sugar().Info("consume connection called")
 	for {
 		err := p.ConsumeMessage(conn, dataStore)
 		logger.Sugar().Info(err)
@@ -75,7 +75,7 @@ func (p *HOWENWS) ConsumeMessage(conn *websocket.Conn, dataStore store.Store) er
 		// Unmarshal the message to check the action type
 		var actionData ActionData
 		if err := json.Unmarshal(message, &actionData); err != nil {
-			return errors.Wrap(err, "error unmarshaling action data: ")
+			return errors.Wrap(err, "error un marshaling action data: ")
 		}
 
 		// Check if action type is 80003 (GPS data)
