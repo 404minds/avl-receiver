@@ -7,6 +7,7 @@ import (
 	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/404minds/avl-receiver/internal/types"
 	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
 	"os"
 	"sync"
 )
@@ -38,9 +39,13 @@ func (w *WebSocketHandler) HandleMessage(conn *websocket.Conn) {
 	//w.connToStoreMap[remoteAddr] = dataStore
 
 	err := deviceProtocol.ConsumeConnection(conn, dataStore)
+	_, message, err := conn.ReadMessage()
 	if err != nil {
-		logger.Sugar().Error(err)
+		logger.Error("Read error:", zap.Error(err))
+		return
 	}
+
+	logger.Sugar().Info("Received message:", string(message))
 
 }
 
