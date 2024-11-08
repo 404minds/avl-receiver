@@ -256,8 +256,7 @@ func startWebSocket(websockethandler *handlers.WebSocketHandler) {
 	//log.Println("Subscription message sent")
 
 	// Listen for incoming messages
-	for {
 
-		websockethandler.HandleMessage(conn)
-	}
+	go websockethandler.HandleMessage(conn)
+
 }

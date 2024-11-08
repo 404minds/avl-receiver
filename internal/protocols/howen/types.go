@@ -2,17 +2,26 @@ package howen
 
 // Import necessary packages
 import (
+	"encoding/json"
+	"github.com/404minds/avl-receiver/internal/types"
+	"google.golang.org/protobuf/types/known/timestamppb"
+	"strconv"
 	_ "time"
 )
 
-// ActionData represents different types of actions, such as login, subscription, GPS data, alarm data, and status.
-type ActionData struct {
+// Actionrepresents different types of actions, such as login, subscription, GPS data, alarm data, and status.
+type Action struct {
 	Type      string         `json:"type"`                // e.g., "80000", "80001", "80003", etc.
 	Login     *LoginData     `json:"login,omitempty"`     // For action "80000"
 	Subscribe *SubscribeData `json:"subscribe,omitempty"` // For action "80001"
 	GPS       *GPSData       `json:"gps,omitempty"`       // For action "80003"
 	Alarm     *AlarmData     `json:"alarm,omitempty"`     // For action "80004"
 	Status    *StatusData    `json:"status,omitempty"`    // For action "80005"
+}
+
+type ActionData struct {
+	Action  string  `json:"action"`
+	Payload Payload `json:"payload"`
 }
 
 // LoginData holds login information.
@@ -182,12 +191,6 @@ type Payload struct {
 	Ext        Extra             `json:"ext"`
 }
 
-// GPSPacket represents a GPS data packet.
-type GPSPacket struct {
-	Action  string  `json:"action"`
-	Payload Payload `json:"payload"`
-}
-
 // AlarmPayload represents payload data for alarms.
 type AlarmPayload struct {
 	GSensor     GSensor           `json:"gsensor"`
@@ -222,6 +225,12 @@ type AlarmMessage struct {
 	Payload AlarmPayload `json:"payload"`
 }
 
+// GPSPacket represents a GPS data packet.
+type GPSPacket struct {
+	Action  string  `json:"action"`
+	Payload Payload `json:"payload"`
+}
+
 // DeviceStatus represents the status of a device.
 type DeviceStatus struct {
 	Action  string        `json:"action"`
@@ -254,33 +263,77 @@ type Extra struct {
 	// Add any other fields that `Extra` should contain
 }
 
-//func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
-//	info := &types.DeviceStatus{}
-//
-//	info.Imei = r.IMEI
-//	info.DeviceType = types.DeviceType_HOWEN
-//	info.Timestamp = timestamppb.New(time.Unix(int64(r.Record.Timestamp), 0))
-//
-//	// GPS Information
-//	info.Position = &types.GPSPosition{}
-//	info.Position.Latitude = r.Record.GPSElement.Latitude
-//	info.Position.Longitude = r.Record.GPSElement.Longitude
-//	info.Position.Altitude = float32(r.Record.GPSElement.Altitude)
-//	var speed = float32(r.Record.GPSElement.Speed)
-//	info.Position.Speed = &speed
-//	info.Position.Course = float32(r.Record.GPSElement.Angle)
-//	info.Position.Satellites = int32(r.Record.GPSElement.Satellites)
-//
-//	// Additional Fields (replace these based on Howen-specific mappings)
-//	info.FuelLtr = int32(r.Record.FuelLevel)
-//	info.Rpm = int32(r.Record.EngineRpm)
-//	info.BatteryLevel = int32(r.Record.BatteryVoltage / 42)
-//
-//	// Device-specific raw data
-//	rawdata, _ := json.Marshal(r)
-//	info.RawData = &types.DeviceStatus_HowenPacket{
-//		HowenPacket: &types.HowenPacket{RawData: rawdata},
-//	}
-//
-//	return info
-//}
+func (p *GPSPacket) ToProtobufDeviceStatusGPS() *types.DeviceStatus {
+	info := &types.DeviceStatus{}
+
+	// Fill common device information
+	info.Imei = p.Payload.DeviceID
+	info.DeviceType = types.DeviceType_HOWEN
+	info.Timestamp = timestamppb.Now() // Or use a specific timestamp from p.Payload
+
+	// Populate GPS-specific data
+	info.Position = &types.GPSPosition{
+		Latitude:  parseToFloat32(p.Payload.Location.Latitude),
+		Longitude: parseToFloat32(p.Payload.Location.Longitude),
+		Altitude:  parseToFloat32(p.Payload.Location.Altitude),
+	}
+	speed := parseToFloat32(p.Payload.Location.Speed)
+	info.Position.Speed = &speed
+	info.Position.Satellites = parseToInt32(p.Payload.Location.Satellites)
+
+	// Populate additional fields (adjust these based on Howen-specific data mappings)
+	info.BatteryLevel = int32(parseToFloat32(p.Payload.Voltage.Bat) * 100 / 12)
+	info.FuelLtr = int32(parseToFloat32(p.Payload.Fuel["total"]))
+	info.Rpm = int32(parseToFloat32(p.Payload.Module.Mobile))
+	info.Odometer = int32(parseToFloat32(p.Payload.Mileage.Total))
+
+	// Device-specific raw data
+	rawdata, _ := json.Marshal(p)
+	info.RawData = &types.DeviceStatus_HowenPacket{
+		HowenPacket: &types.HowenPacket{RawData: rawdata},
+	}
+
+	return info
+}
+
+// Convert AlarmMessage data to DeviceStatus protobuf struct.
+
+func (a *AlarmMessage) ToProtobufDeviceStatusAlarm() *types.DeviceStatus {
+	info := &types.DeviceStatus{}
+
+	// Fill common device information
+	info.Imei = a.Payload.DeviceID
+	info.DeviceType = types.DeviceType_HOWEN
+	info.Timestamp = timestamppb.Now() // Or use a specific timestamp from a.Payload
+
+	// Populate alarm-specific fields
+
+	// Device-specific raw data
+	rawdata, _ := json.Marshal(a)
+	info.RawData = &types.DeviceStatus_HowenPacket{
+		HowenPacket: &types.HowenPacket{RawData: rawdata},
+	}
+
+	return info
+}
+
+func parseToFloat32(value string) float32 {
+	if value == "" {
+		return 0
+	}
+	f, err := strconv.ParseFloat(value, 32)
+	if err != nil {
+		logger.Sugar().Info("error parsing float32: %v\n", err)
+		return 0
+	}
+	return float32(f)
+}
+
+func parseToInt32(value string) int32 {
+	i, err := strconv.Atoi(value)
+	if err != nil {
+		logger.Sugar().Info("error parsing int32: %v\n", err)
+		return 0
+	}
+	return int32(i)
+}
