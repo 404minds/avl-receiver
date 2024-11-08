@@ -54,9 +54,9 @@ func GetDeviceTypesForProtocol(t types.DeviceProtocolType) []types.DeviceType {
 	case types.DeviceProtocolType_FM1200:
 		return []types.DeviceType{types.DeviceType_TELTONIKA}
 	case types.DeviceProtocolType_GT06:
-		return []types.DeviceType{types.DeviceType_CONCOX}
+		return []types.DeviceType{types.DeviceType_CONCOX, types.DeviceType_WANWAY}
 	case types.DeviceProtocolType_TR06:
-		return []types.DeviceType{types.DeviceType_WANWAY}
+		return []types.DeviceType{types.DeviceType_WANWAY, types.DeviceType_CONCOX}
 	case types.DeviceProtocolType_HOWENWS:
 		return []types.DeviceType{types.DeviceType_HOWEN}
 	default:
