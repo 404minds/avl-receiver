@@ -286,7 +286,7 @@ func (p *GPSPacket) ToProtobufDeviceStatusGPS() *types.DeviceStatus {
 	info.FuelLtr = int32(parseToFloat32(p.Payload.Fuel["total"]))
 	info.Rpm = int32(parseToFloat32(p.Payload.Module.Mobile))
 	info.Odometer = int32(parseToFloat32(p.Payload.Mileage.Total))
-
+	info.VehicleStatus.Ignition = parseIgnition(parseToFloat32(p.Payload.Basic.Key))
 	// Device-specific raw data
 	rawdata, _ := json.Marshal(p)
 	info.RawData = &types.DeviceStatus_HowenPacket{
@@ -336,4 +336,9 @@ func parseToInt32(value string) int32 {
 		return 0
 	}
 	return int32(i)
+}
+
+func parseIgnition(value float32) *bool {
+	ignition := value == 1.0 // true if value is 1.0, false otherwise
+	return &ignition
 }
