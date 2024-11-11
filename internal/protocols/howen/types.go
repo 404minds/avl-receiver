@@ -286,7 +286,11 @@ func (p *GPSPacket) ToProtobufDeviceStatusGPS() *types.DeviceStatus {
 	info.FuelLtr = int32(parseToFloat32(p.Payload.Fuel["total"]))
 	info.Rpm = int32(parseToFloat32(p.Payload.Module.Mobile))
 	info.Odometer = int32(parseToFloat32(p.Payload.Mileage.Total))
-	info.VehicleStatus.Ignition = parseIgnition(parseToFloat32(p.Payload.Basic.Key))
+
+	info.VehicleStatus = &types.VehicleStatus{
+		Ignition: parseIgnition(parseToFloat32(p.Payload.Basic.Key)),
+	}
+
 	// Device-specific raw data
 	rawdata, _ := json.Marshal(p)
 	info.RawData = &types.DeviceStatus_HowenPacket{
