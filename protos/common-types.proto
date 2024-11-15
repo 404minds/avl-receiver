@@ -59,6 +59,7 @@ message VehicleStatus {
     bool unplug_battery = 5;
     bool towing = 6;
     bool auto_geofence = 7;
+    bool excessive_idling = 8;
 }
 
 message WanwayPacket {
