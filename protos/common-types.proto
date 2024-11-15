@@ -53,7 +53,7 @@ message GPSPosition {
 
 message VehicleStatus {
     optional bool ignition = 1;
-    bool overspeeding = 2;
+    bool over_speeding = 2;
     bool rash_driving = 3;
     int32 crash_detection = 4;
     bool unplug_battery = 5;

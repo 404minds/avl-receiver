@@ -316,11 +316,11 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 	case *PositioningInformation:
 		var ignition = v.ACCHigh
 		info.VehicleStatus.Ignition = &ignition
-		info.VehicleStatus.Overspeeding = false
+		info.VehicleStatus.OverSpeeding = false
 	case *AlarmInformation:
 		var ignition = v.StatusInformation.TerminalInformation.ACCHigh
 		info.VehicleStatus.Ignition = &ignition
-		info.VehicleStatus.Overspeeding = v.StatusInformation.Alarm == ALV_OverSpeed
+		info.VehicleStatus.OverSpeeding = v.StatusInformation.Alarm == ALV_OverSpeed
 	case *HeartbeatData:
 
 	default:

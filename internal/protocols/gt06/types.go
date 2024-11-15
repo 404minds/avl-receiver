@@ -329,7 +329,7 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 		// Set ignition and alarm status
 		ignition = v.StatusInformation.TerminalInformation.ACCHigh
 		info.VehicleStatus.Ignition = &ignition
-		info.VehicleStatus.Overspeeding = v.StatusInformation.Alarm == ALV_OverSpeed
+		info.VehicleStatus.OverSpeeding = v.StatusInformation.Alarm == ALV_OverSpeed
 
 		// Set battery and GSM signal
 		info.BatteryLevel = resolveBatteryLevel(int32(v.StatusInformation.BatteryLevel))

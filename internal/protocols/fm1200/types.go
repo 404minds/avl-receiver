@@ -165,7 +165,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.VehicleStatus.AutoGeofence = r.Record.IOElement.Properties1B[TIO_AutoGeofence] > 0
 	info.VehicleStatus.Towing = r.Record.IOElement.Properties1B[TIO_Towing] > 0
 	info.VehicleStatus.UnplugBattery = r.Record.IOElement.Properties1B[TIO_Unplug] > 0
-	info.VehicleStatus.Overspeeding = r.Record.IOElement.Properties1B[TIO_Overspeeding] > 0
+	info.VehicleStatus.OverSpeeding = r.Record.IOElement.Properties1B[TIO_Overspeeding] > 0
 	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
 	info.VehicleStatus.CrashDetection = int32(r.Record.IOElement.Properties1B[TIO_CrashDetection])
 
