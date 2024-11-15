@@ -115,7 +115,7 @@ const (
 	TIO_Towing                        = 246
 	TIO_CrashDetection                = 247
 	TIO_TripMode                      = 250
-	TIO_Idling                        = 251
+	TIO_ExcessiveIdling               = 251
 	TIO_Unplug                        = 252
 	TIO_GreenDrivingStatus            = 253
 	TIO_GreenDrivingValue             = 254
@@ -168,7 +168,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.VehicleStatus.OverSpeeding = r.Record.IOElement.Properties1B[TIO_Overspeeding] > 0
 	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
 	info.VehicleStatus.CrashDetection = int32(r.Record.IOElement.Properties1B[TIO_CrashDetection])
-
+	info.VehicleStatus.ExcessiveIdling = r.Record.IOElement.Properties1B[TIO_ExcessiveIdling] > 0
 	info.Rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM])
 	info.Vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN])
 	//battery level
