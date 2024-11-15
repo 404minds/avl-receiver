@@ -81,46 +81,49 @@ const (
 	TIO_DigitalInput2                 = 2
 	TIO_DigitalInput3                 = 3
 	TIO_AnalogInput                   = 9
-	TIO_PCBTemperature                = 70
-	TIO_DigitalOutput1                = 179
-	TIO_DigitalOutput2                = 180
-	TIO_GPSPDOP                       = 181
-	TIO_GPSHDOP                       = 182
-	TIO_ExternalVoltage               = 66
-	TIO_GPSPower                      = 69
-	TIO_Ignition                      = 239
-	TIO_MovementSensor                = 240
 	TIO_OdometerValue                 = 16
-	TIO_OdmTotalMileage               = 389
-	TIO_FuelLevel                     = 390
-	TIO_TripOdometerValue             = 199
-	TIO_GSMOperator                   = 241
-	TIO_Speed                         = 24
-	TIO_IButtonID                     = 78
-	TIO_RFID                          = 207
-	TIO_WorkingMode                   = 80
 	TIO_GSMSignal                     = 21
-	TIO_SleepMode                     = 200
-	TIO_CellID                        = 205
-	TIO_AreaCode                      = 206
-	TIO_DallasTemperature             = 72
+	TIO_Speed                         = 24
+	TIO_RPM                           = 36
+	TIO_AmbientTemperature            = 53
+	TIO_ExternalVoltage               = 66
 	TIO_BatteryVoltage                = 67
 	TIO_BatteryCurrent                = 68
-	TIO_AutoGeofence                  = 175
+	TIO_GPSPower                      = 69
+	TIO_PCBTemperature                = 70
+	TIO_DallasTemperature             = 72
+	TIO_IButtonID                     = 78
+	TIO_WorkingMode                   = 80
 	TIO_Geozone1                      = 155
 	TIO_Geozone2                      = 156
 	TIO_Geozone3                      = 157
 	TIO_Geozone4                      = 158
 	TIO_Geozone5                      = 159
+	TIO_AutoGeofence                  = 175
+	TIO_DigitalOutput1                = 179
+	TIO_DigitalOutput2                = 180
+	TIO_GPSPDOP                       = 181
+	TIO_GPSHDOP                       = 182
+	TIO_TripOdometerValue             = 199
+	TIO_SleepMode                     = 200
+	TIO_CellID                        = 205
+	TIO_AreaCode                      = 206
+	TIO_RFID                          = 207
+	TIO_Ignition                      = 239
+	TIO_MovementSensor                = 240
+	TIO_GSMOperator                   = 241
+	TIO_Towing                        = 246
+	TIO_CrashDetection                = 247
 	TIO_TripMode                      = 250
-	TIO_Immobilizer                   = 251
-	TIO_AuthorizedDriving             = 252
+	TIO_Idling                        = 251
+	TIO_Unplug                        = 252
 	TIO_GreenDrivingStatus            = 253
 	TIO_GreenDrivingValue             = 254
 	TIO_Overspeeding                  = 255
 	TIO_VIN                           = 256
-	TIO_RPM                           = 36
-	TIO_AmbientTemperature            = 53
+	TIO_CrashTraceData                = 257
+	TIO_OdmTotalMileage               = 389
+	TIO_FuelLevel                     = 390
 )
 
 func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
@@ -155,13 +158,17 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	} else {
 		info.IdentificationId = ""
 	}
-	// vehicle info
+	// vehicle status
 	info.VehicleStatus = &types.VehicleStatus{}
 	var ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0 || r.Record.IOElement.Properties1B[TIO_Ignition] > 0
 	info.VehicleStatus.Ignition = &ignition
-
+	info.VehicleStatus.AutoGeofence = r.Record.IOElement.Properties1B[TIO_AutoGeofence] > 0
+	info.VehicleStatus.Towing = r.Record.IOElement.Properties1B[TIO_Towing] > 0
+	info.VehicleStatus.UnplugBattery = r.Record.IOElement.Properties1B[TIO_Unplug] > 0
 	info.VehicleStatus.Overspeeding = r.Record.IOElement.Properties1B[TIO_Overspeeding] > 0
 	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
+	info.VehicleStatus.CrashDetection = int32(r.Record.IOElement.Properties1B[TIO_CrashDetection])
+
 	info.Rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM])
 	info.Vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN])
 	//battery level
