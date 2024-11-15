@@ -158,13 +158,17 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	} else {
 		info.IdentificationId = ""
 	}
-	// vehicle info
+	// vehicle status
 	info.VehicleStatus = &types.VehicleStatus{}
 	var ignition = r.Record.IOElement.Properties1B[TIO_DigitalInput1] > 0 || r.Record.IOElement.Properties1B[TIO_Ignition] > 0
 	info.VehicleStatus.Ignition = &ignition
-
+	info.VehicleStatus.AutoGeofence = r.Record.IOElement.Properties1B[TIO_AutoGeofence] > 0
+	info.VehicleStatus.Towing = r.Record.IOElement.Properties1B[TIO_Towing] > 0
+	info.VehicleStatus.UnplugBattery = r.Record.IOElement.Properties1B[TIO_Unplug] > 0
 	info.VehicleStatus.Overspeeding = r.Record.IOElement.Properties1B[TIO_Overspeeding] > 0
 	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
+	info.VehicleStatus.CrashDetection = int32(r.Record.IOElement.Properties1B[TIO_CrashDetection])
+
 	info.Rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM])
 	info.Vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN])
 	//battery level
