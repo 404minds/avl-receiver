@@ -187,7 +187,7 @@ type Payload struct {
 	Fuel       map[string]string `json:"fuel"`
 	Mobile     map[string]string `json:"mobile"`
 	Wifi       map[string]string `json:"wifi"`
-	Storage    Storage           `json:"storage"`
+	Storage    []Storage         `json:"storage"`
 	Alarm      Alarm             `json:"alarm"`
 	Temp       Temp              `json:"temp"`
 	Mileage    Mileage           `json:"mileage"`
