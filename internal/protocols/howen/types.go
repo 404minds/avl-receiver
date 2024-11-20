@@ -167,6 +167,14 @@ type Basic struct {
 	Key string `json:"key"`
 }
 
+type Storage struct {
+	Name   string `json:"name"`   // Name of the storage device (e.g., "sd1")
+	Index  string `json:"index"`  // Index of the storage device (e.g., "0")
+	Status string `json:"status"` // Status of the storage device (e.g., "1" for active)
+	Total  string `json:"total"`  // Total capacity of the storage in MB or GB (e.g., "7523")
+	Free   string `json:"free"`   // Free space available in MB or GB (e.g., "0")
+}
+
 // Payload represents the main payload structure, holding different device details.
 type Payload struct {
 	DeviceID   string            `json:"deviceID"`
@@ -179,7 +187,7 @@ type Payload struct {
 	Fuel       map[string]string `json:"fuel"`
 	Mobile     map[string]string `json:"mobile"`
 	Wifi       map[string]string `json:"wifi"`
-	Storage    string            `json:"storage"`
+	Storage    Storage           `json:"storage"`
 	Alarm      Alarm             `json:"alarm"`
 	Temp       Temp              `json:"temp"`
 	Mileage    Mileage           `json:"mileage"`
