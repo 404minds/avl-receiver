@@ -58,9 +58,13 @@ func (t *FM1200Protocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip in
 func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, dataStore store.Store) error {
 
 	for {
-		logger.Sugar().Info("entering loop")
+		rawData, err := reader.Peek(500)
+		if err != nil {
+			return err
+		}
+		logger.Sugar().Info("rawData: ", rawData, "rawData String: ", string(rawData))
 
-		err := t.consumeMessage(reader, dataStore, responseWriter)
+		err = t.consumeMessage(reader, dataStore, responseWriter)
 		if err != nil {
 			if err != io.EOF {
 				logger.Error("failed to consume message", zap.Error(err))

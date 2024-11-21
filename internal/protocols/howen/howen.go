@@ -91,7 +91,13 @@ func (p *HOWENWS) ConsumeMessage(conn *websocket.Conn, dataStore store.Store) er
 			asyncStore <- *protoReply
 			// Process the parsed GPS packet (e.g., save to dataStore)
 		} else if actionData.Action == "80004" {
-			logger.Sugar().Infof("Alarm data received")
+			alarmPacket, err := p.parseAlarmMessage(message)
+			if err != nil {
+				return errors.Wrap(err, "error parsing Alarm packet: ")
+			}
+			asyncStore := dataStore.GetProcessChan()
+			protoReply := alarmPacket.ToProtobufDeviceStatusAlarm()
+			asyncStore <- *protoReply
 		} else {
 			logger.Sugar().Infof("Unhandled action type: %s", actionData.Action)
 		}
