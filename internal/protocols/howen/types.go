@@ -177,54 +177,55 @@ type Storage struct {
 
 // Payload represents the main payload structure, holding different device details.
 type Payload struct {
-	DeviceID   string            `json:"deviceID"`
-	NodeID     string            `json:"nodeID"`
-	DTU        string            `json:"dtu"`
-	Location   Location          `json:"location"`
-	GSensor    GSensor           `json:"gsensor"`
-	Basic      Basic             `json:"basic"`
-	Module     Module            `json:"module"`
-	Fuel       map[string]string `json:"fuel"`
-	Mobile     map[string]string `json:"mobile"`
-	Wifi       map[string]string `json:"wifi"`
-	Storage    []Storage         `json:"storage"`
 	Alarm      Alarm             `json:"alarm"`
-	Temp       Temp              `json:"temp"`
-	Mileage    Mileage           `json:"mileage"`
-	Voltage    Voltage           `json:"voltage"`
-	Driver     Driver            `json:"driver"`
+	Basic      Basic             `json:"basic"`
 	Bluetooth  Bluetooth         `json:"bluetooth"`
-	Load       Load              `json:"load"`
+	DeviceID   string            `json:"deviceID"`
 	DeviceTemp DeviceTemp        `json:"deviceTemp"`
+	Driver     Driver            `json:"driver"`
+	DTU        string            `json:"dtu"`
 	Ext        Extra             `json:"ext"`
+	Fuel       map[string]string `json:"fuel"`
+	GSensor    GSensor           `json:"gsensor"`
+	Load       Load              `json:"load"`
+	Location   Location          `json:"location"`
+	Module     Module            `json:"module"`
+	Mileage    Mileage           `json:"mileage"`
+	Mobile     map[string]string `json:"mobile"`
+	NodeID     string            `json:"nodeID"`
+	Storage    []Storage         `json:"storage"`
+	Temp       Temp              `json:"temp"`
+	Voltage    Voltage           `json:"voltage"`
+	Wifi       map[string]string `json:"wifi"`
 }
 
 // AlarmPayload represents payload data for alarms.
 type AlarmPayload struct {
-	GSensor     GSensor           `json:"gsensor"`
-	Fuel        map[string]string `json:"fuel"`
-	IsLater     int               `json:"isLater"`
-	Storage     string            `json:"storage"`
-	Load        Load              `json:"load"`
-	DeviceTemp  DeviceTemp        `json:"deviceTemp"`
-	Payload     PayloadDetail     `json:"payload"`
 	Alarm       Alarm             `json:"alarm"`
-	NodeID      string            `json:"nodeID"`
-	Mileage     Mileage           `json:"mileage"`
-	Wifi        map[string]string `json:"wifi"`
-	Temp        Temp              `json:"temp"`
+	AlarmDetail string            `json:"alarmDetail"`
+	AlarmID     string            `json:"alarmID"`
+	Basic       Basic             `json:"basic"`
+	Bluetooth   Bluetooth         `json:"bluetooth"`
+	DeviceID    string            `json:"deviceID"`
+	DeviceTemp  DeviceTemp        `json:"deviceTemp"`
+	Driver      Driver            `json:"driver"`
 	DTU         string            `json:"dtu"`
+	EventType   string            `json:"eventType"`
+	Fuel        map[string]string `json:"fuel"`
+	GSensor     GSensor           `json:"gsensor"`
+	IsLater     int               `json:"isLater"`
+	Location    Location          `json:"location"`
+	Load        Load              `json:"load"`
+	Mileage     Mileage           `json:"mileage"`
 	Module      Module            `json:"module"`
 	Mobile      map[string]string `json:"mobile"`
-	EventType   string            `json:"eventType"`
-	DeviceID    string            `json:"deviceID"`
-	Bluetooth   Bluetooth         `json:"bluetooth"`
+	NodeID      string            `json:"nodeID"`
+	Payload     PayloadDetail     `json:"payload"`
+	Storage     []Storage         `json:"storage"`
+	Temp        Temp              `json:"temp"`
 	Voltage     Voltage           `json:"voltage"`
-	AlarmDetail string            `json:"alarmDetail"`
-	Driver      Driver            `json:"driver"`
-	AlarmID     string            `json:"alarmID"`
-	Location    Location          `json:"location"`
-	Basic       Basic             `json:"basic"`
+
+	Wifi map[string]string `json:"wifi"`
 }
 
 // AlarmMessage represents an alarm message.
