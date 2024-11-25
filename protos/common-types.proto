@@ -55,11 +55,35 @@ message VehicleStatus {
     optional bool ignition = 1;
     bool over_speeding = 2;
     bool rash_driving = 3;
-    int32 crash_detection = 4;
+    bool crash_detection = 4;
     bool unplug_battery = 5;
     bool towing = 6;
     bool auto_geofence = 7;
     bool excessive_idling = 8;
+    bool route_deviation = 9;
+    bool vibration_detected = 10;             // Vibration sensor triggered
+    bool distance_between_objects = 11;       // Objects too close
+    bool driver_absence = 12;                 // No driver detected
+    bool driver_change = 13;                  // Driver change detected
+    bool driver_distraction = 14;             // Driver distraction event
+    bool entring_geofence = 15;         // Enter or exit geofence
+    bool excessive_driving = 16;              // Excessive driving hours
+    bool excessive_parking = 17;              // Excessive parking detected
+    bool fatigue_driving = 18;                // Fatigue driving
+    bool fuel_refuel = 19;              // Fuel theft or refuel
+    bool tracker_offline = 20;                // Tracker switched off or lost
+    bool inputs_triggering = 21;              // Inputs triggering detected
+    bool outputs_triggering = 22;             // Outputs triggering detected
+    bool parameter_in_range = 23;             // Parameter within range
+    bool parking_state = 24;                  // Parking state detection
+    bool sos_button_pressed = 25;             // SOS button event
+    bool state_field_value_change = 27;       // State field value updated
+    bool task_status_change = 28;             // Task status changed
+    bool exiting_geofence = 29;
+    bool fuel_theft = 30;
+
+
+
 }
 
 message WanwayPacket {
