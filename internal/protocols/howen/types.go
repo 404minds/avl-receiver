@@ -6,6 +6,7 @@ import (
 	"github.com/404minds/avl-receiver/internal/types"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"strconv"
+	"time"
 	_ "time"
 )
 
@@ -193,10 +194,36 @@ type Payload struct {
 	Mileage    Mileage           `json:"mileage"`
 	Mobile     map[string]string `json:"mobile"`
 	NodeID     string            `json:"nodeID"`
+	OBD        []OBD             `json:"obd,omitempty"` // Array of OBD data
 	Storage    []Storage         `json:"storage"`
 	Temp       Temp              `json:"temp"`
 	Voltage    Voltage           `json:"voltage"`
 	Wifi       map[string]string `json:"wifi"`
+}
+
+type OBD struct {
+	TotalMil      int     `json:"totalMil"`      // Total mileage
+	TotalFuel     int     `json:"totalFuel"`     // Total fuel consumed
+	InstanFuel    float64 `json:"instanFuel"`    // Instantaneous fuel consumption
+	Voltage       float64 `json:"voltage"`       // Vehicle voltage
+	RPM           int     `json:"rpm"`           // Engine revolutions per minute
+	Speed         float64 `json:"speed"`         // Vehicle speed in km/h
+	AirShed       float64 `json:"airshed"`       // Air intake flow rate
+	StressMpa     float64 `json:"stressMpa"`     // Air intake pressure in kPa
+	CoolantsTemp  int     `json:"coolantsTemp"`  // Coolant temperature
+	AirTemp       int     `json:"airTemp"`       // Air intake temperature
+	MotorLimit    int     `json:"motorLimit"`    // Engine load in percentage
+	Position      int     `json:"position"`      // Throttle position in percentage
+	EFOA          int     `json:"efoa"`          // Fuel tank level in percentage
+	VIN           string  `json:"vin"`           // Vehicle Identification Number
+	Engine        int     `json:"engine"`        // Engine status (1: ON, 0: OFF)
+	Idle          int     `json:"idle"`          // Idle status (1: Start, 0: End)
+	EngineOnTime  string  `json:"engineOnTime"`  // Engine ON time
+	EngineOffTime string  `json:"engineOffTime"` // Engine OFF time
+	HC            int     `json:"hc"`            // Harsh cornering events
+	HA            int     `json:"ha"`            // Harsh acceleration events
+	HB            int     `json:"hb"`            // Harsh braking events
+	LowBV         int     `json:"lowbv"`         // Battery low voltage (0: No, 1: Yes)
 }
 
 // AlarmPayload represents payload data for alarms.
@@ -220,6 +247,7 @@ type AlarmPayload struct {
 	Module      Module            `json:"module"`
 	Mobile      map[string]string `json:"mobile"`
 	NodeID      string            `json:"nodeID"`
+	OBD         []OBD             `json:"obd,omitempty"` // Array of OBD data
 	Payload     PayloadDetail     `json:"payload"`
 	Storage     []Storage         `json:"storage"`
 	Temp        Temp              `json:"temp"`
@@ -259,6 +287,14 @@ type PayloadDetail struct {
 	ET     string `json:"et"`
 }
 
+type AlarmDetails struct {
+	AlarmID   string    `json:"alarmID"`  // Alarm unique identifier
+	DeviceID  string    `json:"deviceID"` // Device identifier
+	StartTime time.Time `json:"st"`       // Alarm start time
+	EndTime   time.Time `json:"et"`       // Alarm end time
+	Details   string    `json:"det"`      // Detailed alarm information
+}
+
 // Det represents detailed information within PayloadDetail.
 type Det struct {
 	DT  string `json:"dt"`
@@ -281,14 +317,15 @@ func (p *GPSPacket) ToProtobufDeviceStatusGPS() *types.DeviceStatus {
 	info.Timestamp = timestamppb.Now() // Or use a specific timestamp from p.Payload
 
 	// Populate GPS-specific data
-	info.Position = &types.GPSPosition{
-		Latitude:  parseToFloat32(p.Payload.Location.Latitude),
-		Longitude: parseToFloat32(p.Payload.Location.Longitude),
-		Altitude:  parseToFloat32(p.Payload.Location.Altitude),
-	}
 	speed := parseToFloat32(p.Payload.Location.Speed)
-	info.Position.Speed = &speed
-	info.Position.Satellites = parseToInt32(p.Payload.Location.Satellites)
+	info.Position = &types.GPSPosition{
+		Latitude:   parseToFloat32(p.Payload.Location.Latitude),
+		Longitude:  parseToFloat32(p.Payload.Location.Longitude),
+		Altitude:   parseToFloat32(p.Payload.Location.Altitude),
+		Speed:      &speed,
+		Satellites: parseToInt32(p.Payload.Location.Satellites),
+		Course:     parseToFloat32(p.Payload.Location.Direct),
+	}
 
 	// Populate additional fields (adjust these based on Howen-specific data mappings)
 	info.BatteryLevel = int32(parseToFloat32(p.Payload.Voltage.Bat) * 100 / 12)
@@ -317,14 +354,115 @@ func (a *AlarmMessage) ToProtobufDeviceStatusAlarm() *types.DeviceStatus {
 	// Fill common device information
 	info.Imei = a.Payload.DeviceID
 	info.DeviceType = types.DeviceType_HOWEN
-	info.Timestamp = timestamppb.Now() // Or use a specific timestamp from a.Payload
-
-	// Populate alarm-specific fields
+	info.Timestamp = timestamppb.Now() // You may replace this with the event's actual timestamp if available
 
 	// Device-specific raw data
 	rawdata, _ := json.Marshal(a)
 	info.RawData = &types.DeviceStatus_HowenPacket{
 		HowenPacket: &types.HowenPacket{RawData: rawdata},
+	}
+
+	speed := parseToFloat32(a.Payload.Location.Speed)
+	loc := a.Payload.Location
+	// Populate GPS position if available
+	if parseToFloat32(loc.Latitude) != 0 || parseToFloat32(loc.Longitude) != 0 {
+		info.Position = &types.GPSPosition{
+			Latitude:  parseToFloat32(loc.Latitude),
+			Longitude: parseToFloat32(loc.Longitude),
+			Altitude:  parseToFloat32(loc.Altitude),
+			Speed:     &speed,
+			Course:    parseToFloat32(loc.Direct),
+		}
+	}
+
+	// Initialize vehicle status
+	vehicleStatus := &types.VehicleStatus{}
+	vehicleStatus.Ignition = parseIgnition(parseToFloat32(a.Payload.Basic.Key))
+	// Handle event codes (EC)
+	switch a.Payload.Payload.EC {
+	case 217: // Car Crash , impact
+		vehicleStatus.CrashDetection = true
+
+	//case XXX: // Deviation from Route
+	//	info.MessageType = "Deviation from Route"
+
+	case 103: // Distance Between Objects
+		//info.VehicleStatus.DistanceBetweenObjects
+
+	case 126: // Driver Absence
+		//info.VehicleStatus.DriverAbsence
+
+	//case XXX: // Driver Change
+	//	info.MessageType = "Driver Change"
+
+	case 118: // Driver Distraction
+		vehicleStatus.DriverDistraction = true
+
+	case 32: // Engine Excessive Idling
+		vehicleStatus.ExcessiveIdling = true
+
+	case 200: // Entrance  Geofence
+		vehicleStatus.EntringGeofence = true
+	case 201: // Exiting  Geofence
+		vehicleStatus.ExitingGeofence = true
+
+	case 17: // Excessive Driving, fatigue Driving
+		vehicleStatus.FatigueDriving = true
+
+	case 11: // Excessive Parking
+		vehicleStatus.ExcessiveParking = true
+
+	//case 17: // Fatigue Driving
+	//	info.MessageType = "Fatigue Driving"
+
+	case 210: // Fuel Level Change (Refuel)
+		vehicleStatus.FuelRefuel = true
+
+	case 211: // Fuel Level Change (Fuel Theft)
+		vehicleStatus.FuelTheft = true
+
+	case 24, 25, 26, 27, 214, 212, 213: // Harsh Driving
+		vehicleStatus.RashDriving = true
+
+	case 220, 221, 222, 223, 224, 225, 226, 227: // Inputs Triggering
+		vehicleStatus.InputsTriggering = true
+
+	case 228, 229: // Outputs Triggering
+		vehicleStatus.OutputsTriggering = true
+
+	//case XXX: // Parameter in Range
+	//	info.MessageType = "Parameter in Range"
+
+	//case XXX: // Parking State Detection
+	//	info.MessageType = "Parking State Detected"
+
+	//case XXX: // Pressing SOS Button
+	//	info.MessageType = "SOS Button Pressed"
+
+	case 48: // Speeding
+
+		vehicleStatus.OverSpeeding = true
+
+	//case XXX: // State Field Value
+	//	info.MessageType = "State Field Value"
+
+	//case XXX: // Task Status Change
+	//	info.MessageType = "Task Status Changed"
+
+	case 1: // Tracker Switched OFF or Lost Connection
+		vehicleStatus.TrackerOffline = true
+
+	case 218: // Vibration Sensor (Rollover)
+
+		vehicleStatus.CrashDetection = true
+
+	default: // Unknown or unsupported event
+		info.MessageType = "Unknown Event"
+	}
+
+	// Attach vehicle status if populated
+	if vehicleStatus.OverSpeeding || vehicleStatus.RashDriving || vehicleStatus.CrashDetection || vehicleStatus.ExcessiveIdling {
+		info.VehicleStatus = vehicleStatus
 	}
 
 	return info
