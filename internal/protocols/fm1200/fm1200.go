@@ -59,11 +59,11 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 
 	for {
 		var err error
-		rawData, err := reader.Peek(500)
-		if err != nil {
-			return err
-		}
-		logger.Sugar().Info("rawData: ", rawData)
+		//rawData, err := reader.Peek(500)
+		//if err != nil {
+		//	return err
+		//}
+		//logger.Sugar().Info("rawData: ", rawData)
 
 		err = t.consumeMessage(reader, dataStore, responseWriter)
 		if err != nil {
