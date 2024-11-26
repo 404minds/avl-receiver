@@ -59,11 +59,19 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 
 	for {
 		var err error
-		//rawData, err := reader.Peek(500)
-		//if err != nil {
-		//	return err
-		//}
-		//logger.Sugar().Info("rawData: ", rawData)
+		buffered := reader.Buffered()
+		if buffered > 0 {
+			// Peek buffered bytes without advancing the reader
+			peeked, _ := reader.Peek(buffered)
+
+			// Copy the peeked bytes to a new slice
+			copiedBytes := make([]byte, len(peeked))
+			copy(copiedBytes, peeked)
+
+			logger.Sugar().Info(copiedBytes)
+		} else {
+			logger.Sugar().Info("No bytes are buffered yet.")
+		}
 
 		err = t.consumeMessage(reader, dataStore, responseWriter)
 		if err != nil {
