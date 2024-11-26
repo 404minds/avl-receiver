@@ -355,7 +355,7 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader, codecID uint8) (*
 		logger.Sugar().Info("parseIOElements: properties4B error: ", err3)
 	}
 
-	if (ioElement.Properties1B[TIO_DigitalInput1] > 0 || ioElement.Properties1B[TIO_Ignition] > 0) && ioElement.Properties4B[TIO_FuelLevel] == 127 || ioElement.Properties4B[TIO_FuelLevel] == 0 {
+	if (ioElement.Properties1B[TIO_DigitalInput1] > 0 || ioElement.Properties1B[TIO_Ignition] > 0) && (ioElement.Properties4B[TIO_FuelLevel] == 127 || ioElement.Properties4B[TIO_FuelLevel] == 0) {
 		fuelError = true
 	}
 
