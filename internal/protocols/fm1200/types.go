@@ -77,53 +77,60 @@ type IOElement struct {
 type IOProperty int
 
 const (
-	TIO_DigitalInput1      IOProperty = 1
-	TIO_DigitalInput2                 = 2
-	TIO_DigitalInput3                 = 3
-	TIO_AnalogInput                   = 9
-	TIO_OdometerValue                 = 16
-	TIO_GSMSignal                     = 21
-	TIO_Speed                         = 24
-	TIO_RPM                           = 36
-	TIO_AmbientTemperature            = 53
-	TIO_ExternalVoltage               = 66
-	TIO_BatteryVoltage                = 67
-	TIO_BatteryCurrent                = 68
-	TIO_GPSPower                      = 69
-	TIO_PCBTemperature                = 70
-	TIO_DallasTemperature             = 72
-	TIO_IButtonID                     = 78
-	TIO_WorkingMode                   = 80
-	TIO_Geozone1                      = 155
-	TIO_Geozone2                      = 156
-	TIO_Geozone3                      = 157
-	TIO_Geozone4                      = 158
-	TIO_Geozone5                      = 159
-	TIO_AutoGeofence                  = 175
-	TIO_DigitalOutput1                = 179
-	TIO_DigitalOutput2                = 180
-	TIO_GPSPDOP                       = 181
-	TIO_GPSHDOP                       = 182
-	TIO_TripOdometerValue             = 199
-	TIO_SleepMode                     = 200
-	TIO_CellID                        = 205
-	TIO_AreaCode                      = 206
-	TIO_RFID                          = 207
-	TIO_Ignition                      = 239
-	TIO_MovementSensor                = 240
-	TIO_GSMOperator                   = 241
-	TIO_Towing                        = 246
-	TIO_CrashDetection                = 247
-	TIO_TripMode                      = 250
-	TIO_ExcessiveIdling               = 251
-	TIO_Unplug                        = 252
-	TIO_GreenDrivingStatus            = 253
-	TIO_GreenDrivingValue             = 254
-	TIO_Overspeeding                  = 255
-	TIO_VIN                           = 256
-	TIO_CrashTraceData                = 257
-	TIO_OdmTotalMileage               = 389
-	TIO_FuelLevel                     = 390
+	TIO_DigitalInput1        IOProperty = 1
+	TIO_DigitalInput2                   = 2
+	TIO_DigitalInput3                   = 3
+	TIO_AnalogInput                     = 9
+	TIO_OdometerValue                   = 16
+	TIO_GSMSignal                       = 21
+	TIO_Speed                           = 24
+	TIO_RPM                             = 36
+	TIO_AmbientTemperature              = 53
+	TIO_ExternalVoltage                 = 66
+	TIO_BatteryVoltage                  = 67
+	TIO_BatteryCurrent                  = 68
+	TIO_GPSPower                        = 69
+	TIO_PCBTemperature                  = 70
+	TIO_DallasTemperature               = 72
+	TIO_IButtonID                       = 78
+	TIO_WorkingMode                     = 80
+	TIO_Speed_CAN                       = 81
+	TIO_FuelConsumed_CAN                = 83
+	TIO_FuelLevelLtr_CAN                = 84
+	TIO_RPM_CAN                         = 85
+	TIO_TotalMileage_CAN                = 87
+	TIO_FuelLevelPercent_CAN            = 89
+	TIO_Geozone1                        = 155
+	TIO_Geozone2                        = 156
+	TIO_Geozone3                        = 157
+	TIO_Geozone4                        = 158
+	TIO_Geozone5                        = 159
+	TIO_AutoGeofence                    = 175
+	TIO_DigitalOutput1                  = 179
+	TIO_DigitalOutput2                  = 180
+	TIO_GPSPDOP                         = 181
+	TIO_GPSHDOP                         = 182
+	TIO_TripOdometerValue               = 199
+	TIO_SleepMode                       = 200
+	TIO_CellID                          = 205
+	TIO_AreaCode                        = 206
+	TIO_RFID                            = 207
+	TIO_Ignition                        = 239
+	TIO_MovementSensor                  = 240
+	TIO_GSMOperator                     = 241
+	TIO_Towing                          = 246
+	TIO_CrashDetection                  = 247
+	TIO_TripMode                        = 250
+	TIO_ExcessiveIdling                 = 251
+	TIO_Unplug                          = 252
+	TIO_GreenDrivingStatus              = 253
+	TIO_GreenDrivingValue               = 254
+	TIO_Overspeeding                    = 255
+	TIO_VIN                             = 256
+	TIO_CrashTraceData                  = 257
+	TIO_VIN_CAN                         = 325
+	TIO_OdmTotalMileage                 = 389
+	TIO_FuelLevel                       = 390
 )
 
 func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
@@ -138,9 +145,21 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Latitude = r.Record.GPSElement.Latitude
 	info.Position.Longitude = r.Record.GPSElement.Longitude
 	info.Position.Altitude = float32(r.Record.GPSElement.Altitude)
-	var speed = float32(r.Record.GPSElement.Speed)
+	var speed float32
+	if r.Record.GPSElement.Speed > 0 {
+		speed = float32(r.Record.GPSElement.Speed)
+	} else if r.Record.IOElement.Properties1B[TIO_Speed_CAN] > 0 {
+		speed = float32(r.Record.IOElement.Properties1B[TIO_Speed_CAN])
+	}
+
 	info.Position.Speed = &speed
-	info.Odometer = int32(r.Record.IOElement.Properties4B[TIO_OdmTotalMileage])
+	var odometer int32
+	if r.Record.IOElement.Properties4B[TIO_OdmTotalMileage] > 0 {
+		odometer = int32(r.Record.IOElement.Properties4B[TIO_OdmTotalMileage])
+	} else if r.Record.IOElement.Properties4B[TIO_TotalMileage_CAN] > 0 {
+		odometer = int32(r.Record.IOElement.Properties4B[TIO_TotalMileage_CAN]) / 1000
+	}
+	info.Odometer = odometer
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 
@@ -149,7 +168,13 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	} else {
 		info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature])
 	}
-	info.FuelLtr = int32(r.Record.IOElement.Properties4B[TIO_FuelLevel] / 10)
+	var fuel int32
+	if r.Record.IOElement.Properties4B[TIO_FuelLevel] > 0 {
+		fuel = int32(r.Record.IOElement.Properties4B[TIO_FuelLevel])
+	} else if r.Record.IOElement.Properties2B[TIO_FuelLevelLtr_CAN] > 0 {
+		fuel = int32(r.Record.IOElement.Properties2B[TIO_FuelLevelLtr_CAN])
+	}
+	info.FuelLtr = fuel / 10
 	// Check if the iButtonID is available, otherwise use RFID
 	if iButtonID, exists := r.Record.IOElement.Properties8B[TIO_IButtonID]; exists && iButtonID != 0 {
 		info.IdentificationId = ConvertDecimalToHexAndReverse(iButtonID)
@@ -169,8 +194,20 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
 	info.VehicleStatus.CrashDetection = int32(r.Record.IOElement.Properties1B[TIO_CrashDetection]) > 0
 	info.VehicleStatus.ExcessiveIdling = r.Record.IOElement.Properties1B[TIO_ExcessiveIdling] > 0
-	info.Rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM])
-	info.Vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN])
+	var rpm int32
+	if r.Record.IOElement.Properties2B[TIO_RPM] > 0 {
+		rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM])
+	} else if r.Record.IOElement.Properties2B[TIO_RPM_CAN] > 0 {
+		rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM_CAN])
+	}
+	info.Rpm = rpm
+	var vin string
+	if string(r.Record.IOElement.PropertiesNXB[TIO_VIN]) != "" {
+		vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN])
+	} else if string(r.Record.IOElement.PropertiesNXB[TIO_VIN_CAN]) != "" {
+		vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN])
+	}
+	info.Vin = vin
 	//battery level
 	info.BatteryLevel = int32(r.Record.IOElement.Properties2B[TIO_BatteryVoltage] / 42)
 
