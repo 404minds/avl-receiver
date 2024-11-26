@@ -74,11 +74,7 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 			// Peek all buffered bytes
 			peeked, _ = reader.Peek(buffered)
 
-			// Copy the peeked bytes to a new slice
-			copiedBytes := make([]byte, len(peeked))
-			copy(copiedBytes, peeked)
-
-			logger.Sugar().Infof("Buffered bytes: %d, Data: %s", buffered, copiedBytes)
+			logger.Sugar().Info("raw bytes:m ", peeked)
 		} else {
 			logger.Sugar().Info("No bytes are buffered yet.")
 		}
