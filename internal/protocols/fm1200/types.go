@@ -135,6 +135,7 @@ const (
 
 func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info := &types.DeviceStatus{}
+	var speed float32
 
 	info.Imei = r.IMEI
 	info.DeviceType = types.DeviceType_TELTONIKA
@@ -145,7 +146,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Latitude = r.Record.GPSElement.Latitude
 	info.Position.Longitude = r.Record.GPSElement.Longitude
 	info.Position.Altitude = float32(r.Record.GPSElement.Altitude)
-	var speed float32
+
 	if r.Record.GPSElement.Speed > 0 {
 		speed = float32(r.Record.GPSElement.Speed)
 	} else if r.Record.IOElement.Properties1B[TIO_Speed_CAN] > 0 {
@@ -153,13 +154,14 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	}
 
 	info.Position.Speed = &speed
-	var odometer int32
+
 	if r.Record.IOElement.Properties4B[TIO_OdmTotalMileage] > 0 {
-		odometer = int32(r.Record.IOElement.Properties4B[TIO_OdmTotalMileage])
+		info.Odometer = int32(r.Record.IOElement.Properties4B[TIO_OdmTotalMileage])
 	} else if r.Record.IOElement.Properties4B[TIO_TotalMileage_CAN] > 0 {
-		odometer = int32(r.Record.IOElement.Properties4B[TIO_TotalMileage_CAN]) / 1000
+
+		info.Odometer = int32(r.Record.IOElement.Properties4B[TIO_TotalMileage_CAN]) / 1000
 	}
-	info.Odometer = odometer
+
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
 	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 
@@ -168,13 +170,13 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	} else {
 		info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature])
 	}
-	var fuel int32
+
 	if r.Record.IOElement.Properties4B[TIO_FuelLevel] > 0 {
-		fuel = int32(r.Record.IOElement.Properties4B[TIO_FuelLevel])
+		info.FuelLtr = int32(r.Record.IOElement.Properties4B[TIO_FuelLevel]) / 10
 	} else if r.Record.IOElement.Properties2B[TIO_FuelLevelLtr_CAN] > 0 {
-		fuel = int32(r.Record.IOElement.Properties2B[TIO_FuelLevelLtr_CAN])
+		info.FuelLtr = int32(r.Record.IOElement.Properties2B[TIO_FuelLevelLtr_CAN]) / 10
 	}
-	info.FuelLtr = fuel / 10
+
 	// Check if the iButtonID is available, otherwise use RFID
 	if iButtonID, exists := r.Record.IOElement.Properties8B[TIO_IButtonID]; exists && iButtonID != 0 {
 		info.IdentificationId = ConvertDecimalToHexAndReverse(iButtonID)
@@ -194,20 +196,19 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
 	info.VehicleStatus.CrashDetection = int32(r.Record.IOElement.Properties1B[TIO_CrashDetection]) > 0
 	info.VehicleStatus.ExcessiveIdling = r.Record.IOElement.Properties1B[TIO_ExcessiveIdling] > 0
-	var rpm int32
+
 	if r.Record.IOElement.Properties2B[TIO_RPM] > 0 {
-		rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM])
+		info.Rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM])
 	} else if r.Record.IOElement.Properties2B[TIO_RPM_CAN] > 0 {
-		rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM_CAN])
+		info.Rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM_CAN])
 	}
-	info.Rpm = rpm
-	var vin string
+
 	if string(r.Record.IOElement.PropertiesNXB[TIO_VIN]) != "" {
-		vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN])
+		info.Vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN])
 	} else if string(r.Record.IOElement.PropertiesNXB[TIO_VIN_CAN]) != "" {
-		vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN])
+		info.Vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN_CAN])
 	}
-	info.Vin = vin
+	
 	//battery level
 	info.BatteryLevel = int32(r.Record.IOElement.Properties2B[TIO_BatteryVoltage] / 42)
 
