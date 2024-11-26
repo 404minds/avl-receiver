@@ -56,28 +56,41 @@ func (t *FM1200Protocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip in
 }
 
 func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, dataStore store.Store) error {
-
 	for {
-		var err error
+		// Attempt to trigger buffering
+		peeked, err := reader.Peek(1) // Peek a single byte to load the buffer
+		if err != nil {
+			if err == io.EOF {
+				logger.Info("End of stream reached.")
+				return nil // Gracefully handle EOF
+			}
+			logger.Error("Error peeking from reader", zap.Error(err))
+			return err
+		}
+
+		// Check the number of buffered bytes
 		buffered := reader.Buffered()
 		if buffered > 0 {
-			// Peek buffered bytes without advancing the reader
-			peeked, _ := reader.Peek(buffered)
+			// Peek all buffered bytes
+			peeked, _ = reader.Peek(buffered)
 
 			// Copy the peeked bytes to a new slice
 			copiedBytes := make([]byte, len(peeked))
 			copy(copiedBytes, peeked)
 
-			logger.Sugar().Info(copiedBytes)
+			logger.Sugar().Infof("Buffered bytes: %d, Data: %s", buffered, copiedBytes)
 		} else {
 			logger.Sugar().Info("No bytes are buffered yet.")
 		}
 
+		// Process the message
 		err = t.consumeMessage(reader, dataStore, responseWriter)
 		if err != nil {
-			if err != io.EOF {
-				logger.Error("failed to consume message", zap.Error(err))
+			if err == io.EOF {
+				logger.Info("End of stream reached while consuming message.")
+				return nil // Gracefully handle EOF
 			}
+			logger.Error("Failed to consume message", zap.Error(err))
 			return err
 		}
 	}
