@@ -75,8 +75,8 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 		if buffered > 0 {
 			// Peek all buffered bytes
 			peeked, _ = reader.Peek(buffered)
-
-			logger.Sugar().Info("raw bytes:m ", peeked)
+			logger.Sugar().Info("buffered length: ", buffered)
+			logger.Sugar().Info("raw bytes: ", peeked)
 		} else {
 			logger.Sugar().Info("No bytes are buffered yet.")
 		}
@@ -97,7 +97,7 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 			if saveErr != nil {
 				logger.Error("Failed to save peeked data to file", zap.Error(saveErr))
 			} else {
-				logger.Info("Peeked data saved to file successfully.")
+				logger.Info("fuel error raw data saved to file successfully.")
 			}
 		}
 	}
