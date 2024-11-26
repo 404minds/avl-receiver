@@ -10,6 +10,8 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"log"
+	"os"
+	"time"
 
 	"github.com/404minds/avl-receiver/internal/crc"
 	errs "github.com/404minds/avl-receiver/internal/errors"
@@ -80,7 +82,8 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 		}
 
 		// Process the message
-		err = t.consumeMessage(reader, dataStore, responseWriter)
+		var fuelError bool
+		err, fuelError = t.consumeMessage(reader, dataStore, responseWriter)
 		if err != nil {
 			if err == io.EOF {
 				logger.Info("End of stream reached while consuming message.")
@@ -89,25 +92,53 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 			logger.Error("Failed to consume message", zap.Error(err))
 			return err
 		}
+		if fuelError {
+			saveErr := saveToFile("errorLogs.txt", peeked)
+			if saveErr != nil {
+				logger.Error("Failed to save peeked data to file", zap.Error(saveErr))
+			} else {
+				logger.Info("Peeked data saved to file successfully.")
+			}
+		}
 	}
 }
 
-func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.Store, responseWriter io.Writer) (err error) {
+func saveToFile(filename string, data []byte) error {
+	// Open the file in append mode, create it if it doesn't exist
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("unable to open file: %w", err)
+	}
+	defer file.Close()
+
+	// Prepare the log entry with timestamp
+	timestamp := time.Now().Format("2006-01-02 15:04:05") // Format: YYYY-MM-DD HH:MM:SS
+	logEntry := fmt.Sprintf("%s %s\n", timestamp, string(data))
+
+	_, err = file.Write([]byte(logEntry))
+	if err != nil {
+		return fmt.Errorf("failed to write data to file: %w", err)
+	}
+
+	return nil
+}
+
+func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.Store, responseWriter io.Writer) (err error, fuelError bool) {
 	// Read the preamble (first 4 bytes), should be 0x00000000
 	var headerZeros uint32
 	err = binary.Read(reader, binary.BigEndian, &headerZeros)
 	if err != nil {
-		return err
+		return err, false
 	}
 	if headerZeros != 0x0000 {
-		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at header Zeroes")
+		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at header Zeroes"), false
 	}
 
 	// Read the length of the data (next 4 bytes)
 	var dataLen uint32
 	err = binary.Read(reader, binary.BigEndian, &dataLen)
 	if err != nil {
-		return err
+		return err, false
 	}
 
 	logger.Sugar().Info("consumeMessage Data length: ", dataLen)
@@ -115,7 +146,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 	dataBytes := make([]byte, dataLen)
 	_, err = io.ReadFull(reader, dataBytes)
 	if err != nil {
-		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at Data length")
+		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at Data length"), false
 	}
 	logger.Sugar().Info("consumeMessage Data Byte: ", dataBytes)
 
@@ -125,7 +156,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 	// Read the Codec ID (1 byte)
 	codecID, err := dataReader.ReadByte()
 	if err != nil {
-		return err
+		return err, false
 	}
 	logger.Sugar().Info("Codec ID: ", codecID)
 
@@ -137,7 +168,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 		logger.Sugar().Info("Parsing Device Response")
 		response, err := t.ParseDeviceResponse(dataReader, dataLen)
 		if err != nil {
-			return err
+			return err, false
 		}
 
 		logger.Sugar().Infof("Parsed response from device: %+v", response)
@@ -155,30 +186,30 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 
 		err = binary.Read(reader, binary.BigEndian, &response.CRC)
 		if err != nil {
-			return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at parsed Packet CRC")
+			return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at parsed Packet CRC"), false
 		}
 		valid := t.ValidateCrc(dataBytes, response.CRC)
 		if !valid {
-			return errs.ErrBadCrc
+			return errs.ErrBadCrc, false
 		}
-		return nil
+		return nil, false
 	}
 
 	logger.Sugar().Info("Parsing normal AVL packet")
-	parsedPacket, err := t.parseDataToRecord(dataReader, codecID)
+	parsedPacket, err, fuelError := t.parseDataToRecord(dataReader, codecID)
 	if err != nil {
-		return err
+		return err, false
 	}
 
 	// Validate CRC
 	err = binary.Read(reader, binary.BigEndian, &parsedPacket.CRC)
 	if err != nil {
-		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at parsed Packet CRC")
+		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at parsed Packet CRC"), false
 	}
 
 	valid := t.ValidateCrc(dataBytes, parsedPacket.CRC)
 	if !valid {
-		return errs.ErrBadCrc
+		return errs.ErrBadCrc, false
 	}
 
 	// Store records
@@ -196,12 +227,12 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 
 	err = binary.Write(responseWriter, binary.BigEndian, int32(parsedPacket.NumberOfData))
 	if err != nil {
-		return err
+		return err, false
 	}
-	return nil
+	return nil, fuelError
 }
 
-func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader, codecId uint8) (*AvlDataPacket, error) {
+func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader, codecId uint8) (*AvlDataPacket, error, bool) {
 	var packet AvlDataPacket
 	var err error
 
@@ -210,48 +241,49 @@ func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader, codecId uint8) 
 	// number of data
 	packet.NumberOfData, err = reader.ReadByte()
 	if err != nil {
-		return nil, err
+		return nil, err, false
 	}
 
 	logger.Sugar().Info("parseDataRecord: NumberofData ", packet.NumberOfData)
-
+	var fuelError bool
 	// parse each record
 	for i := uint8(0); i < packet.NumberOfData; i++ { //TODO range == packet.NumberOfData currently just for debugging
 
 		logger.Sugar().Info("parseDataToRecord: Data Number: ", i)
-		record, err := t.readSingleRecord(reader, codecId)
+		record, err, fuel := t.readSingleRecord(reader, codecId)
 		if err != nil {
-			return nil, err
+			return nil, err, false
 		}
 		// Prepend the record to the end of the slice
 		packet.Data = append(packet.Data, *record)
+		fuelError = fuel
 	}
 
 	endNumRecords, err := reader.ReadByte()
 	if err != nil {
-		return nil, err
+		return nil, err, false
 	}
 	logger.Sugar().Info("parseDataToRecord endNumRecords: ", endNumRecords)
 	if endNumRecords != packet.NumberOfData {
-		return nil, errors.Wrapf(errs.ErrFM1200BadDataPacket, "error end Num Records != packet.NumberOfData")
+		return nil, errors.Wrapf(errs.ErrFM1200BadDataPacket, "error end Num Records != packet.NumberOfData"), false
 	}
-	return &packet, nil
+	return &packet, nil, fuelError
 }
 
-func (t *FM1200Protocol) readSingleRecord(reader *bufio.Reader, codecID uint8) (*AvlRecord, error) {
+func (t *FM1200Protocol) readSingleRecord(reader *bufio.Reader, codecID uint8) (*AvlRecord, error, bool) {
 	var record AvlRecord
 	var err error
 
 	// timestamp
 	err = binary.Read(reader, binary.BigEndian, &record.Timestamp)
 	if err != nil {
-		return nil, err
+		return nil, err, false
 	}
 
 	// priority
 	err = binary.Read(reader, binary.BigEndian, &record.Priority)
 	if err != nil {
-		return nil, err
+		return nil, err, false
 	}
 
 	logger.Sugar().Info("readSingleRecord: Priority: ", record.Priority)
@@ -259,34 +291,35 @@ func (t *FM1200Protocol) readSingleRecord(reader *bufio.Reader, codecID uint8) (
 	// gps element
 	gpsElement, err := t.parseGpsElement(reader)
 	if err != nil {
-		return nil, err
+		return nil, err, false
 	}
 	record.GPSElement = gpsElement
 
 	// io elements
-	ioElement, err := t.parseIOElements(reader, codecID)
+	ioElement, err, fuelError := t.parseIOElements(reader, codecID)
 	if err != nil {
-		return nil, err
+		return nil, err, false
 	}
 	record.IOElement = *ioElement
 
-	return &record, nil
+	return &record, nil, fuelError
 }
 
-func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader, codecID uint8) (*IOElement, error) {
+func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader, codecID uint8) (*IOElement, error, bool) {
 	ioElement := &IOElement{}
+	var fuelError bool
 
 	// EventID
 	if codecID == 0x8E {
 		err := binary.Read(reader, binary.BigEndian, &ioElement.EventID)
 		if err != nil {
-			return nil, err
+			return nil, err, false
 		}
 		logger.Sugar().Info("parseIOElements: eventID: ", ioElement.EventID)
 	} else {
 		eventID, err := reader.ReadByte()
 		if err != nil {
-			return nil, err
+			return nil, err, false
 		}
 		ioElement.EventID = uint16(eventID)
 		logger.Sugar().Info("parseIOElements: eventID: ", ioElement.EventID)
@@ -296,12 +329,12 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader, codecID uint8) (*
 	if codecID == 0x8E {
 		err := binary.Read(reader, binary.BigEndian, &ioElement.NumProperties)
 		if err != nil {
-			return nil, err
+			return nil, err, false
 		}
 	} else {
 		numOfProperties, err := reader.ReadByte()
 		if err != nil {
-			return nil, err
+			return nil, err, false
 		}
 		ioElement.NumProperties = uint16(numOfProperties)
 	}
@@ -322,6 +355,10 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader, codecID uint8) (*
 		logger.Sugar().Info("parseIOElements: properties4B error: ", err3)
 	}
 
+	if (ioElement.Properties1B[TIO_DigitalInput1] > 0 || ioElement.Properties1B[TIO_Ignition] > 0) && ioElement.Properties4B[TIO_FuelLevel] == 127 || ioElement.Properties4B[TIO_FuelLevel] == 0 {
+		fuelError = true
+	}
+
 	ioElement.Properties8B, err4 = t.read8BProperties(reader, codecID)
 	if err4 != nil {
 		logger.Sugar().Info("parseIOElements: properties8B error: ", err4)
@@ -333,10 +370,10 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader, codecID uint8) (*
 		logger.Sugar().Info("parseIOElements: propertiesNXB error: ", err5)
 	}
 	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil {
-		return nil, errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at IO elements")
+		return nil, errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at IO elements"), false
 	}
 
-	return ioElement, nil
+	return ioElement, nil, fuelError
 }
 
 func (t *FM1200Protocol) read1BProperties(reader *bufio.Reader, codecID uint8) (map[IOProperty]uint8, error) {
