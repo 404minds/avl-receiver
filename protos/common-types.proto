@@ -31,14 +31,15 @@ message DeviceStatus {
     float temperature = 8;
     int32 odometer = 9;
     int32 fuel_ltr = 10;
-    string identification_id = 11;
-    string vin = 12;
-    int32 rpm = 13;
+    int32 fuel_pct = 11;
+    string identification_id = 12;
+    string vin = 13;
+    int32 rpm = 14;
     oneof raw_data {
-        WanwayPacket wanway_packet = 14;
-        TeltonikaPacket teltonika_packet = 15;
-        ConcoxPacket  concox_packet = 16;
-        HowenPacket   howen_packet = 17;
+        WanwayPacket wanway_packet = 15;
+        TeltonikaPacket teltonika_packet = 16;
+        ConcoxPacket  concox_packet = 17;
+        HowenPacket   howen_packet = 18;
     }
 }
 
