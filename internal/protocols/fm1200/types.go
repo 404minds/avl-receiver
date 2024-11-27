@@ -177,6 +177,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 		info.FuelLtr = int32(r.Record.IOElement.Properties2B[TIO_FuelLevelLtr_CAN]) / 10
 	}
 
+	info.FuelPct = int32(r.Record.IOElement.Properties1B[TIO_FuelLevelPercent_CAN])
 	// Check if the iButtonID is available, otherwise use RFID
 	if iButtonID, exists := r.Record.IOElement.Properties8B[TIO_IButtonID]; exists && iButtonID != 0 {
 		info.IdentificationId = ConvertDecimalToHexAndReverse(iButtonID)
@@ -208,7 +209,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	} else if string(r.Record.IOElement.PropertiesNXB[TIO_VIN_CAN]) != "" {
 		info.Vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN_CAN])
 	}
-	
+
 	//battery level
 	info.BatteryLevel = int32(r.Record.IOElement.Properties2B[TIO_BatteryVoltage] / 42)
 
