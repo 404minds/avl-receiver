@@ -111,11 +111,15 @@ func saveToFile(filename string, data []byte) error {
 	}
 	defer file.Close()
 
+	// Convert raw bytes to string format for logging
+	byteArrayString := fmt.Sprintf("%v", data) // Formats as [0 0 0 0 ...]
+
 	// Prepare the log entry with timestamp
 	timestamp := time.Now().Format("2006-01-02 15:04:05") // Format: YYYY-MM-DD HH:MM:SS
-	logEntry := fmt.Sprintf("%s %s\n", timestamp, string(data))
+	logEntry := fmt.Sprintf("%s raw bytes: %s\n", timestamp, byteArrayString)
 
-	_, err = file.Write([]byte(logEntry))
+	// Write the formatted log entry to the file
+	_, err = file.WriteString(logEntry)
 	if err != nil {
 		return fmt.Errorf("failed to write data to file: %w", err)
 	}
