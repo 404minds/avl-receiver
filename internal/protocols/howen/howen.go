@@ -62,46 +62,43 @@ func (p *HOWENWS) ConsumeConnection(conn *websocket.Conn, dataStore store.Store)
 }
 
 func (p *HOWENWS) ConsumeMessage(conn *websocket.Conn, dataStore store.Store) error {
-	for {
-		// Read message from WebSocket
-		_, message, err := conn.ReadMessage()
-		if err != nil {
-			logger.Sugar().Info("consumer message", err)
-			return errors.Wrap(err, "error reading WebSocket message: ")
-		}
-
-		logger.Sugar().Info(string(message))
-
-		// Unmarshal the message to check the action type
-		var actionData ActionData
-		if err := json.Unmarshal(message, &actionData); err != nil {
-			return errors.Wrap(err, "error un marshaling action data: ")
-		}
-
-		// Check if action type is 80003 (GPS data)
-		if actionData.Action == "80003" {
-			// Parse the GPS data
-
-			gpsPacket, err := p.parseGPSPacket(message)
-			if err != nil {
-				return errors.Wrap(err, "error parsing GPS packet: ")
-			}
-			asyncStore := dataStore.GetProcessChan()
-			protoReply := gpsPacket.ToProtobufDeviceStatusGPS()
-			asyncStore <- *protoReply
-			// Process the parsed GPS packet (e.g., save to dataStore)
-		} else if actionData.Action == "80004" {
-			alarmPacket, err := p.parseAlarmMessage(message)
-			if err != nil {
-				return errors.Wrap(err, "error parsing Alarm packet: ")
-			}
-			asyncStore := dataStore.GetProcessChan()
-			protoReply := alarmPacket.ToProtobufDeviceStatusAlarm()
-			asyncStore <- *protoReply
-		} else {
-			logger.Sugar().Infof("Unhandled action type: %s", actionData.Action)
-		}
+	// Read message from WebSocket
+	_, message, err := conn.ReadMessage()
+	if err != nil {
+		logger.Sugar().Error("Error reading WebSocket message:", err)
+		return errors.Wrap(err, "error reading WebSocket message")
 	}
+
+	logger.Sugar().Info("Received WebSocket message:", string(message))
+
+	// Unmarshal the message to check the action type
+	var actionData ActionData
+	if err := json.Unmarshal(message, &actionData); err != nil {
+		return errors.Wrap(err, "error unmarshaling action data")
+	}
+
+	asyncStore := dataStore.GetProcessChan()
+
+	switch actionData.Action {
+	case "80003":
+		gpsPacket, err := p.parseGPSPacket(message)
+		if err != nil {
+			return errors.Wrap(err, "error parsing GPS packet")
+		}
+		protoReply := gpsPacket.ToProtobufDeviceStatusGPS()
+		asyncStore <- *protoReply
+	case "80004":
+		alarmPacket, err := p.parseAlarmMessage(message)
+		if err != nil {
+			return errors.Wrap(err, "error parsing Alarm packet")
+		}
+		protoReply := alarmPacket.ToProtobufDeviceStatusAlarm()
+		asyncStore <- *protoReply
+	default:
+		logger.Sugar().Infof("Unhandled action type: %s", actionData.Action)
+	}
+
+	return nil
 }
 
 // parse response of type 80003 (gps)

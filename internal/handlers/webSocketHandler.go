@@ -7,7 +7,6 @@ import (
 	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/404minds/avl-receiver/internal/types"
 	"github.com/gorilla/websocket"
-	"go.uber.org/zap"
 	"os"
 	"sync"
 )
@@ -25,28 +24,23 @@ var mu sync.Mutex // To synchronize access to the map
 
 // HandleMessage processes the incoming message and parses it based on action type
 func (w *WebSocketHandler) HandleMessage(conn *websocket.Conn) {
-
 	logger.Sugar().Info("creating data store")
 
 	deviceProtocol := &howen.HOWENWS{DeviceType: types.DeviceType_HOWEN}
-
 	dataStore := w.makeAsyncStore(deviceProtocol)
-	logger.Sugar().Info("running a go routine to start process")
+
+	logger.Sugar().Info("starting data store process")
 	go dataStore.Process()
 
-	defer func() { dataStore.GetCloseChan() <- true }()
-
-	//w.connToStoreMap[remoteAddr] = dataStore
+	defer func() {
+		dataStore.GetCloseChan() <- true
+		conn.Close() // Ensure the connection is closed
+	}()
 
 	err := deviceProtocol.ConsumeConnection(conn, dataStore)
-	_, message, err := conn.ReadMessage()
 	if err != nil {
-		logger.Error("Read error:", zap.Error(err))
-		return
+		logger.Sugar().Error("WebSocket connection handling error:", err)
 	}
-
-	logger.Sugar().Info("Received message:", string(message))
-
 }
 
 func (w *WebSocketHandler) makeAsyncStore(deviceProtocol devices.DeviceProtocol) store.Store {
