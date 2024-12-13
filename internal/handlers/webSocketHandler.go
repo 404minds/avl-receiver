@@ -8,7 +8,6 @@ import (
 	"github.com/404minds/avl-receiver/internal/types"
 	"github.com/gorilla/websocket"
 	"os"
-	"sync"
 )
 
 type WebSocketHandler struct {
@@ -18,9 +17,6 @@ type WebSocketHandler struct {
 	storeType         string
 	connToStoreMap    map[string]store.Store
 }
-
-var deviceIDToIMEI = make(map[string]string)
-var mu sync.Mutex // To synchronize access to the map
 
 // HandleMessage processes the incoming message and parses it based on action type
 func (w *WebSocketHandler) HandleMessage(conn *websocket.Conn) {
@@ -34,12 +30,18 @@ func (w *WebSocketHandler) HandleMessage(conn *websocket.Conn) {
 
 	defer func() {
 		dataStore.GetCloseChan() <- true
-		conn.Close() // Ensure the connection is closed
+		if conn != nil {
+			conn.Close()
+		}
 	}()
 
 	err := deviceProtocol.ConsumeConnection(conn, dataStore)
 	if err != nil {
-		logger.Sugar().Error("WebSocket connection handling error:", err)
+		if websocket.IsUnexpectedCloseError(err) {
+			logger.Sugar().Error("WebSocket connection closed unexpectedly:", err)
+		} else {
+			logger.Sugar().Error("WebSocket connection handling error:", err)
+		}
 	}
 }
 
