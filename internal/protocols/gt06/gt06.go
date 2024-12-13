@@ -556,7 +556,7 @@ func (p *GT06Protocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo GPSInf
 	gpsInfo.GPSInfoLength = x >> 4
 	gpsInfo.NumberOfSatellites = x & 0x0f
 
-	var i32 uint32
+	var i32 int32
 	// latitude
 	checkErr(binary.Read(reader, binary.BigEndian, &i32))
 	gpsInfo.Latitude = float32(i32) / 1800000
