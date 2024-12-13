@@ -51,13 +51,20 @@ func (p *HOWENWS) SendCommandToDevice(writer io.Writer, command string) error {
 func (p *HOWENWS) ConsumeConnection(conn *websocket.Conn, dataStore store.Store) error {
 	logger.Sugar().Info("consume connection called")
 	for {
-		err := p.ConsumeMessage(conn, dataStore)
-		logger.Sugar().Info(err)
-		if err != nil {
-			return err
+		if conn == nil {
+			logger.Sugar().Error("Connection is nil, stopping consumption.")
+			return errors.New("connection is nil")
 		}
 
-		return nil
+		err := p.ConsumeMessage(conn, dataStore)
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err) {
+				logger.Sugar().Error("WebSocket closed unexpectedly:", err)
+			} else {
+				logger.Sugar().Info("WebSocket read error:", err)
+			}
+			return err
+		}
 	}
 }
 

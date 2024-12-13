@@ -80,6 +80,7 @@ func main() {
 	remoteStoreClient := store.NewCustomAvlDataStoreClient(storeConn)
 	tcpHandler := handlers.NewTcpHandler(*remoteStoreClient, *storeType)
 	websocketHandler := handlers.NewWebSocketHandler(*remoteStoreClient, *storeType)
+
 	// Start TCP Server
 	go func() {
 		listener, err := net.Listen("tcp4", fmt.Sprintf(":%d", *port))
@@ -212,53 +213,56 @@ func getAuthToken(username, password string) (string, string, error) {
 	return loginResponse.Data.Token, loginResponse.Data.PID, nil
 }
 
-func startWebSocket(websockethandler *handlers.WebSocketHandler) {
+func startWebSocket(wsHandler *handlers.WebSocketHandler) {
 	token, pid, err := getAuthToken("INEITest", "964b4035ac5a3987036692d517eaf7fb")
 	if err != nil {
 		log.Fatal("Error during HTTP login:", err)
 		return
 	}
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		log.Fatal("Error connecting to WebSocket:", err)
-		return
-	}
-	defer conn.Close()
-
-	// Send login message using WebSocket
-	login := LoginMessage{
-		Action: "80000",
-		Payload: struct {
-			Username string `json:"username"`
-			Token    string `json:"token"`
-			PID      string `json:"pid"`
-		}{
-			Username: "INEITest",
-			Token:    token,
-			PID:      pid,
-		},
-	}
-	if err := conn.WriteJSON(login); err != nil {
-		log.Fatal("Error sending login message:", err)
-	}
-	logger.Sugar().Info("Login message sent")
-	_, message, err := conn.ReadMessage()
-	logger.Sugar().Info(string(message))
-	// Wait before sending the subscription message
-	//time.Sleep(25 * time.Minute)
-
-	// Send subscription message
-	//subscribe := SubscribeMessage{Action: "80001"}
-	//if err := conn.WriteJSON(subscribe); err != nil {
-	//	log.Fatal("Error sending subscription message:", err)
-	//}
-	//log.Println("Subscription message sent")
-
-	// Listen for incoming messages
-
 	for {
-		websockethandler.HandleMessage(conn)
-	}
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		if err != nil {
+			logger.Sugar().Error("Error connecting to WebSocket:", err)
+			time.Sleep(5 * time.Second) // Retry after delay
+			continue
+		}
 
+		defer conn.Close()
+
+		// Send login message
+		login := LoginMessage{
+			Action: "80000",
+			Payload: struct {
+				Username string `json:"username"`
+				Token    string `json:"token"`
+				PID      string `json:"pid"`
+			}{
+				Username: "INEITest",
+				Token:    token,
+				PID:      pid,
+			},
+		}
+
+		if err := conn.WriteJSON(login); err != nil {
+			logger.Sugar().Error("Error sending login message:", err)
+			conn.Close()
+			continue
+		}
+
+		logger.Sugar().Info("Login message sent")
+
+		// Wait for response
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			logger.Sugar().Error("Error reading login response:", err)
+			conn.Close()
+			continue
+		}
+
+		logger.Sugar().Info("Received login response:", string(message))
+
+		// Handle incoming WebSocket messages
+		wsHandler.HandleMessage(conn)
+	}
 }
