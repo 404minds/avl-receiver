@@ -116,7 +116,7 @@ func saveToFile(filename string, data []byte) error {
 
 	// Prepare the log entry with timestamp
 	timestamp := time.Now().Format("2006-01-02 15:04:05") // Format: YYYY-MM-DD HH:MM:SS
-	logEntry := fmt.Sprintf("%s raw bytes: %s\n", timestamp, byteArrayString)
+	logEntry := fmt.Sprintf("%s raw bytes: %s\n\n\n", timestamp, byteArrayString)
 
 	// Write the formatted log entry to the file
 	_, err = file.WriteString(logEntry)
@@ -557,7 +557,7 @@ func (t *FM1200Protocol) readNXByteProperties(reader *bufio.Reader, codecID uint
 
 func (t *FM1200Protocol) parseGpsElement(reader *bufio.Reader) (gpsElement GpsElement, err error) {
 	// longitude
-	var i32 uint32
+	var i32 int32 // Use int32 to handle negative values
 	err = binary.Read(reader, binary.BigEndian, &i32)
 	if err != nil {
 		return
