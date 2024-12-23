@@ -60,30 +60,30 @@ func (t *FM1200Protocol) Login(reader *bufio.Reader) (ack []byte, bytesToSkip in
 func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, dataStore store.Store) error {
 	for {
 		// Attempt to trigger buffering
-		peeked, err := reader.Peek(1) // Peek a single byte to load the buffer
-		if err != nil {
-			if err == io.EOF {
-				logger.Info("End of stream reached.")
-				return nil // Gracefully handle EOF
-			}
-			logger.Error("Error peeking from reader", zap.Error(err))
-			return err
-		}
-
-		// Check the number of buffered bytes
-		buffered := reader.Buffered()
-		if buffered > 0 {
-			// Peek all buffered bytes
-			peeked, _ = reader.Peek(buffered)
-			logger.Sugar().Info("buffered length: ", buffered)
-			logger.Sugar().Info("raw bytes: ", peeked)
-		} else {
-			logger.Sugar().Info("No bytes are buffered yet.")
-		}
+		//peeked, err := reader.Peek(1) // Peek a single byte to load the buffer
+		//if err != nil {
+		//	if err == io.EOF {
+		//		logger.Info("End of stream reached.")
+		//		return nil // Gracefully handle EOF
+		//	}
+		//	logger.Error("Error peeking from reader", zap.Error(err))
+		//	return err
+		//}
+		//
+		//// Check the number of buffered bytes
+		//buffered := reader.Buffered()
+		//if buffered > 0 {
+		//	// Peek all buffered bytes
+		//	peeked, _ = reader.Peek(buffered)
+		//	logger.Sugar().Info("buffered length: ", buffered)
+		//	logger.Sugar().Info("raw bytes: ", peeked)
+		//} else {
+		//	logger.Sugar().Info("No bytes are buffered yet.")
+		//}
 
 		// Process the message
-		var fuelError bool
-		err, fuelError = t.consumeMessage(reader, dataStore, responseWriter)
+		//var fuelError bool
+		err, fuelError := t.consumeMessage(reader, dataStore, responseWriter)
 		if err != nil {
 			if err == io.EOF {
 				logger.Info("End of stream reached while consuming message.")
@@ -92,14 +92,15 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 			logger.Error("Failed to consume message", zap.Error(err))
 			return err
 		}
-		if fuelError {
-			saveErr := saveToFile("errorLogs.txt", peeked)
-			if saveErr != nil {
-				logger.Error("Failed to save peeked data to file", zap.Error(saveErr))
-			} else {
-				logger.Info("fuel error raw data saved to file successfully.")
-			}
-		}
+		logger.Sugar().Info("fuel Error: ", fuelError)
+		//if fuelError {
+		//	saveErr := saveToFile("errorLogs.txt", peeked)
+		//	if saveErr != nil {
+		//		logger.Error("Failed to save peeked data to file", zap.Error(saveErr))
+		//	} else {
+		//		logger.Info("fuel error raw data saved to file successfully.")
+		//	}
+		//}
 	}
 }
 
