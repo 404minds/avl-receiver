@@ -211,8 +211,11 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	}
 
 	//battery level
-	info.BatteryLevel = int32(r.Record.IOElement.Properties2B[TIO_BatteryVoltage] / 42)
-
+	if r.Record.IOElement.Properties2B[TIO_BatteryVoltage] <= 4200 {
+		info.BatteryLevel = int32(r.Record.IOElement.Properties2B[TIO_BatteryVoltage] / 42)
+	} else {
+		info.BatteryLevel = int32(r.Record.IOElement.Properties2B[TIO_BatteryVoltage] / 90)
+	}
 	rawdata, _ := json.Marshal(r)
 	info.RawData = &types.DeviceStatus_TeltonikaPacket{
 		TeltonikaPacket: &types.TeltonikaPacket{RawData: rawdata},
