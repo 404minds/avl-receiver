@@ -227,6 +227,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 		asyncStore := dataStore.GetProcessChan()
 		protoRecord := r.ToProtobufDeviceStatus()
 		asyncStore <- *protoRecord
+		time.Sleep(100 * time.Millisecond)
 	}
 	logger.Sugar().Infof("stored %d records", len(parsedPacket.Data))
 
