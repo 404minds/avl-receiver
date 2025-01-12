@@ -44,7 +44,7 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 
 		}
 	}(conn)
-	
+
 	defer func() {
 		delete(t.connToProtocolMap, remoteAddr)
 		delete(t.connToStoreMap, remoteAddr)
@@ -62,7 +62,7 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		logger.Error("failed to identify device", zap.String("remoteAddr", remoteAddr), zap.Error(err))
 		return
 	}
-	logger.Sugar().Info("we have done login")
+
 	t.connToProtocolMap[remoteAddr] = deviceProtocol
 	deviceID := deviceProtocol.GetDeviceID()
 
@@ -74,12 +74,31 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		}
 		logger.Sugar().Infof("Mapped deviceID %s to connection %v and protocol %v", deviceID, conn.RemoteAddr().String(), deviceProtocol)
 	}
-	logger.Sugar().Info("creating data store")
+
 	dataStore := t.makeAsyncStore(deviceProtocol)
-	logger.Sugar().Info("running a go routine to start process")
-	go dataStore.Process()
-	logger.Sugar().Info("running a go routine to start response process")
-	go dataStore.Response()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Sugar().Errorf("Recovered from panic in Process goroutine for deviceID %s: %v", deviceID, r)
+			}
+		}()
+		
+		defer logger.Sugar().Infof("Process goroutine for deviceID %s exited", deviceID)
+		dataStore.Process()
+	}()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Sugar().Errorf("Recovered from panic in Response goroutine for deviceID %s: %v", deviceID, r)
+			}
+		}()
+
+		defer logger.Sugar().Infof("Response goroutine for deviceID %s exited", deviceID)
+		dataStore.Response()
+	}()
+
 	defer func() { dataStore.GetCloseChan() <- true }()
 
 	t.connToStoreMap[remoteAddr] = dataStore

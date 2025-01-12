@@ -83,7 +83,7 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 
 		// Process the message
 		//var fuelError bool
-		err, fuelError := t.consumeMessage(reader, dataStore, responseWriter)
+		err, _ := t.consumeMessage(reader, dataStore, responseWriter)
 		if err != nil {
 			if err == io.EOF {
 				logger.Info("End of stream reached while consuming message.")
@@ -92,7 +92,7 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 			logger.Error("Failed to consume message", zap.Error(err))
 			return err
 		}
-		logger.Sugar().Info("fuel Error: ", fuelError)
+
 		//if fuelError {
 		//	saveErr := saveToFile("errorLogs.txt", peeked)
 		//	if saveErr != nil {
@@ -150,6 +150,9 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 
 	dataBytes := make([]byte, dataLen)
 	_, err = io.ReadFull(reader, dataBytes)
+	if err == io.EOF {
+		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "Connection closed by peer"), false
+	}
 	if err != nil {
 		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at Data length"), false
 	}
@@ -200,7 +203,6 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 		return nil, false
 	}
 
-	logger.Sugar().Info("Parsing normal AVL packet")
 	parsedPacket, err, fuelError := t.parseDataToRecord(dataReader, codecID)
 	if err != nil {
 		return err, false
@@ -292,8 +294,6 @@ func (t *FM1200Protocol) readSingleRecord(reader *bufio.Reader, codecID uint8) (
 		return nil, err, false
 	}
 
-	logger.Sugar().Info("readSingleRecord: Priority: ", record.Priority)
-
 	// gps element
 	gpsElement, err := t.parseGpsElement(reader)
 	if err != nil {
@@ -321,14 +321,14 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader, codecID uint8) (*
 		if err != nil {
 			return nil, err, false
 		}
-		logger.Sugar().Info("parseIOElements: eventID: ", ioElement.EventID)
+
 	} else {
 		eventID, err := reader.ReadByte()
 		if err != nil {
 			return nil, err, false
 		}
 		ioElement.EventID = uint16(eventID)
-		logger.Sugar().Info("parseIOElements: eventID: ", ioElement.EventID)
+
 	}
 
 	// Number of properties
@@ -372,8 +372,7 @@ func (t *FM1200Protocol) parseIOElements(reader *bufio.Reader, codecID uint8) (*
 
 	if codecID == 0x8E {
 		ioElement.PropertiesNXB, err5 = t.readNXBProperties(reader, codecID)
-		logger.Sugar().Info("parseIOElements: propertiesNXB: ", ioElement.PropertiesNXB)
-		logger.Sugar().Info("parseIOElements: propertiesNXB error: ", err5)
+
 	}
 	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil {
 		return nil, errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at IO elements"), false
