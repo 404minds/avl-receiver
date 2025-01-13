@@ -257,7 +257,6 @@ func (t *FM1200Protocol) parseDataToRecord(reader *bufio.Reader, codecId uint8) 
 	// parse each record
 	for i := uint8(0); i < packet.NumberOfData; i++ { //TODO range == packet.NumberOfData currently just for debugging
 
-		logger.Sugar().Info("parseDataToRecord: Data Number: ", i)
 		record, err, fuel := t.readSingleRecord(reader, codecId)
 		if err != nil {
 			return nil, err, false
