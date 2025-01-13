@@ -83,7 +83,7 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 				logger.Sugar().Errorf("Recovered from panic in Process goroutine for deviceID %s: %v", deviceID, r)
 			}
 		}()
-		
+
 		defer logger.Sugar().Infof("Process goroutine for deviceID %s exited", deviceID)
 		dataStore.Process()
 	}()

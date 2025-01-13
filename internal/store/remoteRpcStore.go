@@ -50,10 +50,13 @@ func (s *RemoteRpcStore) Response() {
 		select {
 		case deviceResponse := <-s.ResponseChan:
 			logger.Sugar().Info(deviceResponse.String())
+			start := time.Now()
 			ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
 			_, err := s.RemoteStoreClient.SaveDeviceResponse(ctx, &deviceResponse)
 			if err != nil {
 				logger.Error("failed to save device status", zap.String("imei", deviceResponse.Imei), zap.Error(err))
+				duration := time.Since(start)
+				logger.Sugar().Info("total time taken: ", duration.Seconds())
 			}
 
 		case <-s.CloseChan:
