@@ -33,7 +33,7 @@ func (s *RemoteRpcStore) Process() {
 		select {
 		case deviceStatus := <-s.ProcessChan:
 			logger.Sugar().Infoln(deviceStatus.String())
-			ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+			ctx := context.Background()
 			_, err := s.RemoteStoreClient.SaveDeviceStatus(ctx, &deviceStatus)
 			if err != nil {
 				logger.Error("failed to save device status", zap.String("imei", deviceStatus.Imei), zap.Error(err))
@@ -51,7 +51,7 @@ func (s *RemoteRpcStore) Response() {
 		case deviceResponse := <-s.ResponseChan:
 			logger.Sugar().Info(deviceResponse.String())
 			start := time.Now()
-			ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+			ctx := context.Background()
 			_, err := s.RemoteStoreClient.SaveDeviceResponse(ctx, &deviceResponse)
 			if err != nil {
 				logger.Error("failed to save device status", zap.String("imei", deviceResponse.Imei), zap.Error(err))
