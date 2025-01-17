@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"time"
 
 	"github.com/404minds/avl-receiver/internal/types"
 	"go.uber.org/zap"
@@ -33,7 +32,7 @@ func (s *RemoteRpcStore) Process() {
 		select {
 		case deviceStatus := <-s.ProcessChan:
 			logger.Sugar().Infoln(deviceStatus.String())
-			ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+			ctx := context.Background()
 			_, err := s.RemoteStoreClient.SaveDeviceStatus(ctx, &deviceStatus)
 			if err != nil {
 				logger.Error("failed to save device status", zap.String("imei", deviceStatus.Imei), zap.Error(err))
@@ -50,11 +49,13 @@ func (s *RemoteRpcStore) Response() {
 		select {
 		case deviceResponse := <-s.ResponseChan:
 			logger.Sugar().Info(deviceResponse.String())
-			// make sure to remove this comment 
-			// _, err := context.WithTimeout(context.Background(), time.Second*5)
+			// start := time.Now()
+			// ctx := context.Background()
 			// _, err := s.RemoteStoreClient.SaveDeviceResponse(ctx, &deviceResponse)
 			// if err != nil {
 			// 	logger.Error("failed to save device status", zap.String("imei", deviceResponse.Imei), zap.Error(err))
+			// 	duration := time.Since(start)
+			// 	logger.Sugar().Info("total time taken: ", duration.Seconds())
 			// }
 
 		case <-s.CloseChan:
