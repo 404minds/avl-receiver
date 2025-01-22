@@ -21,5 +21,5 @@ COPY --from=builder /avl-receiver .
 EXPOSE 21000
 EXPOSE 15000
 
-CMD ["./receiver", "-port", "21000", "-grpcPort", "15000", "-remoteStoreAddr", "fns-consumer-grpc-server:8000"]
+CMD ["./receiver", "-port", "21000", "-grpcPort", "15000", "-remoteStoreAddr", "carbuddy-consumer:9000"]
 
