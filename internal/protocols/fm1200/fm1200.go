@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"log"
+	"net"
 	"os"
 	"time"
 
@@ -133,7 +134,12 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 	var headerZeros uint32
 	err = binary.Read(reader, binary.BigEndian, &headerZeros)
 	if err != nil {
-		return err, false
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			logger.Sugar().Error("Read timeout", zap.Error(err))
+			return errors.New("read timeout"), false
+		}
+		return errors.Wrapf(err, "Failed during binary.Read"), false
 	}
 	if headerZeros != 0x0000 {
 		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at header Zeroes"), false

@@ -13,11 +13,12 @@ import (
 var logger = configuredLogger.Logger
 
 type JsonLinesStore struct {
-	File         *os.File
-	ProcessChan  chan types.DeviceStatus
-	ResponseChan chan types.DeviceResponse
-	CloseChan    chan bool
-	DeviceID     string
+	File              *os.File
+	ProcessChan       chan types.DeviceStatus
+	ResponseChan      chan types.DeviceResponse
+	CloseChan         chan bool
+	CloseResponseChan chan bool
+	DeviceID          string
 }
 
 func (s *JsonLinesStore) GetResponseChan() chan types.DeviceResponse {
@@ -31,6 +32,8 @@ func (s *JsonLinesStore) GetProcessChan() chan types.DeviceStatus {
 func (s *JsonLinesStore) GetCloseChan() chan bool {
 	return s.CloseChan
 }
+
+func (s *JsonLinesStore) GetCloseResponseChan() chan bool { return s.CloseResponseChan }
 
 func (s *JsonLinesStore) Process() {
 	for {
