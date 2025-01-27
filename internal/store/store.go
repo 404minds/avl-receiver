@@ -8,4 +8,5 @@ type Store interface {
 	GetProcessChan() chan types.DeviceStatus
 	GetResponseChan() chan types.DeviceResponse
 	GetCloseChan() chan bool
+	GetCloseResponseChan() chan bool
 }

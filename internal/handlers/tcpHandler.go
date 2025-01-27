@@ -99,7 +99,10 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		dataStore.Response()
 	}()
 
-	defer func() { dataStore.GetCloseChan() <- true }()
+	defer func() {
+		dataStore.GetCloseChan() <- true
+		dataStore.GetCloseResponseChan() <- true
+	}()
 
 	t.connToStoreMap[remoteAddr] = dataStore
 	_, err = conn.Write(ack)
@@ -135,7 +138,8 @@ func makeRemoteRpcStore(remoteStoreClient store.CustomAvlDataStoreClient) store.
 	return &store.RemoteRpcStore{
 		ProcessChan:       make(chan types.DeviceStatus, 200),
 		ResponseChan:      make(chan types.DeviceResponse, 200),
-		CloseChan:         make(chan bool, 200),
+		CloseChan:         make(chan bool, 1),
+		CloseResponseChan: make(chan bool, 1),
 		RemoteStoreClient: remoteStoreClient,
 	}
 }
@@ -168,11 +172,12 @@ func makeJsonStore(destDir string, deviceIdentifier string) store.Store {
 	logger.Sugar().Infof("[deviceId: %s] Created json file store at %s", deviceIdentifier, file.Name())
 
 	return &store.JsonLinesStore{
-		File:         file,
-		ProcessChan:  make(chan types.DeviceStatus, 200),
-		ResponseChan: make(chan types.DeviceResponse, 200),
-		CloseChan:    make(chan bool, 200),
-		DeviceID:     deviceIdentifier,
+		File:              file,
+		ProcessChan:       make(chan types.DeviceStatus, 200),
+		ResponseChan:      make(chan types.DeviceResponse, 200),
+		CloseChan:         make(chan bool, 200),
+		CloseResponseChan: make(chan bool, 200),
+		DeviceID:          deviceIdentifier,
 	}
 }
 
