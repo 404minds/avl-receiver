@@ -11,6 +11,7 @@ services:
       - "15000:15000" # gRPC server port
     environment:
       - REMOTE_STORE_ADDR=${CUSTOM_REMOTE_STORE_ADDR}
+      - GRPC_SERVICE_NAME=${CUSTOM_GRPC_SERVICE_NAME}
 
 networks:
   deployment_base-network:
