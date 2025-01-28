@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,18 +15,18 @@ var logger = configuredLogger.Logger
 
 type JsonLinesStore struct {
 	File              *os.File
-	ProcessChan       chan types.DeviceStatus
-	ResponseChan      chan types.DeviceResponse
+	ProcessChan       chan *types.DeviceStatus
+	ResponseChan      chan *types.DeviceResponse
 	CloseChan         chan bool
 	CloseResponseChan chan bool
 	DeviceID          string
 }
 
-func (s *JsonLinesStore) GetResponseChan() chan types.DeviceResponse {
+func (s *JsonLinesStore) GetResponseChan() chan *types.DeviceResponse {
 	return s.ResponseChan
 }
 
-func (s *JsonLinesStore) GetProcessChan() chan types.DeviceStatus {
+func (s *JsonLinesStore) GetProcessChan() chan *types.DeviceStatus {
 	return s.ProcessChan
 }
 
@@ -35,7 +36,7 @@ func (s *JsonLinesStore) GetCloseChan() chan bool {
 
 func (s *JsonLinesStore) GetCloseResponseChan() chan bool { return s.CloseResponseChan }
 
-func (s *JsonLinesStore) Process() {
+func (s *JsonLinesStore) Process(ctx context.Context) {
 	for {
 		select {
 		case data := <-s.ProcessChan:
@@ -51,7 +52,7 @@ func (s *JsonLinesStore) Process() {
 	}
 }
 
-func (s *JsonLinesStore) Response() {
+func (s *JsonLinesStore) Response(ctx context.Context) {
 	for {
 		select {
 		case data := <-s.ResponseChan:

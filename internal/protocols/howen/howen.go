@@ -93,14 +93,14 @@ func (p *HOWENWS) ConsumeMessage(conn *websocket.Conn, dataStore store.Store) er
 			return errors.Wrap(err, "error parsing GPS packet")
 		}
 		protoReply := gpsPacket.ToProtobufDeviceStatusGPS()
-		asyncStore <- *protoReply
+		asyncStore <- protoReply
 	case "80004":
 		alarmPacket, err := p.parseAlarmMessage(message)
 		if err != nil {
 			return errors.Wrap(err, "error parsing Alarm packet")
 		}
 		protoReply := alarmPacket.ToProtobufDeviceStatusAlarm()
-		asyncStore <- *protoReply
+		asyncStore <- protoReply
 	default:
 		logger.Sugar().Infof("Unhandled action type: %s", actionData.Action)
 	}
