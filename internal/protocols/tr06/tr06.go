@@ -117,7 +117,7 @@ func (p *TR06Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, dat
 
 		asyncStore := dataStore.GetProcessChan()
 		protoPacket := packet.ToProtobufDeviceStatus(p.GetDeviceID(), p.DeviceType)
-		asyncStore <- *protoPacket
+		asyncStore <- protoPacket
 	}
 }
 

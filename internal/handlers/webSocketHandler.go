@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	devices "github.com/404minds/avl-receiver/internal/protocols"
 	"github.com/404minds/avl-receiver/internal/protocols/howen"
@@ -25,8 +26,9 @@ func (w *WebSocketHandler) HandleMessage(conn *websocket.Conn) {
 	deviceProtocol := &howen.HOWENWS{DeviceType: types.DeviceType_HOWEN}
 	dataStore := w.makeAsyncStore(deviceProtocol)
 
+	ctx, _ := context.WithCancel(context.Background())
 	logger.Sugar().Info("starting data store process")
-	go dataStore.Process()
+	go dataStore.Process(ctx)
 
 	defer func() {
 		dataStore.GetCloseChan() <- true

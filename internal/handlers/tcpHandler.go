@@ -5,18 +5,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
-	"io"
-	"net"
-	"os"
-	"path"
-	"slices"
-
 	errs "github.com/404minds/avl-receiver/internal/errors"
 	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
 	devices "github.com/404minds/avl-receiver/internal/protocols"
 	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/404minds/avl-receiver/internal/types"
+	"go.uber.org/zap"
+	"io"
+	"net"
+	"os"
+	"path"
+	"runtime/debug"
+	"slices"
+	"sync"
+	"time"
 )
 
 var logger = configuredLogger.Logger
@@ -27,6 +29,7 @@ type DeviceConnectionInfo struct {
 }
 
 type TcpHandler struct {
+	mu                sync.RWMutex
 	connToProtocolMap map[string]devices.DeviceProtocol // make this an LRU cache to evict stale connections
 	allowedProtocols  []types.DeviceProtocolType
 	connToStoreMap    map[string]store.Store
@@ -41,13 +44,78 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	defer func(conn net.Conn) {
 		err := conn.Close()
 		if err != nil {
-
+			return
 		}
 	}(conn)
 
+	err := conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	if err != nil {
+		return
+	}
+	err = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	if err != nil {
+		return
+	}
+	reader := bufio.NewReader(conn)
+	deviceProtocol, ack, err := t.attemptDeviceLogin(reader)
+	if err != nil {
+		logger.Error("failed to identify device", zap.String("remoteAddr", remoteAddr), zap.Error(err))
+		return
+	}
+
+	// Lock for map writes
+	t.mu.Lock()
+	t.connToProtocolMap[remoteAddr] = deviceProtocol
+	deviceID := deviceProtocol.GetDeviceID()
+
+	if deviceID != "" {
+		t.imeiToConnMap[deviceID] = DeviceConnectionInfo{
+			Conn:     conn,
+			Protocol: deviceProtocol,
+		}
+		logger.Sugar().Infof("Mapped deviceID %s to connection %v", deviceID, remoteAddr)
+	}
+	t.mu.Unlock()
+
+	dataStore := t.makeAsyncStore(deviceProtocol)
+
+	// Start processing goroutines
+	// Start processing goroutines
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Sugar().Errorf("Recovered from panic in Process goroutine: %v, \n Stack trace %s", r, debug.Stack())
+			}
+		}()
+		dataStore.Process(ctx)
+	}()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Sugar().Errorf("Recovered from panic in Response goroutine: %v, \n Stack trace %s", r, debug.Stack())
+			}
+		}()
+		dataStore.Response(ctx)
+	}()
+
 	defer func() {
+		dataStore.GetCloseChan() <- true
+		dataStore.GetCloseResponseChan() <- true
+		close(dataStore.GetCloseChan())
+		close(dataStore.GetCloseResponseChan())
+
+		t.mu.Lock()
+		defer t.mu.Unlock()
+
+		// Clean up all maps
 		delete(t.connToProtocolMap, remoteAddr)
 		delete(t.connToStoreMap, remoteAddr)
+
+		// More efficient cleanup using reverse mapping
 		for imei, info := range t.imeiToConnMap {
 			if info.Conn == conn {
 				delete(t.imeiToConnMap, imei)
@@ -56,60 +124,36 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		}
 	}()
 
-	reader := bufio.NewReader(conn)
-	deviceProtocol, ack, err := t.attemptDeviceLogin(reader)
-	if err != nil {
-		logger.Error("failed to identify device", zap.String("remoteAddr", remoteAddr), zap.Error(err))
-		return
-	}
-
-	t.connToProtocolMap[remoteAddr] = deviceProtocol
-	deviceID := deviceProtocol.GetDeviceID()
-
-	// Store the IMEI, connection, and protocol type in the combined map
-	if deviceID != "" {
-		t.imeiToConnMap[deviceID] = DeviceConnectionInfo{
-			Conn:     conn,
-			Protocol: deviceProtocol,
-		}
-		logger.Sugar().Infof("Mapped deviceID %s to connection %v and protocol %v", deviceID, conn.RemoteAddr().String(), deviceProtocol)
-	}
-
-	dataStore := t.makeAsyncStore(deviceProtocol)
-
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				logger.Sugar().Errorf("Recovered from panic in Process goroutine for deviceID %s: %v", deviceID, r)
-			}
-		}()
-
-		defer logger.Sugar().Infof("Process goroutine for deviceID %s exited", deviceID)
-		dataStore.Process()
-	}()
-
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				logger.Sugar().Errorf("Recovered from panic in Response goroutine for deviceID %s: %v", deviceID, r)
-			}
-		}()
-
-		defer logger.Sugar().Infof("Response goroutine for deviceID %s exited", deviceID)
-		dataStore.Response()
-	}()
-
-	defer func() {
-		dataStore.GetCloseChan() <- true
-		dataStore.GetCloseResponseChan() <- true
-	}()
-
+	// Lock for store map update
+	t.mu.Lock()
 	t.connToStoreMap[remoteAddr] = dataStore
-	_, err = conn.Write(ack)
-	if err != nil {
-		logger.Error("Error while writing login ack", zap.Error(err))
+	t.mu.Unlock()
+
+	if _, err = conn.Write(ack); err != nil {
+		logger.Error("Error writing login ack", zap.Error(err))
 		return
 	}
+
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+					logger.Error("failed to refresh read deadline", zap.Error(err))
+					return
+				}
+				if err := conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+					logger.Error("failed to refresh write deadline", zap.Error(err))
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	err = deviceProtocol.ConsumeStream(reader, conn, dataStore)
 	if err != nil && err != io.EOF {
@@ -136,8 +180,8 @@ func (t *TcpHandler) makeAsyncStore(deviceProtocol devices.DeviceProtocol) store
 
 func makeRemoteRpcStore(remoteStoreClient store.CustomAvlDataStoreClient) store.Store {
 	return &store.RemoteRpcStore{
-		ProcessChan:       make(chan types.DeviceStatus, 200),
-		ResponseChan:      make(chan types.DeviceResponse, 200),
+		ProcessChan:       make(chan *types.DeviceStatus, 200),
+		ResponseChan:      make(chan *types.DeviceResponse, 200),
 		CloseChan:         make(chan bool, 1),
 		CloseResponseChan: make(chan bool, 1),
 		RemoteStoreClient: remoteStoreClient,
@@ -173,8 +217,8 @@ func makeJsonStore(destDir string, deviceIdentifier string) store.Store {
 
 	return &store.JsonLinesStore{
 		File:              file,
-		ProcessChan:       make(chan types.DeviceStatus, 200),
-		ResponseChan:      make(chan types.DeviceResponse, 200),
+		ProcessChan:       make(chan *types.DeviceStatus, 200),
+		ResponseChan:      make(chan *types.DeviceResponse, 200),
 		CloseChan:         make(chan bool, 200),
 		CloseResponseChan: make(chan bool, 200),
 		DeviceID:          deviceIdentifier,
