@@ -1,5 +1,5 @@
 ## build environment
-FROM golang:1.22.0 as builder
+FROM golang:1.22.0 AS builder
 
 WORKDIR /avl-receiver
 
@@ -21,5 +21,5 @@ COPY --from=builder /avl-receiver .
 EXPOSE 21000
 EXPOSE 15000
 
-CMD ["./receiver", "-port", "21000", "-grpcPort", "15000", "-remoteStoreAddr", "carbuddy-consumer:9000"]
+CMD ./receiver -port 21000 -grpcPort 15000 -remoteStoreAddr "${REMOTE_STORE_ADDR:-fns-consumer-grpc-server:8000}"
 

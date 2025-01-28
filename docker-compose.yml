@@ -9,8 +9,8 @@ services:
     ports:
       - "21000:21000" # TCP server port
       - "15000:15000" # gRPC server port
-    command: ["./receiver", "-port", "21000", "-grpcPort", "15000", "-remoteStoreAddr", "carbuddy-consumer:9000"]
-    
+    environment:
+      - REMOTE_STORE_ADDR=${CUSTOM_REMOTE_STORE_ADDR}
 
 networks:
   deployment_base-network:
