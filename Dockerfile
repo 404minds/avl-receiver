@@ -21,10 +21,7 @@ COPY --from=builder /avl-receiver .
 EXPOSE 21000
 EXPOSE 15000
 
-CMD ["./receiver", 
-  "-port", "21000", 
-  "-grpcPort", "15000", 
-  "-remoteStoreAddr", "${REMOTE_STORE_ADDR:-fns-consumer-grpc-server:8000}",
-  "-grpcServiceName", "${GRPC_SERVICE_NAME:-/AVLService}"
-]
+CMD ./receiver -port 21000 -grpcPort 15000 \
+    -remoteStoreAddr "${REMOTE_STORE_ADDR:-fns-consumer-grpc-server:8000}" \
+    -grpcServiceName "${GRPC_SERVICE_NAME:-/AVLService}"
 
