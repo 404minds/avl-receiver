@@ -6,6 +6,7 @@ services:
     container_name: avl-receiver
     networks:
       - deployment_base-network
+    restart: on-failure
     ports:
       - "21000:21000" # TCP server port
       - "15000:15000" # gRPC server port
