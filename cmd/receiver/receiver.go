@@ -8,13 +8,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/gorilla/websocket"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/gorilla/websocket"
 
 	"github.com/404minds/avl-receiver/internal/handlers"
 	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
@@ -54,6 +55,12 @@ func main() {
 	var grpcPort = flag.Int("grpcPort", 15000, "Port for gRPC server")
 	var remoteStoreAddr = flag.String("remoteStoreAddr", "", "Address of the remote store")
 	var storeType = flag.String("storeType", "remote", "Store type - one of local or remote")
+	var grpcServiceName = flag.String(
+		"grpcServiceName",
+		"/AVLService",
+		"gRPC service name prefix for VerifyDevice and InsertAVL methods",
+	)
+
 	flag.Parse()
 
 	if *port == 0 || *remoteStoreAddr == "" || *storeType == "" {
@@ -77,7 +84,7 @@ func main() {
 		}
 	}()
 
-	remoteStoreClient := store.NewCustomAvlDataStoreClient(storeConn)
+	remoteStoreClient := store.NewCustomAvlDataStoreClient(storeConn, *grpcServiceName)
 	tcpHandler := handlers.NewTcpHandler(*remoteStoreClient, *storeType)
 	websocketHandler := handlers.NewWebSocketHandler(*remoteStoreClient, *storeType)
 
