@@ -211,7 +211,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 		info.Vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN_CAN])
 	}
 
-	info.FuelGps = int32(r.Record.IOElement.Properties4B[TIO_FuelUsedGPS])
+	info.FuelGps = int32(r.Record.IOElement.Properties4B[TIO_FuelUsedGPS] / 1000)
 
 	//battery level
 	if r.Record.IOElement.Properties2B[TIO_BatteryVoltage] <= 4200 {
