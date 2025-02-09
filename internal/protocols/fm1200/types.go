@@ -81,7 +81,7 @@ const (
 	TIO_DigitalInput2                   = 2
 	TIO_DigitalInput3                   = 3
 	TIO_AnalogInput                     = 9
-	TIO_FuelUsedGPS                     = 13
+	TIO_FuelUsedGPS                     = 12
 	TIO_OdometerValue                   = 16
 	TIO_GSMSignal                       = 21
 	TIO_Speed                           = 24
