@@ -160,6 +160,9 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	} else if r.Record.IOElement.Properties4B[TIO_TotalMileage_CAN] > 0 {
 
 		info.Odometer = int32(r.Record.IOElement.Properties4B[TIO_TotalMileage_CAN]) / 1000
+	} else if r.Record.IOElement.Properties4B[TIO_OdometerValue] > 0 {
+
+		info.Odometer = int32(r.Record.IOElement.Properties4B[TIO_OdometerValue]) / 1000
 	}
 
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
