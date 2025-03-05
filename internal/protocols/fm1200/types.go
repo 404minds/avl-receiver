@@ -81,6 +81,7 @@ const (
 	TIO_DigitalInput2                   = 2
 	TIO_DigitalInput3                   = 3
 	TIO_AnalogInput                     = 9
+	TIO_FuelUsedGPS                     = 12
 	TIO_OdometerValue                   = 16
 	TIO_GSMSignal                       = 21
 	TIO_Speed                           = 24
@@ -212,6 +213,8 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	} else if string(r.Record.IOElement.PropertiesNXB[TIO_VIN_CAN]) != "" {
 		info.Vin = string(r.Record.IOElement.PropertiesNXB[TIO_VIN_CAN])
 	}
+
+	info.FuelGps = int32(r.Record.IOElement.Properties4B[TIO_FuelUsedGPS] / 1000)
 
 	//battery level
 	if r.Record.IOElement.Properties2B[TIO_BatteryVoltage] <= 4200 {

@@ -1,5 +1,5 @@
 run:
-	go run cmd/receiver/receiver.go -port 21000 -remoteStoreAddr localhost:8000
+	go run -race cmd/receiver/receiver.go -port 21000 -remoteStoreAddr localhost:8000
 
 run-buddy:
 	go run cmd/receiver/receiver.go -port 21000 -remoteStoreAddr localhost:9000 -grpcServiceName "/data.StreamService"
@@ -23,4 +23,4 @@ compose-up:
 proto:
 	protoc -I=./protos --go_out=./internal/types --go-grpc_out=./internal/types --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative ./protos/common-types.proto
 	protoc -I=./protos --go_out=./internal/store --go-grpc_out=./internal/store --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative ./protos/avl-data-store.proto
-    protoc -I=./protos --go_out=./internal/store --go-grpc_out=./internal/store --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative ./protos/avl-service.proto
+#    protoc -I=./protos --go_out=./internal/store --go-grpc_out=./internal/store --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative ./protos/avl-service.proto

@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"log"
+	"net"
 	"os"
 	"time"
 
@@ -30,15 +31,15 @@ func (t *FM1200Protocol) GetDeviceID() string {
 	return t.Imei
 }
 
-func (p *FM1200Protocol) GetDeviceType() types.DeviceType {
-	return p.DeviceType
+func (t *FM1200Protocol) GetDeviceType() types.DeviceType {
+	return t.DeviceType
 }
 
-func (p *FM1200Protocol) SetDeviceType(t types.DeviceType) {
-	p.DeviceType = t
+func (t *FM1200Protocol) SetDeviceType(dt types.DeviceType) {
+	t.DeviceType = dt
 }
 
-func (p *FM1200Protocol) GetProtocolType() types.DeviceProtocolType {
+func (t *FM1200Protocol) GetProtocolType() types.DeviceProtocolType {
 	return types.DeviceProtocolType_FM1200
 }
 
@@ -83,6 +84,12 @@ func (t *FM1200Protocol) ConsumeStream(reader *bufio.Reader, responseWriter io.W
 
 		// Process the message
 		//var fuelError bool
+		// Set a read timeout to avoid blocking indefinitely
+		if err := t.setReadTimeout(responseWriter, 30*time.Second); err != nil {
+			logger.Error("Failed to set read timeout", zap.Error(err))
+			return err
+		}
+
 		err, _ := t.consumeMessage(reader, dataStore, responseWriter)
 		if err != nil {
 			if err == io.EOF {
@@ -110,7 +117,12 @@ func saveToFile(filename string, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("unable to open file: %w", err)
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+
+		}
+	}(file)
 
 	// Convert raw bytes to string format for logging
 	byteArrayString := fmt.Sprintf("%v", data) // Formats as [0 0 0 0 ...]
@@ -128,12 +140,24 @@ func saveToFile(filename string, data []byte) error {
 	return nil
 }
 
+func (t *FM1200Protocol) setReadTimeout(writer io.Writer, timeout time.Duration) error {
+	if conn, ok := writer.(net.Conn); ok {
+		return conn.SetReadDeadline(time.Now().Add(timeout))
+	}
+	return nil
+}
+
 func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.Store, responseWriter io.Writer) (err error, fuelError bool) {
 	// Read the preamble (first 4 bytes), should be 0x00000000
 	var headerZeros uint32
 	err = binary.Read(reader, binary.BigEndian, &headerZeros)
 	if err != nil {
-		return err, false
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			logger.Sugar().Error("Read timeout", zap.Error(err))
+			return errors.New("read timeout"), false
+		}
+		return errors.Wrapf(err, "Failed during binary.Read"), false
 	}
 	if headerZeros != 0x0000 {
 		return errors.Wrapf(errs.ErrFM1200BadDataPacket, "error at header Zeroes"), false
@@ -190,7 +214,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 
 		logger.Sugar().Info("proto reply device response", protoReply)
 		asyncResponseStore := dataStore.GetResponseChan()
-		asyncResponseStore <- *protoReply
+		asyncResponseStore <- protoReply
 
 		err = binary.Read(reader, binary.BigEndian, &response.CRC)
 		if err != nil {
@@ -228,7 +252,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 		}
 		asyncStore := dataStore.GetProcessChan()
 		protoRecord := r.ToProtobufDeviceStatus()
-		asyncStore <- *protoRecord
+		asyncStore <- protoRecord
 		time.Sleep(100 * time.Millisecond)
 	}
 	logger.Sugar().Infof("stored %d records", len(parsedPacket.Data))

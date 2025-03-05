@@ -1,11 +1,15 @@
 package store
 
-import "github.com/404minds/avl-receiver/internal/types"
+import (
+	"context"
+	"github.com/404minds/avl-receiver/internal/types"
+)
 
 type Store interface {
-	Process()
-	Response()
-	GetProcessChan() chan types.DeviceStatus
-	GetResponseChan() chan types.DeviceResponse
+	Process(ctx context.Context)
+	Response(ctx context.Context)
+	GetProcessChan() chan *types.DeviceStatus
+	GetResponseChan() chan *types.DeviceResponse
 	GetCloseChan() chan bool
+	GetCloseResponseChan() chan bool
 }
