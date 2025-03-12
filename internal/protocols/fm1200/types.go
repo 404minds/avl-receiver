@@ -85,7 +85,10 @@ const (
 	TIO_OdometerValue                   = 16
 	TIO_GSMSignal                       = 21
 	TIO_Speed                           = 24
+	TIO_CoolantTemperature              = 32
 	TIO_RPM                             = 36
+	TIO_Vehicle_Speed_OBD               = 37
+	TIO_FuelLevelPCT_OBD                = 48
 	TIO_AmbientTemperature              = 53
 	TIO_ExternalVoltage                 = 66
 	TIO_BatteryVoltage                  = 67
@@ -148,7 +151,9 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.Position.Longitude = r.Record.GPSElement.Longitude
 	info.Position.Altitude = float32(r.Record.GPSElement.Altitude)
 
-	if r.Record.GPSElement.Speed > 0 {
+	if r.Record.IOElement.Properties1B[TIO_Vehicle_Speed_OBD] > 0 {
+		speed = float32(r.Record.IOElement.Properties1B[TIO_Vehicle_Speed_OBD])
+	} else if r.Record.GPSElement.Speed > 0 {
 		speed = float32(r.Record.GPSElement.Speed)
 	} else if r.Record.IOElement.Properties1B[TIO_Speed_CAN] > 0 {
 		speed = float32(r.Record.IOElement.Properties1B[TIO_Speed_CAN])
@@ -175,13 +180,20 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 		info.Temperature = float32(r.Record.IOElement.Properties4B[TIO_DallasTemperature])
 	}
 
+	info.CoolantTemperature = float32(r.Record.IOElement.Properties1B[TIO_CoolantTemperature])
+
 	if r.Record.IOElement.Properties4B[TIO_FuelLevel] > 0 {
 		info.FuelLtr = int32(r.Record.IOElement.Properties4B[TIO_FuelLevel]) / 10
 	} else if r.Record.IOElement.Properties2B[TIO_FuelLevelLtr_CAN] > 0 {
 		info.FuelLtr = int32(r.Record.IOElement.Properties2B[TIO_FuelLevelLtr_CAN]) / 10
 	}
 
-	info.FuelPct = int32(r.Record.IOElement.Properties1B[TIO_FuelLevelPercent_CAN])
+	if r.Record.IOElement.Properties1B[TIO_FuelLevelPCT_OBD] > 0 {
+		info.FuelPct = int32(r.Record.IOElement.Properties1B[TIO_FuelLevelPCT_OBD])
+	} else if r.Record.IOElement.Properties1B[TIO_FuelLevelPercent_CAN] > 0 {
+		info.FuelPct = int32(r.Record.IOElement.Properties1B[TIO_FuelLevelPercent_CAN])
+	}
+
 	// Check if the iButtonID is available, otherwise use RFID
 	if iButtonID, exists := r.Record.IOElement.Properties8B[TIO_IButtonID]; exists && iButtonID != 0 {
 		info.IdentificationId = ConvertDecimalToHexAndReverse(iButtonID)

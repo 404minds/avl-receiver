@@ -36,11 +36,12 @@ message DeviceStatus {
     string identification_id = 13;
     string vin = 14;
     int32 rpm = 15;
+    float coolant_temperature = 16;
     oneof raw_data {
-        WanwayPacket wanway_packet = 16;
-        TeltonikaPacket teltonika_packet = 17;
-        ConcoxPacket  concox_packet = 18;
-        HowenPacket   howen_packet = 19;
+        WanwayPacket wanway_packet = 17;
+        TeltonikaPacket teltonika_packet = 18;
+        ConcoxPacket  concox_packet = 19;
+        HowenPacket   howen_packet = 20;
     }
 }
 
