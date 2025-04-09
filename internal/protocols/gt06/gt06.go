@@ -6,10 +6,11 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/404minds/avl-receiver/internal/store"
-	"go.uber.org/zap"
 	"io"
 	"time"
+
+	"github.com/404minds/avl-receiver/internal/store"
+	"go.uber.org/zap"
 
 	"github.com/404minds/avl-receiver/internal/crc"
 	errs "github.com/404minds/avl-receiver/internal/errors"
@@ -51,47 +52,115 @@ func (p *GT06Protocol) GetProtocolType() types.DeviceProtocolType {
 	return types.DeviceProtocolType_TR06
 }
 
+// func (p *GT06Protocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int, e error) {
+// 	if !p.IsValidHeader(reader) {
+// 		return nil, 0, errs.ErrUnknownProtocol
+// 	}
+// 	logger.Sugar().Infoln("1")
+
+// 	// This should have been a TR06 device
+// 	packet, err := p.parsePacket(reader)
+// 	logger.Sugar().Infoln("2")
+// 	if err != nil {
+// 		logger.Error("failed to parse TR06 packet", zap.Error(err))
+// 		return nil, 0, err
+// 	}
+
+// 	if packet.MessageType == MSG_LoginData {
+// 		if packet.Information == nil {
+// 			logger.Sugar().Infoln("3")
+// 			logger.Error("packet information is nil", zap.Error(errs.ErrTR06InvalidLoginInfo))
+// 			return nil, 0, errs.ErrTR06InvalidLoginInfo
+// 		}
+
+// 		loginData, ok := packet.Information.(*LoginData)
+// 		if !ok {
+// 			logger.Sugar().Infoln("4")
+// 			logger.Error("packet information is not of type *LoginData", zap.Error(errs.ErrTR06InvalidLoginInfo))
+// 			return nil, 0, errs.ErrTR06InvalidLoginInfo
+// 		}
+
+// 		if loginData == nil {
+// 			logger.Sugar().Infoln("5")
+// 			logger.Error("loginData is nil", zap.Error(errs.ErrTR06InvalidLoginInfo))
+// 			return nil, 0, errs.ErrTR06InvalidLoginInfo
+// 		}
+// 		logger.Sugar().Info("from Login LoginData: ", loginData)
+// 		p.LoginInformation = loginData
+
+// 		logger.Sugar().Infoln("6")
+// 		byteBuffer := bytes.NewBuffer([]byte{})
+// 		err = p.sendResponse(packet, byteBuffer)
+// 		if err != nil {
+// 			logger.Error("failed to send response for TR06 packet", zap.Error(err))
+// 			return nil, 0, err
+// 		}
+// 		logger.Sugar().Infoln("7")
+
+// 		return byteBuffer.Bytes(), 0, nil // nothing to skip since the stream is already consumed
+// 	} else {
+// 		logger.Sugar().Infoln("8")
+// 		logger.Error("packet message type is not MSG_LoginData", zap.Error(errs.ErrTR06InvalidLoginInfo))
+// 		return nil, 0, errs.ErrTR06InvalidLoginInfo
+// 	}
+// }
+
 func (p *GT06Protocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int, e error) {
+	logger.Sugar().Infoln("Step 1 - GT06 Login started")
+
 	if !p.IsValidHeader(reader) {
+		logger.Sugar().Infoln("Step 2 - Invalid header for GT06")
 		return nil, 0, errs.ErrUnknownProtocol
 	}
+	logger.Sugar().Infoln("Step 3 - Header is valid")
 
-	// This should have been a TR06 device
 	packet, err := p.parsePacket(reader)
+	logger.Sugar().Infoln("Step 4 - Packet parsed")
+
 	if err != nil {
-		logger.Error("failed to parse TR06 packet", zap.Error(err))
+		logger.Error("Step 5 - Failed to parse GT06 packet", zap.Error(err))
 		return nil, 0, err
 	}
 
 	if packet.MessageType == MSG_LoginData {
+		logger.Sugar().Infoln("Step 6 - Packet is of type MSG_LoginData")
+
 		if packet.Information == nil {
-			logger.Error("packet information is nil", zap.Error(errs.ErrTR06InvalidLoginInfo))
+			logger.Sugar().Infoln("Step 7 - Packet information is nil")
+			logger.Error("Step 8 - Packet information is nil", zap.Error(errs.ErrTR06InvalidLoginInfo))
 			return nil, 0, errs.ErrTR06InvalidLoginInfo
 		}
 
 		loginData, ok := packet.Information.(*LoginData)
 		if !ok {
-			logger.Error("packet information is not of type *LoginData", zap.Error(errs.ErrTR06InvalidLoginInfo))
+			logger.Sugar().Infoln("Step 9 - Packet information is not of type *LoginData")
+			logger.Error("Step 10 - Packet information is not of type *LoginData", zap.Error(errs.ErrTR06InvalidLoginInfo))
 			return nil, 0, errs.ErrTR06InvalidLoginInfo
 		}
 
 		if loginData == nil {
-			logger.Error("loginData is nil", zap.Error(errs.ErrTR06InvalidLoginInfo))
+			logger.Sugar().Infoln("Step 11 - loginData is nil")
+			logger.Error("Step 12 - loginData is nil", zap.Error(errs.ErrTR06InvalidLoginInfo))
 			return nil, 0, errs.ErrTR06InvalidLoginInfo
 		}
-		logger.Sugar().Info("from Login LoginData: ", loginData)
+
+		logger.Sugar().Info("Step 13 - LoginData received: ", loginData)
 		p.LoginInformation = loginData
 
 		byteBuffer := bytes.NewBuffer([]byte{})
+		logger.Sugar().Infoln("Step 14 - Sending response")
+
 		err = p.sendResponse(packet, byteBuffer)
 		if err != nil {
-			logger.Error("failed to send response for TR06 packet", zap.Error(err))
+			logger.Error("Step 15 - Failed to send response", zap.Error(err))
 			return nil, 0, err
 		}
 
-		return byteBuffer.Bytes(), 0, nil // nothing to skip since the stream is already consumed
+		logger.Sugar().Infoln("Step 16 - Response sent successfully")
+		return byteBuffer.Bytes(), 0, nil
 	} else {
-		logger.Error("packet message type is not MSG_LoginData", zap.Error(errs.ErrTR06InvalidLoginInfo))
+		logger.Sugar().Infoln("Step 17 - Packet message type is not MSG_LoginData")
+		logger.Error("Step 18 - Invalid message type", zap.Error(errs.ErrTR06InvalidLoginInfo))
 		return nil, 0, errs.ErrTR06InvalidLoginInfo
 	}
 }
