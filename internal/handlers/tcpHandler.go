@@ -5,12 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	errs "github.com/404minds/avl-receiver/internal/errors"
-	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
-	devices "github.com/404minds/avl-receiver/internal/protocols"
-	"github.com/404minds/avl-receiver/internal/store"
-	"github.com/404minds/avl-receiver/internal/types"
-	"go.uber.org/zap"
 	"io"
 	"net"
 	"os"
@@ -19,6 +13,13 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	errs "github.com/404minds/avl-receiver/internal/errors"
+	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
+	devices "github.com/404minds/avl-receiver/internal/protocols"
+	"github.com/404minds/avl-receiver/internal/store"
+	"github.com/404minds/avl-receiver/internal/types"
+	"go.uber.org/zap"
 )
 
 var logger = configuredLogger.Logger
@@ -228,66 +229,81 @@ func makeJsonStore(destDir string, deviceIdentifier string) store.Store {
 func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.DeviceProtocol, ack []byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Sugar().Error("Panic occurred during protocol login: ", r)
+			logger.Sugar().Error("Step 0 - Panic occurred during protocol login: ", r)
 			err = fmt.Errorf("panic occurred during protocol login: %v", r)
 		}
 	}()
 
-	for _, protocolType := range t.allowedProtocols {
-		logger.Sugar().Info("Attempting device login with ProtocolType: ", protocolType)
+	logger.Sugar().Infoln("Step 1 - Starting attemptDeviceLogin")
+
+	for i, protocolType := range t.allowedProtocols {
+		logger.Sugar().Infof("Step 2.%d - Trying protocol type: %s", i+1, protocolType)
+
 		protocol = devices.MakeProtocolForType(protocolType)
-		logger.Sugar().Info("Created Protocol: ", protocol)
+		logger.Sugar().Infof("Step 3.%d - Created protocol instance: %T", i+1, protocol)
 
 		if protocol == nil {
-			logger.Sugar().Error("Unsupported ProtocolType: ", protocolType)
+			logger.Sugar().Errorf("Step 4.%d - Unsupported ProtocolType: %s", i+1, protocolType)
 			continue
 		}
 
-		logger.Sugar().Info("Attempting to login with protocol: ", protocolType)
+		logger.Sugar().Infof("Step 5.%d - Attempting login with protocol: %s", i+1, protocolType)
 		ack, bytesToSkip, err := protocol.Login(reader)
-		logger.Sugar().Infof("Acknowledgement: %v for bytes to skip: %d and error: %v", ack, bytesToSkip, err)
+		logger.Sugar().Infof("Step 6.%d - Login response => Ack: %v, BytesToSkip: %d, Error: %v", i+1, ack, bytesToSkip, err)
 
 		if err != nil {
 			if errors.Is(err, errs.ErrUnknownProtocol) {
-				logger.Sugar().Error("Unknown protocol error: ", err)
-				continue // try another device
+				logger.Sugar().Errorf("Step 7.%d - Unknown protocol error: %v", i+1, err)
+				continue // try another protocol
 			}
-			logger.Sugar().Error("Error during login: ", err)
+			logger.Sugar().Errorf("Step 8.%d - Error during login: %v", i+1, err)
 			return nil, nil, err
 		}
 
-		// Only call GetDeviceID after a successful login
 		deviceID := protocol.GetDeviceID()
-		logger.Sugar().Infof("Device ID: %s", deviceID)
+		logger.Sugar().Infof("Step 9.%d - Retrieved Device ID: %s", i+1, deviceID)
 
 		if deviceID == "" {
-			logger.Error("Device ID is empty after successful login")
+			logger.Sugar().Errorf("Step 10.%d - Device ID is empty after successful login", i+1)
 			continue
 		}
 
-		logger.Info("Device identified", zap.String("protocol", protocolType.String()), zap.String("deviceID", deviceID), zap.Int("bytesToSkip", bytesToSkip))
+		logger.Info("Step 11 - Device identified",
+			zap.String("protocol", protocolType.String()),
+			zap.String("deviceID", deviceID),
+			zap.Int("bytesToSkip", bytesToSkip),
+		)
+
 		if _, err := reader.Discard(bytesToSkip); err != nil {
-			logger.Sugar().Error("Error discarding bytes: ", err)
+			logger.Sugar().Errorf("Step 12.%d - Failed to discard %d bytes: %v", i+1, bytesToSkip, err)
 			return nil, nil, err
 		}
 
 		deviceType, err := t.VerifyDevice(deviceID, protocol.GetProtocolType())
-		logger.Sugar().Info("device Type: ", deviceType, " error: ", err)
+		logger.Sugar().Infof("Step 13.%d - Device type: %v, Error: %v", i+1, deviceType, err)
+
 		if err != nil {
 			if errors.Is(err, errs.ErrUnauthorizedDevice) {
-				logger.Error("Device is not authorized", zap.String("deviceID", deviceID), zap.String("protocolType", protocol.GetProtocolType().String()))
+				logger.Error("Step 14 - Device is not authorized",
+					zap.String("deviceID", deviceID),
+					zap.String("protocolType", protocol.GetProtocolType().String()),
+				)
 				return nil, nil, err
 			}
-			logger.Sugar().Error("Error verifying device: ", err)
+			logger.Sugar().Errorf("Step 15.%d - Error verifying device: %v", i+1, err)
 			return nil, nil, err
 		}
 
 		protocol.SetDeviceType(deviceType)
-		logger.Info("Login successful", zap.String("deviceID", deviceID), zap.String("deviceType", deviceType.String()))
+		logger.Info("Step 16 - Login successful",
+			zap.String("deviceID", deviceID),
+			zap.String("deviceType", deviceType.String()),
+		)
+
 		return protocol, ack, nil
 	}
 
-	logger.Sugar().Error("All protocols failed, unknown device type")
+	logger.Sugar().Error("Step 17 - All protocols failed, unknown device type")
 	return nil, nil, errs.ErrUnknownDeviceType
 }
 
