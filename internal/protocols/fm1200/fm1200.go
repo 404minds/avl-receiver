@@ -5,14 +5,15 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/404minds/avl-receiver/internal/store"
-	"github.com/pkg/errors"
-	"go.uber.org/zap"
 	"io"
 	"log"
 	"net"
 	"os"
 	"time"
+
+	"github.com/404minds/avl-receiver/internal/store"
+	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/404minds/avl-receiver/internal/crc"
 	errs "github.com/404minds/avl-receiver/internal/errors"
@@ -242,6 +243,8 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 	if !valid {
 		return errs.ErrBadCrc, false
 	}
+
+	logger.Sugar().Infoln(" Tel parsedPacket Data", parsedPacket.Data)
 
 	// Store records
 	for i := len(parsedPacket.Data) - 1; i >= 0; i-- {
