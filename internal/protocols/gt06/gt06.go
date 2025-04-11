@@ -106,7 +106,8 @@ func (p *GT06Protocol) GetProtocolType() types.DeviceProtocolType {
 // }
 
 func (p *GT06Protocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int, e error) {
-	logger.Sugar().Infoln("Step 1 - GT06 Login started", p, "reader", reader)
+	header, headerErr := reader.Peek(2)
+	logger.Sugar().Infoln("Step 1 - GT06 Login started", p, "reader", header, headerErr)
 
 	if !p.IsValidHeader(reader) {
 		logger.Sugar().Infoln("Step 2 - Invalid header for GT06")
