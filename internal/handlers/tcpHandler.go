@@ -333,8 +333,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 		logger.Sugar().Infof("Step 6.%d - Login response => Ack: %v, BytesToSkip: %d, Error: %v", i+1, ack, bytesToSkip, err)
 
 		if err != nil {
-			if errors.Is(err, errs.ErrUnknownProtocol) || errors.Is(err, io.EOF) {
-				// Consider EOF or login format errors as "try next protocol" signals
+			if errors.Is(err, errs.ErrUnknownProtocol) || errors.Is(err, errs.ErrTR06InvalidLoginInfo) || errors.Is(err, errs.ErrGT06InvalidLoginInfo) || errors.Is(err, io.EOF) {
 				logger.Sugar().Warnf("Step 7.%d - Protocol detection error: %v, trying next protocol", i+1, err)
 				continue // try another protocol
 			}

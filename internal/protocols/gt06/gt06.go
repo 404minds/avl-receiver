@@ -323,6 +323,12 @@ func (p *GT06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 
 func (p *GT06Protocol) parsePacketData(reader *bufio.Reader, packet *Packet) error {
 	protocolNumByte, err := reader.ReadByte()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return errs.ErrUnknownProtocol
+		}
+		return err
+	}
 
 	msgType := MessageType(protocolNumByte)
 
@@ -330,6 +336,9 @@ func (p *GT06Protocol) parsePacketData(reader *bufio.Reader, packet *Packet) err
 		logger.Sugar().Errorf("Invalid message type: %x", protocolNumByte)
 		remainingData, err := p.consumePacket(reader)
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return errs.ErrUnknownProtocol
+			}
 			return err
 		}
 		logger.Sugar().Errorln("Invalid message type: ", hex.Dump(remainingData))
@@ -339,7 +348,7 @@ func (p *GT06Protocol) parsePacketData(reader *bufio.Reader, packet *Packet) err
 
 	packet.MessageType = msgType
 
-	// TODO: parse packetInfoBytes
+	// Parse packetInfoBytes
 	packet.Information, err = p.parsePacketInformation(reader, packet.MessageType)
 	if err != nil {
 		return err
@@ -396,15 +405,22 @@ func (p *GT06Protocol) parseLoginInformation(reader *bufio.Reader) (interface{},
 	err := binary.Read(reader, binary.BigEndian, &imeiBytes)
 	if err != nil {
 		logger.Error("failed to read IMEI bytes", zap.Error(err))
+		if errors.Is(err, io.EOF) {
+			return nil, errs.ErrUnknownProtocol // Return ErrUnknownProtocol instead of ErrTR06InvalidLoginInfo
+		}
 		return nil, errs.ErrTR06InvalidLoginInfo
 	}
 	logger.Sugar().Info("parseLoginInformation imeiBytes: ", imeiBytes[:])
 	loginInfo.TerminalID = hex.EncodeToString(imeiBytes[:])[1:] // IMEI is 15 chars
 	logger.Sugar().Info("parseLoginInformation loginInfo: ", loginInfo)
 	logger.Sugar().Info("parseLoginInformation loginInfo.TerminalID: ", loginInfo.TerminalID)
+
 	err = binary.Read(reader, binary.BigEndian, &loginInfo.TerminalType)
 	if err != nil {
 		logger.Error("failed to read terminal type", zap.Error(err))
+		if errors.Is(err, io.EOF) {
+			return nil, errs.ErrUnknownProtocol // Return ErrUnknownProtocol instead of ErrTR06InvalidLoginInfo
+		}
 		return nil, errs.ErrTR06InvalidLoginInfo
 	}
 
@@ -412,8 +428,13 @@ func (p *GT06Protocol) parseLoginInformation(reader *bufio.Reader) (interface{},
 	err = binary.Read(reader, binary.BigEndian, &timezoneOffset)
 	if err != nil {
 		logger.Error("failed to read timezone offset", zap.Error(err))
+		if errors.Is(err, io.EOF) {
+			return nil, errs.ErrUnknownProtocol // Return ErrUnknownProtocol instead of ErrTR06InvalidLoginInfo
+		}
 		return nil, errs.ErrTR06InvalidLoginInfo
 	}
+
+	// Rest of the function remains the same
 	timezonePart := int(timezoneOffset >> 4)
 	hours := timezonePart / 100
 	minutes := timezonePart % 100
