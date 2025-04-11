@@ -101,7 +101,7 @@ func (p *TR06Protocol) GetProtocolType() types.DeviceProtocolType {
 // }
 
 func (p *TR06Protocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int, e error) {
-	logger.Sugar().Infoln("Step 1 - TR06 Login started", p)
+	logger.Sugar().Infoln("Step 1 - TR06 Login started", p, "reader", reader)
 
 	if !p.IsValidHeader(reader) {
 		logger.Sugar().Infoln("Step 2 - Invalid header for TR06")
