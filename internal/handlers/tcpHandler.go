@@ -316,11 +316,19 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 		}
 	}()
 
-	// Before the loop, capture the reader's content without consuming it
-	readerCopy := new(bytes.Buffer)
-	// Peek as much as we reasonably can (adjust size as needed)
-	peekedBytes, _ := reader.Peek(reader.Buffered())
-	readerCopy.Write(peekedBytes)
+	const bufferSize = 1024 // Adjust based on your protocol needs
+
+	// Peek the data (this doesn't consume it)
+	initialData, err := reader.Peek(bufferSize)
+	if err != nil && err != io.EOF {
+		// If we can't even peek the initial data, there's a real problem
+		return nil, nil, fmt.Errorf("failed to read initial data: %w", err)
+	}
+
+	dataCopy := make([]byte, len(initialData))
+	copy(dataCopy, initialData)
+
+	logger.Sugar().Infof("Attempting to identify protocol, peeked %d bytes", len(dataCopy))
 
 	header, headerErr := reader.Peek(8)
 	logger.Sugar().Infoln("Step 0 OUTSIDE FOR LOOP", t, "reader", header, headerErr)
@@ -330,7 +338,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 	for i, protocolType := range t.allowedProtocols {
 
 		// Create a new reader for each protocol attempt using the copied data
-		tempReader := bufio.NewReader(bytes.NewReader(readerCopy.Bytes()))
+		tempReader := bufio.NewReader(bytes.NewReader(dataCopy))
 
 		header, headerErr := tempReader.Peek(2)
 		logger.Sugar().Infoln("Step 1.13000 - INSIDE FOR LOOP", t, "tempReader", header, headerErr)
