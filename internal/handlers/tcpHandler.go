@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -316,18 +315,6 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 		}
 	}()
 
-	buffered := reader.Buffered()
-	initialData := make([]byte, buffered)
-
-	// Peek at the buffered data without consuming it
-	peekedData, err := reader.Peek(buffered)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error peeking initial data: %v", err)
-	}
-
-	// Make a proper copy of the peeked data
-	copy(initialData, peekedData)
-
 	header, headerErr := reader.Peek(8)
 	logger.Sugar().Infoln("Step 0 OUTSIDE FOR LOOP", t, "reader", header, headerErr)
 
@@ -335,14 +322,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 
 	for i, protocolType := range t.allowedProtocols {
 
-		protocolReader := bufio.NewReader(
-			io.MultiReader(
-				bytes.NewReader(initialData), // First use our copy of the initial data
-				reader,                       // Then fall back to the original reader if needed
-			),
-		)
-
-		header, headerErr := protocolReader.Peek(2)
+		header, headerErr := reader.Peek(2)
 		logger.Sugar().Infoln("Step 1.13000 - INSIDE FOR LOOP", t, "reader", header, headerErr)
 
 		logger.Sugar().Infof("Step 2.%d - Trying protocol type: %s", i+1, protocolType)
