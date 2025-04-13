@@ -41,7 +41,7 @@ func TestTeltonikaDeviceLogin(t *testing.T) {
 		Imei:       "356307043721579",
 		DeviceType: types.DeviceType_TELTONIKA,
 	}, "")
-	protocol, ack, err := handler.attemptDeviceLogin(reader)
+	protocol, ack, err := handler.attemptDeviceLogin(reader, nil)
 
 	assert.NoError(t, err, "device login should succeed")
 	assert.IsType(t, &fm1200.FM1200Protocol{}, protocol, "protocol should be of type FM1200Protocol")
@@ -58,7 +58,7 @@ func TestWanwayDeviceLogin(t *testing.T) {
 		Imei:       "752533678900242",
 		DeviceType: types.DeviceType_WANWAY,
 	}, "")
-	protocol, ack, err := handler.attemptDeviceLogin(reader)
+	protocol, ack, err := handler.attemptDeviceLogin(reader, nil)
 
 	assert.NoError(t, err, "device login should succeed")
 	assert.IsType(t, &gt06.GT06Protocol{}, protocol, "protocol should be of type GT06Protocol")
@@ -70,7 +70,7 @@ func TestUnknownDeviceLogin(t *testing.T) {
 	buf, _ := hex.DecodeString("7676fafafafa")
 	reader := bufio.NewReader(bytes.NewReader(buf))
 	handler := NewTcpHandler(&mockRemoteDataStore{}, "")
-	protocol, ack, err := handler.attemptDeviceLogin(reader)
+	protocol, ack, err := handler.attemptDeviceLogin(reader, nil)
 
 	assert.Nil(t, protocol, "protocol should be nil")
 	assert.Nil(t, ack, "ack should be nil")
