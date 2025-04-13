@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -315,12 +316,18 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 		}
 	}()
 
+	initialBuffer, _ := reader.Peek(reader.Buffered())
+	snapshot := bytes.NewBuffer(initialBuffer)
+
 	header, headerErr := reader.Peek(8)
 	logger.Sugar().Infoln("Step 0 OUTSIDE FOR LOOP", t, "reader", header, headerErr)
 
 	logger.Sugar().Infoln("Step 1 - Starting attemptDeviceLogin")
 
 	for i, protocolType := range t.allowedProtocols {
+		// Reset reader to the snapshot for each protocol attempt
+		reader.Reset(io.MultiReader(snapshot, reader))
+
 		header, headerErr := reader.Peek(2)
 		logger.Sugar().Infoln("Step 1.13000 - INSIDE FOR LOOP", t, "reader", header, headerErr)
 
