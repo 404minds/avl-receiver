@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -58,7 +59,7 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		return
 	}
 	reader := bufio.NewReader(conn)
-	deviceProtocol, ack, err := t.attemptDeviceLogin(reader, &conn)
+	deviceProtocol, ack, err := t.attemptDeviceLogin(reader, conn)
 	if err != nil {
 		logger.Error("failed to identify device", zap.String("remoteAddr", remoteAddr), zap.Error(err))
 		return
@@ -307,7 +308,7 @@ func makeJsonStore(destDir string, deviceIdentifier string) store.Store {
 // 	return nil, nil, errs.ErrUnknownDeviceType
 // }
 
-func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader, conn *net.Conn) (protocol devices.DeviceProtocol, ack []byte, err error) {
+func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader, conn net.Conn) (protocol devices.DeviceProtocol, ack []byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Sugar().Error("Step 0 - Panic occurred during protocol login: ", r)
@@ -315,15 +316,29 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader, conn *net.Conn) (p
 		}
 	}()
 
+	buffered := reader.Buffered()
+	initialData := make([]byte, buffered)
+	_, err = reader.Peek(buffered)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error peeking initial data: %v", err)
+	}
+	copy(initialData, initialData) // Ensure we have a copy
+
 	header, headerErr := reader.Peek(8)
 	logger.Sugar().Infoln("Step 0 OUTSIDE FOR LOOP", t, "reader", header, headerErr)
 
 	logger.Sugar().Infoln("Step 1 - Starting attemptDeviceLogin")
 
 	for i, protocolType := range t.allowedProtocols {
-		tempReader := bufio.NewReader(*conn)
+
+		copiedReader := bufio.NewReader(
+			io.MultiReader(
+				bytes.NewReader(initialData),
+				conn,
+			),
+		)
 		// Create a new reader for each protocol attempt using the copied data
-		header, headerErr := tempReader.Peek(2)
+		header, headerErr := reader.Peek(2)
 		logger.Sugar().Infoln("Step 1.13000 - INSIDE FOR LOOP", t, "reader", header, headerErr)
 
 		logger.Sugar().Infof("Step 2.%d - Trying protocol type: %s", i+1, protocolType)
