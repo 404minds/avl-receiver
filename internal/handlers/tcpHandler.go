@@ -338,7 +338,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader, conn net.Conn) (pr
 			),
 		)
 		// Create a new reader for each protocol attempt using the copied data
-		header, headerErr := reader.Peek(2)
+		header, headerErr := copiedReader.Peek(2)
 		logger.Sugar().Infoln("Step 1.13000 - INSIDE FOR LOOP", t, "reader", header, headerErr)
 
 		logger.Sugar().Infof("Step 2.%d - Trying protocol type: %s", i+1, protocolType)
