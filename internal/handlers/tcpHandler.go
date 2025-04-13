@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -58,12 +57,8 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	if err != nil {
 		return
 	}
-
-	var buf bytes.Buffer
-	tee := io.TeeReader(conn, &buf)
-	reader := bufio.NewReader(tee)
-
-	deviceProtocol, ack, err := t.attemptDeviceLogin(reader, &buf)
+	reader := bufio.NewReader(conn)
+	deviceProtocol, ack, err := t.attemptDeviceLogin(reader)
 	if err != nil {
 		logger.Error("failed to identify device", zap.String("remoteAddr", remoteAddr), zap.Error(err))
 		return
@@ -312,7 +307,7 @@ func makeJsonStore(destDir string, deviceIdentifier string) store.Store {
 // 	return nil, nil, errs.ErrUnknownDeviceType
 // }
 
-func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader, buf *bytes.Buffer) (protocol devices.DeviceProtocol, ack []byte, err error) {
+func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.DeviceProtocol, ack []byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Sugar().Error("Step 0 - Panic occurred during protocol login: ", r)
@@ -323,20 +318,13 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader, buf *bytes.Buffer)
 	header, headerErr := reader.Peek(8)
 	logger.Sugar().Infoln("Step 0 OUTSIDE FOR LOOP", t, "reader", header, headerErr)
 
-	snapshot := bytes.NewBuffer(buf.Bytes())
-
-	logger.Sugar().Infoln("Step 1 - Starting attemptDeviceLogin", snapshot)
+	logger.Sugar().Infoln("Step 1 - Starting attemptDeviceLogin")
 
 	for i, protocolType := range t.allowedProtocols {
 
-		tempReader := bufio.NewReader(io.MultiReader(
-			snapshot,
-			reader,
-		))
-
 		// Create a new reader for each protocol attempt using the copied data
-		header, headerErr := tempReader.Peek(2)
-		logger.Sugar().Infoln("Step 1.13000 - INSIDE FOR LOOP", t, "tempReader", header, headerErr)
+		header, headerErr := reader.Peek(2)
+		logger.Sugar().Infoln("Step 1.13000 - INSIDE FOR LOOP", t, "reader", header, headerErr)
 
 		logger.Sugar().Infof("Step 2.%d - Trying protocol type: %s", i+1, protocolType)
 
