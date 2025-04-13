@@ -315,7 +315,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 		}
 	}()
 
-	header, headerErr := reader.Peek(2)
+	header, headerErr := reader.Peek(8)
 	logger.Sugar().Infoln("Step 0 OUTSIDE FOR LOOP", t, "reader", header, headerErr)
 
 	logger.Sugar().Infoln("Step 1 - Starting attemptDeviceLogin")
