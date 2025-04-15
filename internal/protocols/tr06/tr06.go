@@ -6,12 +6,11 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"github.com/404minds/avl-receiver/internal/store"
+	"go.uber.org/zap"
 	"io"
 	"slices"
 	"time"
-
-	"github.com/404minds/avl-receiver/internal/store"
-	"go.uber.org/zap"
 
 	"github.com/404minds/avl-receiver/internal/crc"
 	errs "github.com/404minds/avl-receiver/internal/errors"
@@ -49,118 +48,54 @@ func (p *TR06Protocol) SetDeviceType(t types.DeviceType) {
 }
 
 func (p *TR06Protocol) GetProtocolType() types.DeviceProtocolType {
-	return types.DeviceProtocolType_TR06
+	return types.DeviceProtocolType_GT06
 }
 
-// func (p *TR06Protocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int, e error) {
-// 	if !p.IsValidHeader(reader) {
-// 		return nil, 0, errs.ErrUnknownProtocol
-// 	}
-
-// 	data, _ := reader.Peek(reader.Buffered())
-// 	logger.Sugar().Info("Available data before reading IMEI: ", data)
-
-// 	// This should have been a TR06 device
-// 	packet, err := p.parsePacket(reader)
-// 	if err != nil {
-// 		logger.Error("failed to parse TR06 packet", zap.Error(err))
-// 		return nil, 0, err
-// 	}
-
-// 	if packet.MessageType == MSG_LoginData {
-// 		if packet.Information == nil {
-// 			logger.Error("packet information is nil", zap.Error(errs.ErrTR06InvalidLoginInfo))
-// 			return nil, 0, errs.ErrTR06InvalidLoginInfo
-// 		}
-
-// 		loginData, ok := packet.Information.(*LoginData)
-// 		if !ok {
-// 			logger.Error("packet information is not of type *LoginData", zap.Error(errs.ErrTR06InvalidLoginInfo))
-// 			return nil, 0, errs.ErrTR06InvalidLoginInfo
-// 		}
-
-// 		if loginData == nil {
-// 			logger.Error("loginData is nil", zap.Error(errs.ErrTR06InvalidLoginInfo))
-// 			return nil, 0, errs.ErrTR06InvalidLoginInfo
-// 		}
-// 		logger.Sugar().Info("from Login LoginData: ", loginData)
-// 		p.LoginInformation = loginData
-
-// 		byteBuffer := bytes.NewBuffer([]byte{})
-// 		err = p.sendResponse(packet, byteBuffer)
-// 		if err != nil {
-// 			logger.Error("failed to send response for TR06 packet", zap.Error(err))
-// 			return nil, 0, err
-// 		}
-
-// 		return byteBuffer.Bytes(), 0, nil // nothing to skip since the stream is already consumed
-// 	} else {
-// 		logger.Error("packet message type is not MSG_LoginData", zap.Error(errs.ErrTR06InvalidLoginInfo))
-// 		return nil, 0, errs.ErrTR06InvalidLoginInfo
-// 	}
-// }
-
 func (p *TR06Protocol) Login(reader *bufio.Reader) (ack []byte, byteToSkip int, e error) {
-	header, headerErr := reader.Peek(2)
-	logger.Sugar().Infoln("Step 1 - TR06 Login started", p, "reader", header, headerErr)
-
 	if !p.IsValidHeader(reader) {
-		logger.Sugar().Infoln("Step 2 - Invalid header for TR06")
 		return nil, 0, errs.ErrUnknownProtocol
 	}
-	logger.Sugar().Infoln("Step 3 - Header is valid")
 
 	data, _ := reader.Peek(reader.Buffered())
-	logger.Sugar().Info("Step 4 - Available data before reading IMEI: ", data)
+	logger.Sugar().Info("Available data before reading IMEI: ", data)
 
+	// This should have been a GT06 device
 	packet, err := p.parsePacket(reader)
-	logger.Sugar().Infoln("Step 5 - Packet parsed")
-
 	if err != nil {
-		logger.Error("Step 6 - Failed to parse TR06 packet", zap.Error(err))
+		logger.Error("failed to parse GT06 packet", zap.Error(err))
 		return nil, 0, err
 	}
 
 	if packet.MessageType == MSG_LoginData {
-		logger.Sugar().Infoln("Step 7 - Packet is of type MSG_LoginData")
-
 		if packet.Information == nil {
-			logger.Sugar().Infoln("Step 8 - Packet information is nil")
-			logger.Error("Step 9 - Packet information is nil", zap.Error(errs.ErrTR06InvalidLoginInfo))
-			return nil, 0, errs.ErrTR06InvalidLoginInfo
+			logger.Error("packet information is nil", zap.Error(errs.ErrGT06InvalidLoginInfo))
+			return nil, 0, errs.ErrGT06InvalidLoginInfo
 		}
 
 		loginData, ok := packet.Information.(*LoginData)
 		if !ok {
-			logger.Sugar().Infoln("Step 10 - Packet information is not of type *LoginData")
-			logger.Error("Step 11 - Packet information is not of type *LoginData", zap.Error(errs.ErrTR06InvalidLoginInfo))
-			return nil, 0, errs.ErrTR06InvalidLoginInfo
+			logger.Error("packet information is not of type *LoginData", zap.Error(errs.ErrGT06InvalidLoginInfo))
+			return nil, 0, errs.ErrGT06InvalidLoginInfo
 		}
 
 		if loginData == nil {
-			logger.Sugar().Infoln("Step 12 - loginData is nil")
-			logger.Error("Step 13 - loginData is nil", zap.Error(errs.ErrTR06InvalidLoginInfo))
-			return nil, 0, errs.ErrTR06InvalidLoginInfo
+			logger.Error("loginData is nil", zap.Error(errs.ErrGT06InvalidLoginInfo))
+			return nil, 0, errs.ErrGT06InvalidLoginInfo
 		}
-
-		logger.Sugar().Info("Step 14 - LoginData received: ", loginData)
+		logger.Sugar().Info("from Login LoginData: ", loginData)
 		p.LoginInformation = loginData
 
 		byteBuffer := bytes.NewBuffer([]byte{})
-		logger.Sugar().Infoln("Step 15 - Sending response")
-
 		err = p.sendResponse(packet, byteBuffer)
 		if err != nil {
-			logger.Error("Step 16 - Failed to send response", zap.Error(err))
+			logger.Error("failed to send response for GT06 packet", zap.Error(err))
 			return nil, 0, err
 		}
 
-		logger.Sugar().Infoln("Step 17 - Response sent successfully")
-		return byteBuffer.Bytes(), 0, nil
+		return byteBuffer.Bytes(), 0, nil // nothing to skip since the stream is already consumed
 	} else {
-		logger.Sugar().Infoln("Step 18 - Packet message type is not MSG_LoginData")
-		logger.Error("Step 19 - Invalid message type", zap.Error(errs.ErrTR06InvalidLoginInfo))
-		return nil, 0, errs.ErrTR06InvalidLoginInfo
+		logger.Error("packet message type is not MSG_LoginData", zap.Error(errs.ErrGT06InvalidLoginInfo))
+		return nil, 0, errs.ErrGT06InvalidLoginInfo
 	}
 }
 
@@ -221,7 +156,7 @@ func (p *TR06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 				err = fmt.Errorf("parse packet unknown panic: %v", r)
 			}
 			if err != io.EOF {
-				err = errors.Wrapf(errs.ErrTR06BadDataPacket, "from parsePAcket")
+				err = errors.Wrapf(errs.ErrGT06BadDataPacket, "from parsePAcket")
 				logger.Sugar().Info("parse packet 0 ", err)
 			}
 			logger.Sugar().Errorf("parse packet Recovered from panic: %v", err)
@@ -259,7 +194,7 @@ func (p *TR06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 		packet.PacketLength = packetLength
 		logger.Sugar().Infof("parse packet Packet length: %d", packet.PacketLength)
 	} else {
-		return nil, errors.Wrapf(errs.ErrTR06BadDataPacket, "from parsePacket Invalid StartBit packet.StartBit: %d", packet.StartBit) // Invalid start bit
+		return nil, errors.Wrapf(errs.ErrGT06BadDataPacket, "from parsePacket Invalid StartBit packet.StartBit: %d", packet.StartBit) // Invalid start bit
 	}
 
 	// Packet data
@@ -306,7 +241,7 @@ func (p *TR06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 	logger.Sugar().Infof("parse packet Stop bits: %x", packet.StopBits)
 
 	if packet.StopBits != 0x0d0a {
-		err = errors.Wrapf(errs.ErrTR06BadDataPacket, "from parsePacket 3")
+		err = errors.Wrapf(errs.ErrGT06BadDataPacket, "from parsePacket 3")
 		logger.Sugar().Errorf("parse packet Invalid stop bits: %x  parse packet 1 ERRTRO6 %v", packet.StopBits, err)
 		return nil, err
 	}
@@ -346,7 +281,7 @@ func (p *TR06Protocol) parsePacketData(reader *bufio.Reader, packet *Packet) err
 		}
 		logger.Sugar().Errorln("Invalid message type: ", hex.Dump(remainingData))
 		logger.Sugar().Info("error from parsePacketData ", err)
-		return errors.Wrapf(errs.ErrTR06BadDataPacket, "from parsePacketData")
+		return errors.Wrapf(errs.ErrGT06BadDataPacket, "from parsePacketData")
 	}
 
 	packet.MessageType = msgType
@@ -399,7 +334,7 @@ func (p *TR06Protocol) parsePacketInformation(reader *bufio.Reader, messageType 
 		return parsedInfo, err
 	} else {
 		logger.Sugar().Info("error from parsePacketInformation")
-		return nil, errors.Wrapf(errs.ErrTR06BadDataPacket, "from parsePAcketInformation")
+		return nil, errors.Wrapf(errs.ErrGT06BadDataPacket, "from parsePAcketInformation")
 	}
 }
 
@@ -410,7 +345,7 @@ func (p *TR06Protocol) parseLoginInformation(reader *bufio.Reader) (interface{},
 	err := binary.Read(reader, binary.BigEndian, &imeiBytes)
 	if err != nil {
 		logger.Error("failed to read IMEI bytes", zap.Error(err))
-		return nil, errs.ErrTR06InvalidLoginInfo
+		return nil, errs.ErrGT06InvalidLoginInfo
 	}
 	logger.Sugar().Info("parseLoginInformation imeiBytes: ", imeiBytes[:])
 	loginInfo.TerminalID = hex.EncodeToString(imeiBytes[:])[1:] // IMEI is 15 chars
@@ -424,7 +359,7 @@ func (p *TR06Protocol) parsePositioningData(reader *bufio.Reader) (positionInfo 
 			err = r.(error)
 			if err != io.EOF {
 				logger.Sugar().Info("from parsePositioningData err: ", err)
-				err = errors.Wrapf(errs.ErrTR06BadDataPacket, "from parsePositioningData")
+				err = errors.Wrapf(errs.ErrGT06BadDataPacket, "from parsePositioningData")
 			}
 		}
 	}()
@@ -503,7 +438,7 @@ func (p *TR06Protocol) parseAlarmData(reader *bufio.Reader) (alarmInfo AlarmInfo
 			err = r.(error)
 			if err != io.EOF {
 				logger.Sugar().Info("error from parseAlarmData err: ", err)
-				err = errors.Wrapf(errs.ErrTR06BadDataPacket, "from parseAlarmData")
+				err = errors.Wrapf(errs.ErrGT06BadDataPacket, "from parseAlarmData")
 			}
 		}
 	}()
@@ -526,7 +461,7 @@ func (p *TR06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat Heart
 			err = r.(error)
 			if err != io.EOF {
 				logger.Sugar().Info("error from parseHeartbeatData 1 err: ", err)
-				err = errors.Wrapf(errs.ErrTR06BadDataPacket, "from parseHeartbeatData")
+				err = errors.Wrapf(errs.ErrGT06BadDataPacket, "from parseHeartbeatData")
 			}
 		}
 	}()
@@ -548,7 +483,7 @@ func (p *TR06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat Heart
 	logger.Sugar().Infof("parseHeartbeatData  Battery Level Byte: %x", batteryLevelByte)
 	heartbeat.BatteryLevel = BatteryLevel(batteryLevelByte)
 	if heartbeat.BatteryLevel == VL_Invalid {
-		return heartbeat, errs.ErrTR06InvalidVoltageLevel
+		return heartbeat, errs.ErrGT06InvalidVoltageLevel
 	}
 
 	var gsmSignalStrengthByte byte
@@ -558,7 +493,7 @@ func (p *TR06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat Heart
 	logger.Sugar().Infof("parseHeartbeatData GSM Signal Strength Byte: %x", gsmSignalStrengthByte)
 	heartbeat.GSMSignalStrength = GSMSignalStrength(gsmSignalStrengthByte)
 	if heartbeat.GSMSignalStrength == GSM_Invalid {
-		return heartbeat, errs.ErrTR06InvalidGSMSignalStrength
+		return heartbeat, errs.ErrGT06InvalidGSMSignalStrength
 	}
 
 	if err := binary.Read(reader, binary.BigEndian, &heartbeat.ExtendedPortStatus); err != nil {
@@ -569,7 +504,7 @@ func (p *TR06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat Heart
 	if _, err := reader.Peek(1); err != io.EOF {
 		logger.Sugar().Errorf("parseHeartbeatData Extra bytes detected in packet")
 		logger.Sugar().Info("error from parseHeartbeatData 2")
-		return heartbeat, errors.Wrapf(errs.ErrTR06BadDataPacket, "from parseHeartbeatData 2")
+		return heartbeat, errors.Wrapf(errs.ErrGT06BadDataPacket, "from parseHeartbeatData 2")
 	}
 
 	return heartbeat, nil
@@ -581,7 +516,7 @@ func (p *TR06Protocol) parseInformationTransmissionPacket(reader *bufio.Reader) 
 			err = r.(error)
 			if err != io.EOF {
 				logger.Sugar().Info("error from parseInformationTransmissionPacket: ", err)
-				err = errors.New("TR06 Bad Data Packet")
+				err = errors.New("GT06 Bad Data Packet")
 			}
 		}
 	}()
@@ -629,7 +564,7 @@ func (p *TR06Protocol) parseInformationTransmissionPacket(reader *bufio.Reader) 
 	if remain, err := reader.Peek(1); err != io.EOF {
 		logger.Sugar().Info("parseInformationTransmissionPacket remaining bytes: ", remain)
 		logger.Sugar().Info("parseInformationTransmissionPacket: Extra bytes detected in packet")
-		return packet, errors.New("TR06 Bad Data Packet")
+		return packet, errors.New("GT06 Bad Data Packet")
 	}
 
 	logger.Sugar().Info("parseInformationTransmissionPacket: Successfully parsed packet")
@@ -739,7 +674,7 @@ func (p *TR06Protocol) parseStatusInformation(reader *bufio.Reader) (statusInfo 
 	checkErr(binary.Read(reader, binary.BigEndian, &b))
 	statusInfo.BatteryLevel = BatteryLevel(b)
 	if statusInfo.BatteryLevel == VL_Invalid {
-		return statusInfo, errs.ErrTR06InvalidAlarmType
+		return statusInfo, errs.ErrGT06InvalidAlarmType
 	}
 
 	// GSM signal strength
@@ -747,7 +682,7 @@ func (p *TR06Protocol) parseStatusInformation(reader *bufio.Reader) (statusInfo 
 	statusInfo.GSMSignalStrength = GSMSignalStrength(b)
 	checkErr(binary.Read(reader, binary.BigEndian, &statusInfo.GSMSignalStrength))
 	if statusInfo.GSMSignalStrength == GSM_Invalid {
-		return statusInfo, errs.ErrTR06InvalidGSMSignalStrength
+		return statusInfo, errs.ErrGT06InvalidGSMSignalStrength
 	}
 
 	// alarm status
@@ -771,7 +706,7 @@ func (p *TR06Protocol) parseTerminalInfoFromByte(terminalInfoByte byte) (Termina
 	terminalInfo.Armed = terminalInfoByte&0x01 == 0x01                   // bit 0
 
 	if terminalInfo.AlarmType == AL_Invalid {
-		return terminalInfo, errs.ErrTR06InvalidAlarmType
+		return terminalInfo, errs.ErrGT06InvalidAlarmType
 	}
 	return terminalInfo, nil
 }
