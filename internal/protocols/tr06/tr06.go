@@ -6,12 +6,11 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"github.com/404minds/avl-receiver/internal/store"
+	"go.uber.org/zap"
 	"io"
 	"slices"
 	"time"
-
-	"github.com/404minds/avl-receiver/internal/store"
-	"go.uber.org/zap"
 
 	"github.com/404minds/avl-receiver/internal/crc"
 	errs "github.com/404minds/avl-receiver/internal/errors"
@@ -367,8 +366,6 @@ func (p *TR06Protocol) parsePositioningData(reader *bufio.Reader) (positionInfo 
 
 	var parsed PositioningInformation
 
-	logger.Sugar().Infoln("reader", reader)
-
 	// Date Time
 	timestamp, err := p.parseTimestamp(reader)
 	if err != nil {
@@ -468,8 +465,6 @@ func (p *TR06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat Heart
 			}
 		}
 	}()
-
-	logger.Sugar().Infoln("heartbeat reader", reader)
 
 	var terminalInfoByte byte
 	if err := binary.Read(reader, binary.BigEndian, &terminalInfoByte); err != nil {
