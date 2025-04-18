@@ -322,6 +322,10 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 		info.VehicleStatus.Ignition = &ignition
 		info.VehicleStatus.OverSpeeding = v.StatusInformation.Alarm == ALV_OverSpeed
 	case *HeartbeatData:
+		//Set battery and GSM signal
+		logger.Sugar().Info(v.BatteryLevel, "  ", v.GSMSignalStrength)
+		info.BatteryLevel = resolveBatteryLevel(int32(v.BatteryLevel))
+		info.Position.Satellites = int32(v.GSMSignalStrength)
 
 	default:
 	}
@@ -360,5 +364,26 @@ func (mt MessageType) String() string {
 		return "MSG_TransmissionInstruction"
 	default:
 		return "MSG_Invalid"
+	}
+}
+
+func resolveBatteryLevel(level int32) int32 {
+	switch level {
+	case 0x00:
+		return 0 // No Power (shutdown)
+	case 0x01:
+		return 10 // Extremely Low Battery
+	case 0x02:
+		return 25 // Very Low Battery (Low Battery Alarm)
+	case 0x03:
+		return 40 // Low Battery (can be used normally)
+	case 0x04:
+		return 60 // Medium
+	case 0x05:
+		return 80 // High
+	case 0x06:
+		return 100 // Full
+	default:
+		return -1 // Unknown level
 	}
 }
