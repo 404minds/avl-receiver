@@ -2,15 +2,18 @@ services:
   avl-receiver:
     build:
       context: .
+      args:
+        TCP_PORT: ${CUSTOM_TCP_PORT}
     image: avl-receiver
     container_name: avl-receiver
     networks:
       - deployment_base-network
     restart: on-failure
     ports:
-      - "21000:21000" # TCP server port
+      - "${CUSTOM_TCP_PORT}:${CUSTOM_TCP_PORT}" # TCP server port
       - "15000:15000" # gRPC server port
     environment:
+      - TCP_PORT=${CUSTOM_TCP_PORT}
       - REMOTE_STORE_ADDR=${CUSTOM_REMOTE_STORE_ADDR}
       - GRPC_SERVICE_NAME=${CUSTOM_GRPC_SERVICE_NAME}
 

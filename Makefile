@@ -2,7 +2,7 @@ run:
 	go run -race cmd/receiver/receiver.go -port 21000 -remoteStoreAddr localhost:8000
 
 run-buddy:
-	go run cmd/receiver/receiver.go -port 21000 -remoteStoreAddr localhost:9000 -grpcServiceName "/data.StreamService"
+	go run cmd/receiver/receiver.go -port 49875 -remoteStoreAddr localhost:9000 -grpcServiceName "/data.StreamService"
 
 run-server:
 	go run cmd/testRpcStore/testRpcStore.go -port 8080
