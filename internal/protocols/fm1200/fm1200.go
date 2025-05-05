@@ -247,7 +247,7 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 	logger.Sugar().Infoln(" Tel parsedPacket Data", parsedPacket.Data)
 
 	// Store records
-	for i := len(parsedPacket.Data) - 1; i >= 0; i-- {
+	for i := 0; i <= len(parsedPacket.Data)-1; i++ {
 		record := parsedPacket.Data[i]
 		r := Record{
 			Record: record,
