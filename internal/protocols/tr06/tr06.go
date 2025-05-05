@@ -128,6 +128,7 @@ func (p *TR06Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, dat
 		logger.Sugar().Infoln("ConsumeStream: parsePacket returned err =", err)
 		if err != nil {
 			logger.Sugar().Infoln("ConsumeStream: step 1 failed, returning err")
+
 			return err
 		}
 
@@ -747,6 +748,8 @@ func (p *TR06Protocol) IsValidHeader(reader *bufio.Reader) bool {
 		logger.Sugar().Infoln("IsValidHeader: peek error", err)
 		return false
 	}
+	test, testerr := reader.Peek(8)
+	logger.Sugar().Infoln("header test, testerr", test, testerr)
 	ok := bytes.Equal(header, []byte{0x78, 0x78}) || bytes.Equal(header, []byte{0x79, 0x79})
 	logger.Sugar().Infoln("IsValidHeader: header =", header, "valid?", ok)
 	return ok
