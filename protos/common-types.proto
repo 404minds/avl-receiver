@@ -43,6 +43,7 @@ message DeviceStatus {
         ConcoxPacket  concox_packet = 19;
         HowenPacket   howen_packet = 20;
     }
+    float engine_load = 21;
 }
 
 message GPSPosition {

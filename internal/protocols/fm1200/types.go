@@ -85,6 +85,7 @@ const (
 	TIO_OdometerValue                   = 16
 	TIO_GSMSignal                       = 21
 	TIO_Speed                           = 24
+	TIO_EngineLoad                      = 31
 	TIO_CoolantTemperature              = 32
 	TIO_RPM                             = 36
 	TIO_Vehicle_Speed_OBD               = 37
@@ -181,6 +182,8 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	}
 
 	info.CoolantTemperature = float32(r.Record.IOElement.Properties1B[TIO_CoolantTemperature])
+
+	info.EngineLoad = float32(r.Record.IOElement.Properties1B[TIO_EngineLoad])
 
 	if r.Record.IOElement.Properties4B[TIO_FuelLevel] > 0 {
 		info.FuelLtr = int32(r.Record.IOElement.Properties4B[TIO_FuelLevel]) / 10
