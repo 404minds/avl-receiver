@@ -11,6 +11,7 @@ enum DeviceType {
     WANWAY = 1;
     CONCOX = 2;
     HOWEN  = 3;
+    AQUILA = 4;
 }
 
 enum DeviceProtocolType {
@@ -18,6 +19,7 @@ enum DeviceProtocolType {
     GT06 = 1;
     TR06 = 2;
     HOWENWS =3;
+    OBDII2G = 4;
 }
 
 message DeviceStatus {
@@ -42,8 +44,9 @@ message DeviceStatus {
         TeltonikaPacket teltonika_packet = 18;
         ConcoxPacket  concox_packet = 19;
         HowenPacket   howen_packet = 20;
+        AquilaPacket  aquila_packet = 21;
     }
-    float engine_load = 21;
+    float engine_load = 22;
 }
 
 message GPSPosition {
@@ -106,6 +109,9 @@ message HowenPacket{
     bytes raw_data = 1;
 }
 
+message AquilaPacket{
+    bytes raw_data = 1;
+}
 
 message DeviceResponse {
     string imei = 1;

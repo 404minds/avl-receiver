@@ -6,10 +6,11 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/404minds/avl-receiver/internal/store"
-	"go.uber.org/zap"
 	"io"
 	"time"
+
+	"github.com/404minds/avl-receiver/internal/store"
+	"go.uber.org/zap"
 
 	"github.com/404minds/avl-receiver/internal/crc"
 	errs "github.com/404minds/avl-receiver/internal/errors"
