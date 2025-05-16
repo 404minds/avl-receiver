@@ -285,7 +285,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 		if err != nil {
 			if errors.Is(err, errs.ErrUnauthorizedDevice) {
 				logger.Error("Device is not authorized", zap.String("deviceID", deviceID), zap.String("protocolType", protocol.GetProtocolType().String()))
-				return nil, nil, err
+				// return nil, nil, err
 			}
 			logger.Sugar().Error("Error verifying device: ", err)
 			return nil, nil, err
@@ -297,7 +297,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 	}
 
 	logger.Sugar().Error("All protocols failed, unknown device type")
-	return nil, nil, errs.ErrUnknownDeviceType
+	return nil, nil, nil
 }
 
 // Getter for connection info by IMEI
