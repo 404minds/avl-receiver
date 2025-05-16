@@ -41,7 +41,7 @@ func (a *AquilaOBDII2GProtocol) GetProtocolType() types.DeviceProtocolType {
 }
 
 func (a *AquilaOBDII2GProtocol) Login(reader *bufio.Reader) ([]byte, int, error) {
-	peeked, err := reader.Peek(8)
+	peeked, err := reader.Peek(32)
 	if err != nil {
 		return nil, 0, errors.Wrap(err, "failed to peek login packet")
 	}
