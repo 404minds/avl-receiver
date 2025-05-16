@@ -259,7 +259,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 		if err != nil {
 			if errors.Is(err, errs.ErrUnknownProtocol) {
 				logger.Sugar().Error("Unknown protocol error: ", err)
-				// continue // try another device
+				continue // try another device
 			}
 			logger.Sugar().Error("Error during login: ", err)
 			return nil, nil, err

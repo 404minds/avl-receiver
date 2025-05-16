@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	errs "github.com/404minds/avl-receiver/internal/errors"
 	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
 	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/404minds/avl-receiver/internal/types"
@@ -59,9 +58,9 @@ func (a *AquilaOBDII2GProtocol) Login(reader *bufio.Reader) ([]byte, int, error)
 	logger.Sugar().Infoln("string reader", packetStr)
 
 	// Verify packet starts with $$ header
-	if !strings.HasPrefix(packetStr, "$$") {
-		return nil, 0, errs.ErrUnknownProtocol
-	}
+	// if !strings.HasPrefix(packetStr, "$$") {
+	// 	return nil, 0, errs.ErrUnknownProtocol
+	// }
 
 	parts := strings.Split(packetStr, ",")
 	// if len(parts) < 3 {
