@@ -68,6 +68,6 @@ func GetDeviceTypesForProtocol(t types.DeviceProtocolType) []types.DeviceType {
 	case types.DeviceProtocolType_HOWENWS:
 		return []types.DeviceType{types.DeviceType_HOWEN}
 	default:
-		return []types.DeviceType{}
+		return []types.DeviceType{types.DeviceType_AQUILA}
 	}
 }
