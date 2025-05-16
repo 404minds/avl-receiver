@@ -57,7 +57,6 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	if err != nil {
 		return
 	}
-	logger.Sugar().Infoln("full conn", conn)
 	reader := bufio.NewReader(conn)
 	logger.Sugar().Infoln("full reader", reader)
 	deviceProtocol, ack, err := t.attemptDeviceLogin(reader)
