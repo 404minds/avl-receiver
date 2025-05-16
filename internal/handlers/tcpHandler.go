@@ -5,12 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	errs "github.com/404minds/avl-receiver/internal/errors"
-	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
-	devices "github.com/404minds/avl-receiver/internal/protocols"
-	"github.com/404minds/avl-receiver/internal/store"
-	"github.com/404minds/avl-receiver/internal/types"
-	"go.uber.org/zap"
 	"io"
 	"net"
 	"os"
@@ -19,6 +13,13 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	errs "github.com/404minds/avl-receiver/internal/errors"
+	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
+	devices "github.com/404minds/avl-receiver/internal/protocols"
+	"github.com/404minds/avl-receiver/internal/store"
+	"github.com/404minds/avl-receiver/internal/types"
+	"go.uber.org/zap"
 )
 
 var logger = configuredLogger.Logger
@@ -56,7 +57,9 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	if err != nil {
 		return
 	}
+	logger.Sugar().Infoln("full conn", conn)
 	reader := bufio.NewReader(conn)
+	logger.Sugar().Infoln("full reader", reader)
 	deviceProtocol, ack, err := t.attemptDeviceLogin(reader)
 	if err != nil {
 		logger.Error("failed to identify device", zap.String("remoteAddr", remoteAddr), zap.Error(err))
