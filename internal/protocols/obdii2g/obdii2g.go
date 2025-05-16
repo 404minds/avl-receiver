@@ -2,6 +2,7 @@ package obdii2g
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -41,36 +42,49 @@ func (a *AquilaOBDII2GProtocol) GetProtocolType() types.DeviceProtocolType {
 }
 
 func (a *AquilaOBDII2GProtocol) Login(reader *bufio.Reader) ([]byte, int, error) {
-	peeked, err := reader.Peek(8)
+	// Peek first 2 bytes to verify header
+	header, err := reader.Peek(2)
 	if err != nil {
-		return nil, 0, errors.Wrap(err, "failed to peek login packet")
+		return nil, 0, fmt.Errorf("header peek failed: %w", err)
 	}
-
-	packetStr := string(peeked)
-	logger.Sugar().Infoln("reader", peeked)
-	logger.Sugar().Infoln("string reader", packetStr)
-
-	// Verify packet starts with $$ header
-	if !strings.HasPrefix(packetStr, "$$") {
+	if !bytes.Equal(header, []byte{0x36, 0x36}) { // $$ in ASCII
 		return nil, 0, errs.ErrUnknownProtocol
 	}
 
-	parts := strings.Split(packetStr, ",")
-	if len(parts) < 3 {
-		return nil, 0, errors.New("invalid login packet format")
+	peekSize := 40
+	peeked, err := reader.Peek(peekSize)
+	if err != nil && err != bufio.ErrBufferFull {
+		return nil, 0, fmt.Errorf("imei peek failed: %w", err)
 	}
 
-	// Extract IMEI from second field (index 1)
-	imei := parts[1]
+	// Find first comma after header ($$CLIENT...)
+	firstComma := bytes.IndexByte(peeked[2:], ',') + 2
+	if firstComma < 2 {
+		return nil, 0, errors.New("invalid packet format - first comma")
+	}
+
+	// Find second comma (IMEI end)
+	secondComma := bytes.IndexByte(peeked[firstComma+1:], ',') + firstComma + 1
+	if secondComma <= firstComma {
+		return nil, 0, errors.New("invalid packet format - second comma")
+	}
+
+	// Extract IMEI (between first and second commas)
+	imeiBytes := peeked[firstComma+1 : secondComma]
+	if len(imeiBytes) != 15 { // Validate IMEI length
+		return nil, 0, errors.New("invalid IMEI length")
+	}
+
+	imei := string(imeiBytes)
 	if !a.isImeiAuthorized(imei) {
-		return nil, len(peeked), errs.ErrUnauthorizedDevice
+		return nil, 0, errs.ErrUnauthorizedDevice
 	}
 
+	// Calculate total bytes to consume
+	totalBytes := secondComma + 1 // Position after second comma
 	a.Imei = imei
 
-	// Proper ACK format based on protocol document example
-	ack := []byte("*" + hex.EncodeToString([]byte{calculateChecksum(packetStr)}))
-	return ack, len(peeked), nil
+	return []byte{}, totalBytes, nil
 }
 
 func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, store store.Store) error {
