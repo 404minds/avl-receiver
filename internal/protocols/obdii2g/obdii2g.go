@@ -79,8 +79,8 @@ func (a *AquilaOBDII2GProtocol) Login(reader *bufio.Reader) ([]byte, int, error)
 	a.Imei = imei
 
 	// Proper ACK format based on protocol document example
-	ack := []byte("*" + hex.EncodeToString([]byte{calculateChecksum(packetStr)}))
-	return ack, 0, nil
+	// ack := []byte("*" + hex.EncodeToString([]byte{calculateChecksum(packetStr)}))
+	return []byte{0x01}, 0, nil
 }
 
 func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, store store.Store) error {
