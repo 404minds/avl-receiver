@@ -46,6 +46,14 @@ func (a *AquilaOBDII2GProtocol) Login(reader *bufio.Reader) ([]byte, int, error)
 		return nil, 0, errors.Wrap(err, "failed to peek login packet")
 	}
 
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, 0, errors.Wrap(err, "failed to read login packet")
+	}
+	line = strings.TrimSpace(line) // remove newline and any trailing whitespace
+
+	logger.Sugar().Infoln("packet line", line)
+
 	packetStr := string(peeked)
 	logger.Sugar().Infoln("reader", peeked)
 	logger.Sugar().Infoln("string reader", packetStr)
