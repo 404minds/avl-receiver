@@ -11,6 +11,7 @@ import (
 	"path"
 	"runtime/debug"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,7 +59,13 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		return
 	}
 	reader := bufio.NewReader(conn)
-	logger.Sugar().Infoln("full reader", reader)
+	line, err := reader.ReadString('*')
+	if err != nil {
+		// return nil, 0, (err, "failed to read login packet")
+	}
+	line = strings.TrimSpace(line) // remove newline and any trailing whitespace
+
+	logger.Sugar().Infoln("bahar line", line)
 	deviceProtocol, ack, err := t.attemptDeviceLogin(reader)
 	if err != nil {
 		logger.Error("failed to identify device", zap.String("remoteAddr", remoteAddr), zap.Error(err))
