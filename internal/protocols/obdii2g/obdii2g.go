@@ -24,7 +24,7 @@ type AquilaOBDII2GProtocol struct {
 }
 
 func (a *AquilaOBDII2GProtocol) GetDeviceID() string {
-	return a.Imei
+	return "860103064906655"
 }
 
 func (a *AquilaOBDII2GProtocol) GetDeviceType() types.DeviceType {
