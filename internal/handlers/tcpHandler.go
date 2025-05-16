@@ -44,10 +44,10 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	var remoteAddr = conn.RemoteAddr().String()
 
 	defer func(conn net.Conn) {
-		err := conn.Close()
-		if err != nil {
-			return
-		}
+		// err := conn.Close()
+		// if err != nil {
+		// 	return
+		// }
 	}(conn)
 
 	err := conn.SetReadDeadline(time.Now().Add(10 * time.Second))

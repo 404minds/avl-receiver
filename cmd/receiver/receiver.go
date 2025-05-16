@@ -73,7 +73,7 @@ func main() {
 	if err != nil {
 		logger.Sugar().Fatalf("did not connect: %v", err)
 	}
-	defer storeConn.Close()
+	// defer storeConn.Close()
 
 	go func() {
 		time.Sleep(5 * time.Second)
@@ -235,7 +235,7 @@ func startWebSocket(wsHandler *handlers.WebSocketHandler) {
 			continue
 		}
 
-		defer conn.Close()
+		// defer conn.Close()
 
 		// Send login message
 		login := LoginMessage{
@@ -253,7 +253,7 @@ func startWebSocket(wsHandler *handlers.WebSocketHandler) {
 
 		if err := conn.WriteJSON(login); err != nil {
 			logger.Sugar().Error("Error sending login message:", err)
-			conn.Close()
+			// conn.Close()
 			continue
 		}
 
@@ -263,7 +263,7 @@ func startWebSocket(wsHandler *handlers.WebSocketHandler) {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			logger.Sugar().Error("Error reading login response:", err)
-			conn.Close()
+			// conn.Close()
 			continue
 		}
 
