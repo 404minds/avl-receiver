@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	errs "github.com/404minds/avl-receiver/internal/errors"
 	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
 	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/404minds/avl-receiver/internal/types"
@@ -24,7 +25,7 @@ type AquilaOBDII2GProtocol struct {
 }
 
 func (a *AquilaOBDII2GProtocol) GetDeviceID() string {
-	return "860103064906655"
+	return a.Imei
 }
 
 func (a *AquilaOBDII2GProtocol) GetDeviceType() types.DeviceType {
@@ -40,47 +41,36 @@ func (a *AquilaOBDII2GProtocol) GetProtocolType() types.DeviceProtocolType {
 }
 
 func (a *AquilaOBDII2GProtocol) Login(reader *bufio.Reader) ([]byte, int, error) {
-	peeked, err := reader.Peek(32)
+	peeked, err := reader.Peek(8)
 	if err != nil {
-		// return nil, 0, errors.Wrap(err, "failed to peek login packet")
+		return nil, 0, errors.Wrap(err, "failed to peek login packet")
 	}
-
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		// return nil, 0, errors.Wrap(err, "failed to read login packet")
-	}
-	line = strings.TrimSpace(line) // remove newline and any trailing whitespace
-
-	logger.Sugar().Infoln("packet line", line)
 
 	packetStr := string(peeked)
 	logger.Sugar().Infoln("reader", peeked)
 	logger.Sugar().Infoln("string reader", packetStr)
 
 	// Verify packet starts with $$ header
-	// if !strings.HasPrefix(packetStr, "$$") {
-	// 	return nil, 0, errs.ErrUnknownProtocol
-	// }
+	if !strings.HasPrefix(packetStr, "$$") {
+		return nil, 0, errs.ErrUnknownProtocol
+	}
 
 	parts := strings.Split(packetStr, ",")
-	// if len(parts) < 3 {
-	// return nil, 0, errors.New("invalid login packet format")
-	// }
+	if len(parts) < 3 {
+		return nil, 0, errors.New("invalid login packet format")
+	}
 
 	// Extract IMEI from second field (index 1)
 	imei := parts[1]
-	if imei == "" {
-		imei = "860103064906655"
-	}
 	if !a.isImeiAuthorized(imei) {
-		// return nil, len(peeked), errs.ErrUnauthorizedDevice
+		return nil, len(peeked), errs.ErrUnauthorizedDevice
 	}
 
 	a.Imei = imei
 
 	// Proper ACK format based on protocol document example
-	// ack := []byte("*" + hex.EncodeToString([]byte{calculateChecksum(packetStr)}))
-	return []byte{0x01}, 0, nil
+	ack := []byte("*" + hex.EncodeToString([]byte{calculateChecksum(packetStr)}))
+	return ack, len(peeked), nil
 }
 
 func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, store store.Store) error {

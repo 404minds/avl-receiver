@@ -11,7 +11,6 @@ import (
 	"path"
 	"runtime/debug"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -44,10 +43,10 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	var remoteAddr = conn.RemoteAddr().String()
 
 	defer func(conn net.Conn) {
-		// err := conn.Close()
-		// if err != nil {
-		// 	return
-		// }
+		err := conn.Close()
+		if err != nil {
+			return
+		}
 	}(conn)
 
 	err := conn.SetReadDeadline(time.Now().Add(10 * time.Second))
@@ -58,14 +57,9 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	if err != nil {
 		return
 	}
+	logger.Sugar().Infoln("full conn", conn)
 	reader := bufio.NewReader(conn)
-	line, err := reader.ReadString('*')
-	if err != nil {
-		// return nil, 0, (err, "failed to read login packet")
-	}
-	line = strings.TrimSpace(line) // remove newline and any trailing whitespace
-
-	logger.Sugar().Infoln("bahar line", line)
+	logger.Sugar().Infoln("full reader", reader)
 	deviceProtocol, ack, err := t.attemptDeviceLogin(reader)
 	if err != nil {
 		logger.Error("failed to identify device", zap.String("remoteAddr", remoteAddr), zap.Error(err))
@@ -297,7 +291,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 	}
 
 	logger.Sugar().Error("All protocols failed, unknown device type")
-	return nil, nil, nil
+	return nil, nil, errs.ErrUnknownDeviceType
 }
 
 // Getter for connection info by IMEI
