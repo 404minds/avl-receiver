@@ -89,7 +89,7 @@ func (a *AquilaOBDII2GProtocol) Login(reader *bufio.Reader) ([]byte, int, error)
 
 func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, dataStore store.Store) error {
 	for {
-		if err := a.setReadTimeout(responseWriter, 30*time.Second); err != nil {
+		if err := a.setReadTimeout(responseWriter, 50*time.Second); err != nil {
 			logger.Error("Failed to set read timeout", zap.Error(err))
 			return err
 		}
