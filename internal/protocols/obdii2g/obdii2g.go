@@ -101,9 +101,8 @@ func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, responseWrit
 			if err == io.EOF {
 				return nil
 			}
-			// If we need to debug what's left in the reader when an error occurs
-			remaining, _ := io.ReadAll(reader)
-			logger.Sugar().Infof("Remaining unread data: %q", remaining)
+
+			logger.Sugar().Info("Remaining unread data:", reader)
 
 			return errors.Wrap(err, "failed to read packet")
 		}
