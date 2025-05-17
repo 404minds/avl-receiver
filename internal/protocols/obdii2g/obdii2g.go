@@ -100,6 +100,7 @@ func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, responseWrit
 			if err == io.EOF {
 				return nil
 			}
+			logger.Sugar().Infoln("kya tha wo packet", reader)
 			return errors.Wrap(err, "failed to read packet")
 		}
 
