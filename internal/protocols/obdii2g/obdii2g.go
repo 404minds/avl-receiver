@@ -3,9 +3,9 @@ package obdii2g
 import (
 	"bufio"
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +15,7 @@ import (
 	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/404minds/avl-receiver/internal/types"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -44,10 +45,11 @@ func (a *AquilaOBDII2GProtocol) GetProtocolType() types.DeviceProtocolType {
 func (a *AquilaOBDII2GProtocol) Login(reader *bufio.Reader) ([]byte, int, error) {
 	// Peek first 2 bytes to verify header
 	header, err := reader.Peek(2)
+	logger.Sugar().Infoln(header) //  INFO    obdii2g/obdii2g.go:47   [36 36]
 	if err != nil {
 		return nil, 0, fmt.Errorf("header peek failed: %w", err)
 	}
-	if !bytes.Equal(header, []byte{0x36, 0x36}) { // $$ in ASCII
+	if !bytes.Equal(header, []byte{0x24, 0x24}) { // $$ in ASCII
 		return nil, 0, errs.ErrUnknownProtocol
 	}
 
@@ -80,16 +82,20 @@ func (a *AquilaOBDII2GProtocol) Login(reader *bufio.Reader) ([]byte, int, error)
 		return nil, 0, errs.ErrUnauthorizedDevice
 	}
 
-	// Calculate total bytes to consume
-	totalBytes := secondComma + 1 // Position after second comma
 	a.Imei = imei
 
-	return []byte{}, totalBytes, nil
+	return []byte{}, 0, nil
 }
 
-func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, store store.Store) error {
+func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, dataStore store.Store) error {
 	for {
+		if err := a.setReadTimeout(responseWriter, 30*time.Second); err != nil {
+			logger.Error("Failed to set read timeout", zap.Error(err))
+			return err
+		}
+
 		packet, err := reader.ReadString('*')
+		logger.Sugar().Infoln("full value", packet)
 		if err != nil {
 			if err == io.EOF {
 				return nil
@@ -98,35 +104,44 @@ func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, writer io.Wr
 		}
 
 		// Validate checksum
-		parts := strings.Split(packet, "*")
-		if len(parts) != 2 {
-			return errors.New("invalid packet format")
-		}
+		// parts := strings.Split(packet, "*")
+		// if len(parts) != 2 {
+		// 	return errors.New("invalid packet format")
+		// }
 
-		calculatedChecksum := calculateChecksum(parts[0])
-		receivedChecksum, err := hex.DecodeString(parts[1])
-		if err != nil || calculatedChecksum != receivedChecksum[0] {
-			return errors.New("invalid checksum")
-		}
+		// calculatedChecksum := calculateChecksum(parts[0])
+		// receivedChecksum, err := hex.DecodeString(parts[1])
+		// if err != nil || calculatedChecksum != receivedChecksum[0] {
+		// 	return errors.New("invalid checksum")
+		// }
 
-		// Parse packet
-		status, err := a.parsePacket(parts[0])
-		if err != nil {
-			return errors.Wrap(err, "failed to parse packet")
-		}
+		// if err != nil {
+		// 	return errors.Wrap(err, "failed to parse packet")
+		// }
 
-		// Send to store
-		store.GetProcessChan() <- status
+		asyncStore := dataStore.GetProcessChan()
+
+		protoPacket := &types.DeviceStatus{
+			Imei:       a.Imei,
+			DeviceType: types.DeviceType_AQUILA,
+			Timestamp:  timestamppb.Now(),
+			Position:   &types.GPSPosition{},
+			VehicleStatus: &types.VehicleStatus{
+				Ignition: new(bool),
+			},
+		}
+		asyncStore <- protoPacket
+
 	}
 }
 
-func (a *AquilaOBDII2GProtocol) parsePacket(packet string) (*types.DeviceStatus, error) {
-	parts := strings.Split(packet, ",")
-	if len(parts) < 20 {
-		return nil, errors.New("invalid packet length")
-	}
+func (a *AquilaOBDII2GProtocol) parsePacket() (*types.DeviceStatus, error) {
+	// parts := strings.Split(packet, ",")
+	// if len(parts) < 20 {
+	// 	return nil, errors.New("invalid packet length")
+	// }
 
-	logger.Sugar().Infoln("parts obd2  ", parts)
+	// logger.Sugar().Infoln("parts obd2  ", parts)
 	status := &types.DeviceStatus{
 		Imei:       a.Imei,
 		DeviceType: types.DeviceType_AQUILA,
@@ -176,6 +191,13 @@ func (a *AquilaOBDII2GProtocol) SendCommandToDevice(writer io.Writer, command st
 func (a *AquilaOBDII2GProtocol) isImeiAuthorized(imei string) bool {
 	// Implement authorization logic
 	return true
+}
+
+func (a *AquilaOBDII2GProtocol) setReadTimeout(writer io.Writer, timeout time.Duration) error {
+	if conn, ok := writer.(net.Conn); ok {
+		return conn.SetReadDeadline(time.Now().Add(timeout))
+	}
+	return nil
 }
 
 func calculateChecksum(data string) byte {

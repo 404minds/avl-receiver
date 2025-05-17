@@ -271,6 +271,7 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 			logger.Sugar().Error("Error discarding bytes: ", err)
 			return nil, nil, err
 		}
+		logger.Sugar().Infoln("protocol.GetProtocolType()", protocol.GetProtocolType())
 
 		deviceType, err := t.VerifyDevice(deviceID, protocol.GetProtocolType())
 		logger.Sugar().Info("device Type: ", deviceType, " error: ", err)
@@ -282,8 +283,8 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 			logger.Sugar().Error("Error verifying device: ", err)
 			return nil, nil, err
 		}
-
 		protocol.SetDeviceType(deviceType)
+
 		logger.Info("Login successful", zap.String("deviceID", deviceID), zap.String("deviceType", deviceType.String()))
 		return protocol, ack, nil
 	}
