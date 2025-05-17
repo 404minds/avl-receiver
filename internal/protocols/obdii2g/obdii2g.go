@@ -94,8 +94,8 @@ func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, responseWrit
 			return err
 		}
 
-		packet, err := reader.ReadString('*')
-		logger.Sugar().Infoln("full value", packet)
+		_, err := reader.ReadString('*')
+		// logger.Sugar().Infoln("full value", packet)
 		if err != nil {
 			if err == io.EOF {
 				return nil
@@ -103,22 +103,6 @@ func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, responseWrit
 			logger.Sugar().Infoln("kya tha wo packet", reader)
 			return errors.Wrap(err, "failed to read packet")
 		}
-
-		// Validate checksum
-		// parts := strings.Split(packet, "*")
-		// if len(parts) != 2 {
-		// 	return errors.New("invalid packet format")
-		// }
-
-		// calculatedChecksum := calculateChecksum(parts[0])
-		// receivedChecksum, err := hex.DecodeString(parts[1])
-		// if err != nil || calculatedChecksum != receivedChecksum[0] {
-		// 	return errors.New("invalid checksum")
-		// }
-
-		// if err != nil {
-		// 	return errors.Wrap(err, "failed to parse packet")
-		// }
 
 		asyncStore := dataStore.GetProcessChan()
 
