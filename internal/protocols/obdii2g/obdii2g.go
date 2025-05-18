@@ -94,17 +94,15 @@ func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, responseWrit
 			return err
 		}
 
-		packet, err := reader.ReadString('*')
+		packet, err := reader.ReadString('\n')
 		logger.Sugar().Infoln("full value", packet)
 		if err != nil {
 			if err == io.EOF {
 				return nil
 			}
 			logger.Sugar().Info("----------------------------------------------")
-			seeHeader, _ := reader.Peek(32)
-			logger.Sugar().Info("Remaining unread data:", seeHeader)
-			continue
-			// return errors.Wrap(err, "failed to read packet")
+			logger.Sugar().Info("Remaining unread data:", reader)
+			return errors.Wrap(err, "failed to read packet")
 		}
 
 		asyncStore := dataStore.GetProcessChan()
