@@ -15,7 +15,6 @@ import (
 	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/404minds/avl-receiver/internal/types"
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -89,10 +88,10 @@ func (a *AquilaOBDII2GProtocol) Login(reader *bufio.Reader) ([]byte, int, error)
 
 func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, dataStore store.Store) error {
 	for {
-		if err := a.setReadTimeout(responseWriter, 50*time.Second); err != nil {
-			logger.Error("Failed to set read timeout", zap.Error(err))
-			return err
-		}
+		// if err := a.setReadTimeout(responseWriter, 50*time.Second); err != nil {
+		// 	logger.Error("Failed to set read timeout", zap.Error(err))
+		// 	return err
+		// }
 
 		packet, err := reader.ReadString('\n')
 		logger.Sugar().Infoln("full value", packet)
