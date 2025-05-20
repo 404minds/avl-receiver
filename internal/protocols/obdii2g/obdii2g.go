@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strconv"
-	"strings"
 	"time"
 
 	errs "github.com/404minds/avl-receiver/internal/errors"
@@ -15,6 +13,7 @@ import (
 	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/404minds/avl-receiver/internal/types"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -77,9 +76,6 @@ func (a *AquilaOBDII2GProtocol) Login(reader *bufio.Reader) ([]byte, int, error)
 	}
 
 	imei := string(imeiBytes)
-	if !a.isImeiAuthorized(imei) {
-		return nil, 0, errs.ErrUnauthorizedDevice
-	}
 
 	a.Imei = imei
 
@@ -88,10 +84,10 @@ func (a *AquilaOBDII2GProtocol) Login(reader *bufio.Reader) ([]byte, int, error)
 
 func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, dataStore store.Store) error {
 	for {
-		// if err := a.setReadTimeout(responseWriter, 50*time.Second); err != nil {
-		// 	logger.Error("Failed to set read timeout", zap.Error(err))
-		// 	return err
-		// }
+		if err := a.setReadTimeout(responseWriter, 40*time.Second); err != nil {
+			logger.Error("Failed to set read timeout", zap.Error(err))
+			return err
+		}
 
 		packet, err := reader.ReadString('\n')
 		logger.Sugar().Infoln("full value", packet)
@@ -120,62 +116,10 @@ func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, responseWrit
 	}
 }
 
-func (a *AquilaOBDII2GProtocol) parsePacket() (*types.DeviceStatus, error) {
-	// parts := strings.Split(packet, ",")
-	// if len(parts) < 20 {
-	// 	return nil, errors.New("invalid packet length")
-	// }
-
-	// logger.Sugar().Infoln("parts obd2  ", parts)
-	status := &types.DeviceStatus{
-		Imei:       a.Imei,
-		DeviceType: types.DeviceType_AQUILA,
-		Timestamp:  timestamppb.Now(),
-		Position:   &types.GPSPosition{},
-		VehicleStatus: &types.VehicleStatus{
-			Ignition: new(bool),
-		},
-	}
-
-	return status, nil
-}
-
-func (a *AquilaOBDII2GProtocol) parseEventFlags(vs *types.VehicleStatus, flags uint32) {
-	// Implementation based on event flag table
-	vs.OverSpeeding = (flags>>2)&1 == 1
-	vs.CrashDetection = (flags>>24)&1 == 1
-	vs.Towing = (flags>>12)&1 == 1
-	vs.UnplugBattery = (flags>>5)&1 == 1
-	// Add more flags as needed
-}
-
-func (a *AquilaOBDII2GProtocol) parseOBDData(status *types.DeviceStatus, obdData []string) {
-	for _, data := range obdData {
-		if strings.HasPrefix(data, "010D:") {
-			// RPM data example: 010D:06410D15000000
-			rpmVal, _ := strconv.ParseInt(data[7:11], 16, 32)
-			status.Rpm = int32(rpmVal)
-		} else if strings.HasPrefix(data, "51|") {
-			// VIN data
-			status.Vin = strings.Split(data, "|")[1]
-		} else if strings.HasPrefix(data, "52|") {
-			// DTC data
-			codes := strings.Split(data, "|")
-			status.VehicleStatus.DriverDistraction = len(codes) > 1 // Example mapping
-		}
-		// Add more PID parsers
-	}
-}
-
 func (a *AquilaOBDII2GProtocol) SendCommandToDevice(writer io.Writer, command string) error {
 	cmd := fmt.Sprintf("#%s\\r\\n", command)
 	_, err := writer.Write([]byte(cmd))
 	return err
-}
-
-func (a *AquilaOBDII2GProtocol) isImeiAuthorized(imei string) bool {
-	// Implement authorization logic
-	return true
 }
 
 func (a *AquilaOBDII2GProtocol) setReadTimeout(writer io.Writer, timeout time.Duration) error {
@@ -183,19 +127,4 @@ func (a *AquilaOBDII2GProtocol) setReadTimeout(writer io.Writer, timeout time.Du
 		return conn.SetReadDeadline(time.Now().Add(timeout))
 	}
 	return nil
-}
-
-func calculateChecksum(data string) byte {
-	var checksum byte
-	for _, c := range []byte(data) {
-		checksum ^= c
-	}
-	return checksum
-}
-
-func parseDateTime(dt string) (time.Time, error) {
-	if len(dt) != 12 {
-		return time.Time{}, errors.New("invalid datetime format")
-	}
-	return time.Parse("060102150405", dt)
 }
