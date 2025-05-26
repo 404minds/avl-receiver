@@ -3,6 +3,7 @@ package obdii2g
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -12,9 +13,7 @@ import (
 	configuredLogger "github.com/404minds/avl-receiver/internal/logger"
 	"github.com/404minds/avl-receiver/internal/store"
 	"github.com/404minds/avl-receiver/internal/types"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var logger = configuredLogger.Logger
@@ -23,6 +22,12 @@ type AquilaOBDII2GProtocol struct {
 	Imei       string
 	DeviceType types.DeviceType
 }
+
+const (
+	loginEventCode    = "15"
+	readTimeout       = 40 * time.Second
+	keepAliveInterval = 30 * time.Second
+)
 
 func (a *AquilaOBDII2GProtocol) GetDeviceID() string {
 	return a.Imei
@@ -82,38 +87,72 @@ func (a *AquilaOBDII2GProtocol) Login(reader *bufio.Reader) ([]byte, int, error)
 	return []byte{}, 0, nil
 }
 
-func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, responseWriter io.Writer, dataStore store.Store) error {
+func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, store store.Store) error {
+	ticker := time.NewTicker(keepAliveInterval)
+	defer ticker.Stop()
+
 	for {
-		if err := a.setReadTimeout(responseWriter, 40*time.Second); err != nil {
-			logger.Error("Failed to set read timeout", zap.Error(err))
-			return err
-		}
-
-		packet, err := reader.ReadString('\n')
-		logger.Sugar().Infoln("full value", packet)
-		if err != nil {
-			if err == io.EOF {
-				return nil
+		select {
+		case <-ticker.C:
+			if err := a.setReadTimeout(writer, readTimeout); err != nil {
+				logger.Error("Failed to refresh read deadline", zap.Error(err))
 			}
-			logger.Sugar().Info("----------------------------------------------")
-			logger.Sugar().Info("Remaining unread data:", reader)
-			return errors.Wrap(err, "failed to read packet")
+		default:
+			packet, err := reader.ReadString('*')
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					logger.Info("Connection closed gracefully")
+					return nil
+				}
+				return a.handleStreamError(err, reader)
+			}
+
+			if err := a.processPacket(packet, store); err != nil {
+				logger.Warn("Packet processing failed", zap.Error(err))
+				continue
+			}
 		}
-
-		asyncStore := dataStore.GetProcessChan()
-
-		protoPacket := &types.DeviceStatus{
-			Imei:       a.Imei,
-			DeviceType: types.DeviceType_AQUILA,
-			Timestamp:  timestamppb.Now(),
-			Position:   &types.GPSPosition{},
-			VehicleStatus: &types.VehicleStatus{
-				Ignition: new(bool),
-			},
-		}
-		asyncStore <- protoPacket
-
 	}
+}
+
+func (a *AquilaOBDII2GProtocol) processPacket(raw string, store store.Store) error {
+	// Validate and parse packet
+	pkt, err := ParsePacket(raw)
+	if err != nil {
+		return fmt.Errorf("packet validation failed: %w", err)
+	}
+
+	// Convert to protobuf format
+	status, err := pkt.ToProtobuf()
+	if err != nil {
+		return fmt.Errorf("proto conversion failed: %w", err)
+	}
+
+	// Send to store with timeout
+	select {
+	case store.GetProcessChan() <- status:
+	case <-time.After(100 * time.Millisecond):
+		logger.Warn("Dropping packet due to store buffer full")
+	}
+
+	return nil
+}
+
+func (a *AquilaOBDII2GProtocol) handleStreamError(err error, reader *bufio.Reader) error {
+	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		logger.Warn("Connection timeout, closing")
+		return nil
+	}
+
+	// Log remaining data for debugging
+	if buf := reader.Buffered(); buf > 0 {
+		peeked, _ := reader.Peek(min(buf, 256))
+		logger.Debug("Remaining buffer content",
+			zap.ByteString("data", peeked),
+			zap.Int("bytes", buf))
+	}
+
+	return fmt.Errorf("stream read error: %w", err)
 }
 
 func (a *AquilaOBDII2GProtocol) SendCommandToDevice(writer io.Writer, command string) error {

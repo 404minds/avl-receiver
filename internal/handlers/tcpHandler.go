@@ -49,11 +49,11 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		}
 	}(conn)
 
-	err := conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	err := conn.SetReadDeadline(time.Now().Add(20 * time.Second))
 	if err != nil {
 		return
 	}
-	err = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	err = conn.SetWriteDeadline(time.Now().Add(20 * time.Second))
 	if err != nil {
 		return
 	}
@@ -142,11 +142,11 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		for {
 			select {
 			case <-ticker.C:
-				if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				if err := conn.SetReadDeadline(time.Now().Add(20 * time.Second)); err != nil {
 					logger.Error("failed to refresh read deadline", zap.Error(err))
 					return
 				}
-				if err := conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				if err := conn.SetWriteDeadline(time.Now().Add(20 * time.Second)); err != nil {
 					logger.Error("failed to refresh write deadline", zap.Error(err))
 					return
 				}
