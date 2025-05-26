@@ -155,24 +155,24 @@ func (p *Packet) getOBDFloatValue(pid string) float32 {
 
 // ParsePacket validates and parses complete Aquila packet
 func ParsePacket(raw string) (*Packet, error) {
-	if !strings.HasPrefix(raw, packetHeader) {
-		return nil, fmt.Errorf("%w: invalid header", ErrInvalidPacket)
-	}
-	if len(raw) > maxPacketSize {
-		return nil, fmt.Errorf("%w: packet size exceeded", ErrInvalidPacket)
-	}
+	// if !strings.HasPrefix(raw, packetHeader) {
+	// 	return nil, fmt.Errorf("%w: invalid header", ErrInvalidPacket)
+	// }
+	// if len(raw) > maxPacketSize {
+	// 	return nil, fmt.Errorf("%w: packet size exceeded", ErrInvalidPacket)
+	// }
 
-	// Split off checksum
+	// // Split off checksum
 	parts := strings.Split(raw, checksumSeparator)
 	if len(parts) != 2 || len(parts[1]) != 2 {
 		return nil, fmt.Errorf("%w: missing checksum", ErrInvalidPacket)
 	}
-	calculated := calculateChecksum(parts[0])
-	received, err := hex.DecodeString(parts[1])
-	if err != nil || calculated != received[0] {
-		return nil, fmt.Errorf("%w: expected %02X got %s",
-			ErrChecksumMismatch, calculated, parts[1])
-	}
+	// calculated := calculateChecksum(parts[0])
+	// received, err := hex.DecodeString(parts[1])
+	// if err != nil || calculated != received[0] {
+	// 	return nil, fmt.Errorf("%w: expected %02X got %s",
+	// 		ErrChecksumMismatch, calculated, parts[1])
+	// }
 
 	// Split the core comma‐fields
 	fields := strings.Split(parts[0], ",")
@@ -181,9 +181,8 @@ func ParsePacket(raw string) (*Packet, error) {
 	}
 
 	pkt := &Packet{
-		Raw:      raw,
-		IsValid:  true,
-		Checksum: calculated,
+		Raw:     raw,
+		IsValid: true,
 	}
 
 	// ── Core fields ───────────────────────────────────────
