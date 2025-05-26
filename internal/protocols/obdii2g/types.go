@@ -163,10 +163,10 @@ func ParsePacket(raw string) (*Packet, error) {
 	// }
 
 	// // Split off checksum
-	parts := strings.Split(raw, checksumSeparator)
-	if len(parts) != 2 || len(parts[1]) != 2 {
-		return nil, fmt.Errorf("%w: missing checksum", ErrInvalidPacket)
-	}
+	// parts := strings.Split(raw, *)
+	// if len(parts) != 2 || len(parts[1]) != 2 {
+	// 	return nil, fmt.Errorf("%w: missing checksum", ErrInvalidPacket)
+	// }
 	// calculated := calculateChecksum(parts[0])
 	// received, err := hex.DecodeString(parts[1])
 	// if err != nil || calculated != received[0] {
@@ -175,7 +175,7 @@ func ParsePacket(raw string) (*Packet, error) {
 	// }
 
 	// Split the core comma‐fields
-	fields := strings.Split(parts[0], ",")
+	fields := strings.Split(raw, ",")
 	if len(fields) < 22 {
 		return nil, fmt.Errorf("%w: insufficient fields", ErrInvalidPacket)
 	}
