@@ -137,28 +137,29 @@ func (p *Packet) ToProtobuf() (*types.DeviceStatus, error) {
 // parseVehicleStatus decodes 32-bit event flag to 25+ status fields
 func (p *Packet) parseVehicleStatus() *types.VehicleStatus {
 	vs := &types.VehicleStatus{}
-	flagBinary := fmt.Sprintf("%032b", p.Vehicle.EventFlag)
+	flags := p.Vehicle.EventFlag
+	logger.Sugar().Infoln("flags", flags)
+	// vs.HarshBrakingEvent      = (flags & (1 << 26)) != 0 // bit 27
+	vs.UnplugBattery = (flags & (1 << 1)) != 0
+	vs.OverSpeeding = (flags & (1 << 2)) != 0
 
-	// Handle optional ignition field
-	if ignition := p.parseBitFlag(flagBinary, 17); ignition {
-		vs.Ignition = &ignition
+	if ig := (flags & (1 << 10)) != 0; ig {
+		vs.Ignition = &ig
 	}
-	vs.OverSpeeding = p.parseBitFlag(flagBinary, 2)
-	vs.CrashDetection = p.parseBitFlag(flagBinary, 24)
-	vs.Towing = p.parseBitFlag(flagBinary, 12)
-	vs.UnplugBattery = p.parseBitFlag(flagBinary, 5)
-	vs.RashDriving = p.parseBitFlag(flagBinary, 25)
-	// Add all 32 flags as per protocol doc table
+
+	vs.Towing = (flags & (1 << 12)) != 0
+	vs.CrashDetection = (flags & (1 << 24)) != 0
+	vs.RashDriving = (flags & (1 << 25)) != 0
 
 	return vs
 }
 
-func (p *Packet) parseBitFlag(binaryStr string, bitPos int) bool {
-	if len(binaryStr) != 32 || bitPos < 0 || bitPos > 31 {
-		return false
-	}
-	return binaryStr[bitPos] == '1'
-}
+// func (p *Packet) parseBitFlag(binaryStr string, bitPos int) bool {
+// 	if len(binaryStr) != 32 || bitPos < 0 || bitPos > 31 {
+// 		return false
+// 	}
+// 	return binaryStr[bitPos] == '1'
+// }
 
 func (p *Packet) calculateBatteryLevel() int32 {
 	if p.Vehicle.ExternalBattery == 0 {
@@ -231,20 +232,20 @@ func ParsePacket(raw string) (*Packet, error) {
 	pkt.Position.Latitude, _ = parseFloat(fields[3])
 	pkt.Position.Longitude, _ = parseFloat(fields[4])
 	pkt.Position.FixStatus = (fields[6] == "A") // was fields[7]
-	pkt.Position.Satellites, _ = parseInt32(fields[7])
+	pkt.Position.Satellites, _ = parseInt32(fields[11])
 	pkt.Position.Course, _ = parseFloat(fields[10]) // was [11]
-	pkt.Position.Speed, _ = parseFloat(fields[11])  // was [9]
+	pkt.Position.Speed, _ = parseFloat(fields[8])   // was [9]
 	pkt.Position.HDOP, _ = parseFloat(fields[12])   // was [13]
 
 	// ── Vehicle ──────────────────────────────────────────
-	pkt.Vehicle.GSMSignal, _ = parseInt32(fields[8])
+	pkt.Vehicle.GSMSignal, _ = parseInt32(fields[7])
 	pkt.Vehicle.AccumulatedDist, _ = parseInt32(fields[9]) // was [10]
-	pkt.Vehicle.AnalogInput, _ = parseInt32(fields[16])
-	pkt.Vehicle.EventFlag, _ = parseUint32(fields[17])
-	pkt.Vehicle.ExternalBattery, _ = parseInt32(fields[18])
-	pkt.Vehicle.InternalBattery, _ = parseInt32(fields[19])
-	pkt.Vehicle.TripTime, _ = parseInt32(fields[20])
-
+	pkt.Vehicle.AnalogInput, _ = parseInt32(fields[15])
+	pkt.Vehicle.EventFlag, _ = parseUint32(fields[16])
+	pkt.Vehicle.ExternalBattery, _ = parseInt32(fields[17])
+	pkt.Vehicle.InternalBattery, _ = parseInt32(fields[18])
+	pkt.Vehicle.TripTime, _ = parseInt32(fields[19])
+	logger.Sugar().Infoln("fields[20]", fields[20])
 	// ── OBD Parameters ────────────────────────────────────
 	pkt.OBD = make(map[string]OBDParameter)
 	// The last CSV field before '*' is something like "1|PID:HEX|PID:HEX|…"
