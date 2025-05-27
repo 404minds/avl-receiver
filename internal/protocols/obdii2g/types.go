@@ -65,12 +65,34 @@ type OBDParameter struct {
 	Valid  bool
 }
 
+const (
+	pidEngineRpm            = "010C" // 2 bytes: (A*256 + B) / 4 rpm
+	pidVehicleSpeed         = "010D" // 1 byte : A km/h
+	pidEngineLoad           = "0104" // 1 byte : A *100/255 %
+	pidCoolantTemp          = "0105" // 1 byte : A - 40 °C
+	pidIntakeAirTemp        = "010F" // 1 byte : A - 40 °C
+	pidRunTime              = "011F" // 2 bytes: A*256 + B s
+	pidDistanceMILOn        = "0121" // 2 bytes: A*256 + B km
+	pidFuelLevelInput       = "012F" // 1 byte : A *100/255 %
+	pidMafAirFlow           = "0110" // 2 bytes: (A*256 + B)/100 g/s
+	pidFuelRailPressure     = "0122" // 2 bytes: (A*256 + B)*0.079 kPa
+	pidWarmupsSinceClear    = "0130" // 1 byte : A count
+	pidDistanceSinceClear   = "0131" // 2 bytes: A*256 + B km
+	pidBarometricPressure   = "0133" // 1 byte : A kPa
+	pidControlModuleVoltage = "0142" // 2 bytes: (A*256 + B)/1000 V
+	pidAbsoluteLoadValue    = "0143" // 2 bytes: (A*256 + B)*100/255 %
+	pidEngineOilTemp        = "015C" // 1 byte : A - 40 °C
+)
+
 // ToProtobuf converts raw packet to protobuf format with complete data mapping
 func (p *Packet) ToProtobuf() (*types.DeviceStatus, error) {
 	if !p.IsValid {
 		return nil, fmt.Errorf("cannot convert invalid packet")
 	}
 	speed := float32(p.Position.Speed)
+	if obdSpeed := p.getOBDFloatValue(pidVehicleSpeed); obdSpeed != 0 {
+		speed = obdSpeed
+	}
 
 	proto := &types.DeviceStatus{
 		Imei:       p.IMEI,
@@ -82,15 +104,26 @@ func (p *Packet) ToProtobuf() (*types.DeviceStatus, error) {
 			Speed:      &speed,
 			Course:     float32(p.Position.Course),
 			Satellites: p.Position.Satellites,
-			Altitude:   0, // Not in protocol docs
 		},
-		VehicleStatus:      p.parseVehicleStatus(),
-		BatteryLevel:       p.calculateBatteryLevel(),
-		Odometer:           p.Vehicle.AccumulatedDist,
-		FuelLtr:            p.getFuelData(),
-		Rpm:                int32(p.getOBDFloatValue("010C")),
-		CoolantTemperature: p.getOBDFloatValue("0105"),
-		EngineLoad:         p.getOBDFloatValue("0104"),
+		VehicleStatus:        p.parseVehicleStatus(),
+		BatteryLevel:         p.calculateBatteryLevel(),
+		Odometer:             p.Vehicle.AccumulatedDist,
+		FuelPct:              p.getFuelData(),
+		Rpm:                  int32(p.getOBDFloatValue(pidEngineRpm)),
+		CoolantTemperature:   p.getOBDFloatValue(pidCoolantTemp),
+		EngineLoad:           p.getOBDFloatValue(pidEngineLoad),
+		IntakeAirTemp:        p.getOBDFloatValue(pidIntakeAirTemp),
+		RunTime:              uint32(p.getOBDFloatValue(pidRunTime)),
+		DistanceMilOn:        uint32(p.getOBDFloatValue(pidDistanceMILOn)),
+		FuelLevelInput:       p.getOBDFloatValue(pidFuelLevelInput),
+		MafAirFlow:           p.getOBDFloatValue(pidMafAirFlow),
+		FuelRailPressure:     p.getOBDFloatValue(pidFuelRailPressure),
+		WarmupsSinceClear:    uint32(p.getOBDFloatValue(pidWarmupsSinceClear)),
+		DistanceSinceClear:   uint32(p.getOBDFloatValue(pidDistanceSinceClear)),
+		BarometricPressure:   int32(p.getOBDFloatValue(pidBarometricPressure)),
+		ControlModuleVoltage: p.getOBDFloatValue(pidControlModuleVoltage),
+		AbsoluteLoadValue:    p.getOBDFloatValue(pidAbsoluteLoadValue),
+		EngineOilTemp:        p.getOBDFloatValue(pidEngineOilTemp),
 		RawData: &types.DeviceStatus_AquilaPacket{
 			AquilaPacket: &types.AquilaPacket{
 				RawData: []byte(p.Raw),
@@ -241,28 +274,104 @@ func (o *OBDParameter) parseValue(pidCode string) {
 		}
 	}()
 
-	rawBytes, err := hex.DecodeString(strings.TrimPrefix(o.RawHex, "0641"))
-	if err != nil || len(rawBytes) < 4 {
+	hexStr := strings.TrimPrefix(o.RawHex, "0641")
+	hexStr = strings.TrimPrefix(hexStr, "067F")
+	data, err := hex.DecodeString(hexStr)
+	if err != nil {
 		o.Valid = false
 		return
 	}
 
 	switch pidCode {
-	case "010C": // Engine RPM (2 bytes)
-		o.Parsed = float64(uint16(rawBytes[0])<<8|uint16(rawBytes[1])) / 4
-		o.Unit = "RPM"
-	case "0105": // Coolant Temp (1 byte)
-		o.Parsed = float64(rawBytes[0]) - 40
-		o.Unit = "°C"
-	case "010D": // Vehicle Speed (1 byte)
-		o.Parsed = float64(rawBytes[0])
+	case pidEngineRpm:
+		if len(data) < 2 {
+			o.Valid = false
+			return
+		}
+		raw := uint16(data[0])<<8 | uint16(data[1])
+		o.Parsed = float64(raw) / 4
+		o.Unit = "rpm"
+
+	case pidVehicleSpeed:
+		o.Parsed = float64(data[0])
 		o.Unit = "km/h"
-	case "0104": // Engine Load (1 byte)
-		o.Parsed = (float64(rawBytes[0]) / 255) * 100
+
+	case pidEngineLoad:
+		o.Parsed = float64(data[0]) * 100 / 255
 		o.Unit = "%"
-	case "012F": // Fuel Level Input (1 byte)
-		o.Parsed = float64(rawBytes[0]) / 2.55
+
+	case pidCoolantTemp:
+		o.Parsed = float64(data[0]) - 40
+		o.Unit = "°C"
+
+	case pidIntakeAirTemp:
+		o.Parsed = float64(data[0]) - 40
+		o.Unit = "°C"
+
+	case pidRunTime:
+		if len(data) < 2 {
+			o.Valid = false
+			return
+		}
+		o.Parsed = float64(uint16(data[0])<<8 | uint16(data[1]))
+		o.Unit = "s"
+
+	case pidDistanceMILOn, pidDistanceSinceClear:
+		if len(data) < 2 {
+			o.Valid = false
+			return
+		}
+		o.Parsed = float64(uint16(data[0])<<8 | uint16(data[1]))
+		o.Unit = "km"
+
+	case pidFuelLevelInput:
+		o.Parsed = float64(data[0]) * 100 / 255
 		o.Unit = "%"
+
+	case pidMafAirFlow:
+		if len(data) < 2 {
+			o.Valid = false
+			return
+		}
+		o.Parsed = float64(uint16(data[0])<<8|uint16(data[1])) / 100
+		o.Unit = "g/s"
+
+	case pidFuelRailPressure:
+		if len(data) < 2 {
+			o.Valid = false
+			return
+		}
+		o.Parsed = float64(uint16(data[0])<<8|uint16(data[1])) * 0.079
+		o.Unit = "kPa"
+
+	case pidWarmupsSinceClear:
+		o.Parsed = float64(data[0])
+		o.Unit = "cycles"
+
+	case pidBarometricPressure:
+		o.Parsed = float64(data[0])
+		o.Unit = "kPa"
+
+	case pidControlModuleVoltage:
+		if len(data) < 2 {
+			o.Valid = false
+			return
+		}
+		o.Parsed = float64(uint16(data[0])<<8|uint16(data[1])) / 1000
+		o.Unit = "V"
+
+	case pidAbsoluteLoadValue:
+		if len(data) < 2 {
+			o.Valid = false
+			return
+		}
+		raw := uint16(data[0])<<8 | uint16(data[1])
+		o.Parsed = float64(raw) * 100 / 255
+		o.Unit = "%"
+
+	case pidEngineOilTemp:
+		o.Parsed = float64(data[0]) - 40
+		o.Unit = "°C"
 	// Add all supported PIDs from protocol doc
 	default:
 		o.Valid = false
