@@ -140,16 +140,16 @@ func (p *Packet) parseVehicleStatus() *types.VehicleStatus {
 	flags := p.Vehicle.EventFlag
 	logger.Sugar().Infoln("flags", flags)
 	// vs.HarshBrakingEvent      = (flags & (1 << 26)) != 0 // bit 27
-	vs.UnplugBattery = (flags & (1 << 1)) != 0
-	vs.OverSpeeding = (flags & (1 << 2)) != 0
+	vs.UnplugBattery = (flags & (1 << 2)) != 0
+	vs.OverSpeeding = (flags & (1 << 3)) != 0
 
-	if ig := (flags & (1 << 10)) != 0; ig {
+	if ig := (flags & (1 << 11)) != 0; ig {
 		vs.Ignition = &ig
 	}
 
-	vs.Towing = (flags & (1 << 12)) != 0
-	vs.CrashDetection = (flags & (1 << 24)) != 0
-	vs.RashDriving = (flags & (1 << 25)) != 0
+	vs.Towing = (flags & (1 << 13)) != 0
+	vs.CrashDetection = (flags & (1 << 25)) != 0
+	vs.RashDriving = (flags & (1 << 26)) != 0
 
 	return vs
 }
@@ -174,7 +174,7 @@ func (p *Packet) calculateBatteryLevel() int32 {
 
 func (p *Packet) getFuelData() int32 {
 	// PID 012F: Fuel Level Input
-	if fuel, exists := p.OBD["012F"]; exists && fuel.Valid {
+	if fuel, exists := p.OBD[pidFuelLevelInput]; exists && fuel.Valid {
 		return int32(fuel.Parsed)
 	}
 	return 0
@@ -267,7 +267,6 @@ func ParsePacket(raw string) (*Packet, error) {
 	return pkt, nil
 }
 
-// parseValue handles OBD PID value decoding
 func (o *OBDParameter) parseValue(pidCode string) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -275,13 +274,23 @@ func (o *OBDParameter) parseValue(pidCode string) {
 		}
 	}()
 
-	hexStr := strings.TrimPrefix(o.RawHex, "0641")
-	hexStr = strings.TrimPrefix(hexStr, "067F")
-	data, err := hex.DecodeString(hexStr)
-	if err != nil {
+	// 1) decode the full hex string into bytes
+	rawBytes, err := hex.DecodeString(strings.TrimSpace(o.RawHex))
+	if err != nil || len(rawBytes) < 3 {
 		o.Valid = false
 		return
 	}
+	// rawBytes[0] = Length
+	// rawBytes[1] = ResponseType (0x40 + Mode for positive, or 0x7F for negative)
+	// rawBytes[2] = echoed PID
+	// the real data starts at rawBytes[3:]
+	// if rawBytes[1] == 0x7F {
+	// 	// negative response: NACK
+	// 	o.Valid = false
+	// 	return
+	// }
+
+	data := rawBytes[3:] // <-- now data[0], data[1], ... are the actual payload bytes
 
 	switch pidCode {
 	case pidEngineRpm:
@@ -294,90 +303,87 @@ func (o *OBDParameter) parseValue(pidCode string) {
 		o.Unit = "rpm"
 
 	case pidVehicleSpeed:
+		if len(data) < 1 {
+			o.Valid = false
+			return
+		}
 		o.Parsed = float64(data[0])
 		o.Unit = "km/h"
 
 	case pidEngineLoad:
+		if len(data) < 1 {
+			o.Valid = false
+			return
+		}
 		o.Parsed = float64(data[0]) * 100 / 255
 		o.Unit = "%"
 
-	case pidCoolantTemp:
+	case pidCoolantTemp, pidIntakeAirTemp, pidEngineOilTemp:
+		if len(data) < 1 {
+			o.Valid = false
+			return
+		}
 		o.Parsed = float64(data[0]) - 40
 		o.Unit = "°C"
 
-	case pidIntakeAirTemp:
-		o.Parsed = float64(data[0]) - 40
-		o.Unit = "°C"
-
-	case pidRunTime:
+	case pidRunTime, pidDistanceMILOn, pidDistanceSinceClear, pidMafAirFlow,
+		pidFuelRailPressure, pidControlModuleVoltage, pidAbsoluteLoadValue:
+		// all these need at least two bytes
 		if len(data) < 2 {
 			o.Valid = false
 			return
 		}
-		o.Parsed = float64(uint16(data[0])<<8 | uint16(data[1]))
-		o.Unit = "s"
+		// fall through to specialized logic below
+		switch pidCode {
+		case pidRunTime:
+			raw := uint16(data[0])<<8 | uint16(data[1])
+			o.Parsed = float64(raw)
+			o.Unit = "s"
 
-	case pidDistanceMILOn, pidDistanceSinceClear:
-		if len(data) < 2 {
-			o.Valid = false
-			return
+		case pidDistanceMILOn, pidDistanceSinceClear:
+			raw := uint16(data[0])<<8 | uint16(data[1])
+			o.Parsed = float64(raw)
+			o.Unit = "km"
+
+		case pidMafAirFlow:
+			raw := uint16(data[0])<<8 | uint16(data[1])
+			o.Parsed = float64(raw) / 100
+			o.Unit = "g/s"
+
+		case pidFuelRailPressure:
+			raw := uint16(data[0])<<8 | uint16(data[1])
+			o.Parsed = float64(raw) * 0.079
+			o.Unit = "kPa"
+
+		case pidControlModuleVoltage:
+			raw := uint16(data[0])<<8 | uint16(data[1])
+			o.Parsed = float64(raw) / 1000
+			o.Unit = "V"
+
+		case pidAbsoluteLoadValue:
+			raw := uint16(data[0])<<8 | uint16(data[1])
+			o.Parsed = float64(raw) * 100 / 255
+			o.Unit = "%"
+
 		}
-		o.Parsed = float64(uint16(data[0])<<8 | uint16(data[1]))
-		o.Unit = "km"
-
-	case pidFuelLevelInput:
-		o.Parsed = float64(data[0]) * 100 / 255
-		o.Unit = "%"
-
-	case pidMafAirFlow:
-		if len(data) < 2 {
-			o.Valid = false
-			return
+	case pidFuelLevelInput, pidWarmupsSinceClear, pidBarometricPressure:
+		switch pidCode {
+		case pidFuelLevelInput:
+			o.Parsed = float64(data[0]) * 100 / 255
+			o.Unit = "%"
+		case pidWarmupsSinceClear:
+			o.Parsed = float64(data[0])
+			o.Unit = "cycles"
+		case pidBarometricPressure:
+			o.Parsed = float64(data[0])
+			o.Unit = "kPa"
 		}
-		o.Parsed = float64(uint16(data[0])<<8|uint16(data[1])) / 100
-		o.Unit = "g/s"
-
-	case pidFuelRailPressure:
-		if len(data) < 2 {
-			o.Valid = false
-			return
-		}
-		o.Parsed = float64(uint16(data[0])<<8|uint16(data[1])) * 0.079
-		o.Unit = "kPa"
-
-	case pidWarmupsSinceClear:
-		o.Parsed = float64(data[0])
-		o.Unit = "cycles"
-
-	case pidBarometricPressure:
-		o.Parsed = float64(data[0])
-		o.Unit = "kPa"
-
-	case pidControlModuleVoltage:
-		if len(data) < 2 {
-			o.Valid = false
-			return
-		}
-		o.Parsed = float64(uint16(data[0])<<8|uint16(data[1])) / 1000
-		o.Unit = "V"
-
-	case pidAbsoluteLoadValue:
-		if len(data) < 2 {
-			o.Valid = false
-			return
-		}
-		raw := uint16(data[0])<<8 | uint16(data[1])
-		o.Parsed = float64(raw) * 100 / 255
-		o.Unit = "%"
-
-	case pidEngineOilTemp:
-		o.Parsed = float64(data[0]) - 40
-		o.Unit = "°C"
-	// Add all supported PIDs from protocol doc
 	default:
+		// unsupported PID
 		o.Valid = false
 		return
 	}
+
 	o.Valid = true
 }
 
