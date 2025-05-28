@@ -284,11 +284,11 @@ func (o *OBDParameter) parseValue(pidCode string) {
 	// rawBytes[1] = ResponseType (0x40 + Mode for positive, or 0x7F for negative)
 	// rawBytes[2] = echoed PID
 	// the real data starts at rawBytes[3:]
-	// if rawBytes[1] == 0x7F {
-	// 	// negative response: NACK
-	// 	o.Valid = false
-	// 	return
-	// }
+	if rawBytes[1] == 0x7F {
+		// negative response: NACK
+		o.Valid = false
+		return
+	}
 
 	data := rawBytes[3:] // <-- now data[0], data[1], ... are the actual payload bytes
 
