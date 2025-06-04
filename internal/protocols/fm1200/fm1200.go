@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/404minds/avl-receiver/internal/store"
@@ -246,8 +247,13 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 
 	logger.Sugar().Infoln(" Tel parsedPacket Data", parsedPacket.Data)
 
+	sort.Slice(parsedPacket.Data, func(i, j int) bool {
+		return parsedPacket.Data[i].Timestamp < parsedPacket.Data[j].Timestamp
+	})
+
 	// Store records
 	for i := 0; i <= len(parsedPacket.Data)-1; i++ {
+
 		record := parsedPacket.Data[i]
 		r := Record{
 			Record: record,
