@@ -11,6 +11,7 @@ enum DeviceType {
     WANWAY = 1;
     CONCOX = 2;
     HOWEN  = 3;
+    AQUILA = 4;
 }
 
 enum DeviceProtocolType {
@@ -18,31 +19,50 @@ enum DeviceProtocolType {
     GT06 = 1;
     TR06 = 2;
     HOWENWS =3;
+    OBDII2G = 4;
 }
 
 message DeviceStatus {
-    string imei = 1;
-    DeviceType device_type = 2;
-    google.protobuf.Timestamp timestamp = 3;
-    string message_type = 4;
-    GPSPosition position = 5;
-    VehicleStatus vehicle_status = 6;
-    int32 battery_level = 7;
-    float temperature = 8;
-    int32 odometer = 9;
-    int32 fuel_ltr = 10;
-    int32 fuel_pct = 11;
-    int32 fuel_gps = 12;
-    string identification_id = 13;
-    string vin = 14;
-    int32 rpm = 15;
-    oneof raw_data {
-        WanwayPacket wanway_packet = 16;
-        TeltonikaPacket teltonika_packet = 17;
-        ConcoxPacket  concox_packet = 18;
-        HowenPacket   howen_packet = 19;
-    }
+  string imei                         = 1;
+  DeviceType device_type              = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  string message_type                 = 4;
+  GPSPosition position                = 5;
+  VehicleStatus vehicle_status        = 6;
+  int32 battery_level                 = 7;
+  float temperature                   = 8;
+  int32 odometer                      = 9;
+  int32 fuel_ltr                      = 10;
+  int32 fuel_pct                      = 11;
+  int32 fuel_gps                      = 12;
+  string identification_id            = 13;
+  string vin                          = 14;
+  int32 rpm                           = 15;
+  float coolant_temperature           = 16;
+
+  oneof raw_data {
+    WanwayPacket    wanway_packet    = 17;
+    TeltonikaPacket teltonika_packet = 18;
+    ConcoxPacket    concox_packet    = 19;
+    HowenPacket     howen_packet     = 20;
+    AquilaPacket    aquila_packet    = 21;
+  }
+
+  float engine_load                 = 22;
+  float intake_air_temp            = 23;
+  uint32 run_time                  = 24;
+  uint32 distance_mil_on           = 25;
+  float fuel_level_input           = 26;
+  float maf_air_flow               = 27;
+  float fuel_rail_pressure         = 28;
+  uint32 warmups_since_clear       = 29;
+  uint32 distance_since_clear      = 30;
+  int32 barometric_pressure        = 31;
+  float control_module_voltage     = 32;
+  float absolute_load_value        = 33;
+  float engine_oil_temp            = 34;
 }
+
 
 message GPSPosition {
     float latitude = 1;
@@ -104,6 +124,9 @@ message HowenPacket{
     bytes raw_data = 1;
 }
 
+message AquilaPacket{
+    bytes raw_data = 1;
+}
 
 message DeviceResponse {
     string imei = 1;
