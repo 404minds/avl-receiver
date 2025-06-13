@@ -8,6 +8,7 @@ import (
 	"github.com/404minds/avl-receiver/internal/protocols/fm1200"
 	"github.com/404minds/avl-receiver/internal/protocols/gt06"
 	"github.com/404minds/avl-receiver/internal/protocols/howen"
+	"github.com/404minds/avl-receiver/internal/protocols/intellitrac_a"
 	"github.com/404minds/avl-receiver/internal/protocols/obdii2g"
 	"github.com/404minds/avl-receiver/internal/protocols/tr06"
 	"github.com/404minds/avl-receiver/internal/store"
@@ -40,6 +41,10 @@ func MakeProtocolForType(t types.DeviceProtocolType) DeviceProtocol {
 		logger.Sugar().Info("OBDII2G called the protocol is: ", &obdii2g.AquilaOBDII2GProtocol{DeviceType: types.DeviceType_AQUILA})
 		return &obdii2g.AquilaOBDII2GProtocol{DeviceType: types.DeviceType_AQUILA}
 
+	case types.DeviceProtocolType_INTELLITRAC_A:
+		logger.Sugar().Info("INTELLITRAC called the protocol is: ", &intellitrac_a.IntelliTracAProtocol{DeviceType: types.DeviceType_INTELLITRAC})
+		return &intellitrac_a.IntelliTracAProtocol{DeviceType: types.DeviceType_INTELLITRAC}
+
 	case types.DeviceProtocolType_TR06:
 		logger.Sugar().Info("TR06 called the protocol is: ", &tr06.TR06Protocol{DeviceType: types.DeviceType_WANWAY})
 		return &tr06.TR06Protocol{DeviceType: types.DeviceType_WANWAY}
@@ -59,6 +64,8 @@ func GetDeviceTypesForProtocol(t types.DeviceProtocolType) []types.DeviceType {
 	switch t {
 	case types.DeviceProtocolType_FM1200:
 		return []types.DeviceType{types.DeviceType_TELTONIKA}
+	case types.DeviceProtocolType_INTELLITRAC_A:
+		return []types.DeviceType{types.DeviceType_INTELLITRAC}
 	case types.DeviceProtocolType_OBDII2G:
 		return []types.DeviceType{types.DeviceType_AQUILA}
 	case types.DeviceProtocolType_GT06:

@@ -12,6 +12,7 @@ enum DeviceType {
     CONCOX = 2;
     HOWEN  = 3;
     AQUILA = 4;
+    INTELLITRAC = 5;
 }
 
 enum DeviceProtocolType {
@@ -20,6 +21,7 @@ enum DeviceProtocolType {
     TR06 = 2;
     HOWENWS =3;
     OBDII2G = 4;
+    INTELLITRAC_A = 5;
 }
 
 message DeviceStatus {
@@ -41,28 +43,28 @@ message DeviceStatus {
   float coolant_temperature           = 16;
 
   oneof raw_data {
-    WanwayPacket    wanway_packet    = 17;
-    TeltonikaPacket teltonika_packet = 18;
-    ConcoxPacket    concox_packet    = 19;
-    HowenPacket     howen_packet     = 20;
-    AquilaPacket    aquila_packet    = 21;
+    WanwayPacket wanway_packet             = 17;
+    TeltonikaPacket teltonika_packet       = 18;
+    ConcoxPacket concox_packet             = 19;
+    HowenPacket howen_packet               = 20;
+    AquilaPacket aquila_packet             = 21;
+    IntellitracPacket intellitrac_packet   = 22; 
   }
 
-  float engine_load                 = 22;
-  float intake_air_temp            = 23;
-  uint32 run_time                  = 24;
-  uint32 distance_mil_on           = 25;
-  float fuel_level_input           = 26;
-  float maf_air_flow               = 27;
-  float fuel_rail_pressure         = 28;
-  uint32 warmups_since_clear       = 29;
-  uint32 distance_since_clear      = 30;
-  int32 barometric_pressure        = 31;
-  float control_module_voltage     = 32;
-  float absolute_load_value        = 33;
-  float engine_oil_temp            = 34;
+  float engine_load                 = 23;
+  float intake_air_temp             = 24;
+  uint32 run_time                   = 25;
+  uint32 distance_mil_on            = 26;
+  float fuel_level_input            = 27;
+  float maf_air_flow                = 28;
+  float fuel_rail_pressure          = 29;
+  uint32 warmups_since_clear        = 30;
+  uint32 distance_since_clear       = 31;
+  int32 barometric_pressure         = 32;
+  float control_module_voltage      = 33;
+  float absolute_load_value         = 34;
+  float engine_oil_temp             = 35; 
 }
-
 
 message GPSPosition {
     float latitude = 1;
@@ -125,6 +127,10 @@ message HowenPacket{
 }
 
 message AquilaPacket{
+    bytes raw_data = 1;
+}
+
+message IntellitracPacket{
     bytes raw_data = 1;
 }
 
