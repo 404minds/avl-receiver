@@ -181,7 +181,7 @@ func (t *IntelliTracAProtocol) handleBinaryPosition(reader *bufio.Reader, writer
 	}
 	logger.Sugar().Infoln("data", data)
 
-	t.handlePositionalData(data, modemID, messageID, transactionID, writer, store)
+	t.handlePositionalData(data, modemID, dataLen, messageID, transactionID, writer, store)
 
 	// Send acknowledgment
 	ack := make([]byte, BinaryAckSize)
@@ -194,12 +194,12 @@ func (t *IntelliTracAProtocol) handleBinaryPosition(reader *bufio.Reader, writer
 	return err
 }
 
-func (t *IntelliTracAProtocol) handlePositionalData(data []byte, modemID string, messageID uint16, transactionID uint16, writer io.Writer, store store.Store) error {
+func (t *IntelliTracAProtocol) handlePositionalData(data []byte, modemID string, dataLen uint16, messageID uint16, transactionID uint16, writer io.Writer, store store.Store) error {
 	position := &PositionRecord{
 		TransactionID: transactionID,
 		ModemID:       modemID,
 		MessageID:     messageID,
-		DataLength:    46,
+		DataLength:    dataLen,
 	}
 
 	// GPS Date/Time (bytes 0-5)
@@ -229,10 +229,10 @@ func (t *IntelliTracAProtocol) handlePositionalData(data []byte, modemID string,
 	position.GPS.Direction = float32(binary.BigEndian.Uint16(data[19:21])) / 10.0     // 0.1 degree units
 
 	// Odometer (bytes 21-24)
-	position.Odometer = binary.BigEndian.Uint32(data[21:25])
+	position.Odometer = binary.BigEndian.Uint32(data[21:25]) / 1000
 
 	// HDOP and Satellites (bytes 25-26)
-	position.HDOP = data[25]
+	position.HDOP = data[25] / 10.0
 	position.Satellites = data[26]
 
 	position.IOStatus = binary.BigEndian.Uint16(data[27:29])
@@ -282,7 +282,7 @@ func (t *IntelliTracAProtocol) handlePositionalData(data []byte, modemID string,
 		"direction_deg", position.GPS.Direction,
 
 		// odometer + fix quality
-		"odometer_m", position.Odometer,
+		"odometer_km", position.Odometer,
 		"hdop", float32(position.HDOP)/10.0,
 		"satellites", position.Satellites,
 
