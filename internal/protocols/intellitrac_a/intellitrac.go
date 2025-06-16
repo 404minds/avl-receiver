@@ -85,8 +85,7 @@ func (t *IntelliTracAProtocol) Login(reader *bufio.Reader) ([]byte, int, error) 
 		t.IsBinary = true
 		logger.Sugar().Infof("Binary heartbeat - Transaction ID: %d, Modem ID: %d", transactionID, modemID)
 
-	}
-	if len(peeked) >= 2 && peeked[0] == 0xFA && peeked[1] == 0xF8 {
+	} else if len(peeked) >= 2 && peeked[0] == 0xFA && peeked[1] == 0xF8 {
 		// ASCII heartbeat (page 11)
 		data := make([]byte, ASCIIHeartbeatSize)
 		_, err := io.ReadFull(reader, data)
@@ -99,6 +98,8 @@ func (t *IntelliTracAProtocol) Login(reader *bufio.Reader) ([]byte, int, error) 
 		modemID = uint64(binary.BigEndian.Uint32(data[4:8]))
 		t.IsBinary = false
 		logger.Sugar().Infof("ASCII heartbeat - Transaction ID: %d, Modem ID: %d", transactionID, modemID)
+	} else {
+		return nil, 0, errs.ErrUnknownProtocol
 	}
 
 	t.Imei = padIMEI(fmt.Sprintf("%d", modemID))
