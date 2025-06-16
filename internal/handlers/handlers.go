@@ -9,7 +9,7 @@ import (
 func NewTcpHandler(remoteStoreClient store.CustomAvlDataStoreClient, storeType string) TcpHandler {
 	return TcpHandler{
 		connToProtocolMap: make(map[string]protocols.DeviceProtocol),
-		allowedProtocols:  []types.DeviceProtocolType{types.DeviceProtocolType_OBDII2G, types.DeviceProtocolType_GT06, types.DeviceProtocolType_TR06, types.DeviceProtocolType_FM1200}, // registered device types can be made configurable to enable/disable a device-type at once
+		allowedProtocols:  []types.DeviceProtocolType{types.DeviceProtocolType_INTELLITRAC_A, types.DeviceProtocolType_OBDII2G, types.DeviceProtocolType_GT06, types.DeviceProtocolType_TR06, types.DeviceProtocolType_FM1200}, // registered device types can be made configurable to enable/disable a device-type at once
 		connToStoreMap:    make(map[string]store.Store),
 		remoteStoreClient: remoteStoreClient,
 		storeType:         storeType,
