@@ -290,6 +290,8 @@ func (t *IntelliTracAProtocol) handlePositionalData(data []byte, modemID string,
 		// digital I/O
 		"ioStatus", fmt.Sprintf("0x%04X", position.IOStatus),
 		"vehicleStatus", fmt.Sprintf("0x%02X", position.VehicleStatus),
+		"ioStatus_full", position.IOStatus,
+		"vehicleStatus_full", position.VehicleStatus,
 
 		//input
 		"AnalogInput1", position.AnalogInput1,
@@ -303,9 +305,6 @@ func (t *IntelliTracAProtocol) handlePositionalData(data []byte, modemID string,
 	// Convert to DeviceStatus and send to store
 	status := position.ToDeviceStatus(t.Imei)
 	store.GetProcessChan() <- status
-
-	logger.Sugar().Infof("46-byte position parsed - Lat: %.5f, Lon: %.5f",
-		position.GPS.Latitude, position.GPS.Longitude)
 
 	// Send acknowledgment
 	ack := make([]byte, BinaryAckSize)
