@@ -325,7 +325,7 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 		//Set battery and GSM signal
 		logger.Sugar().Info(v.BatteryLevel, "  ", v.GSMSignalStrength)
 		info.BatteryLevel = resolveBatteryLevel(int32(v.BatteryLevel))
-		info.Position.Satellites = int32(v.GSMSignalStrength)
+		info.GsmNetwork = int32(v.GSMSignalStrength)
 
 	default:
 	}

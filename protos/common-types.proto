@@ -54,14 +54,15 @@ message DeviceStatus {
   float  control_module_voltage       = 27;
   float  absolute_load_value          = 28;
   float  engine_oil_temp              = 29;
+  int32  gsm_network                  = 30;
 
   oneof raw_data {
-    WanwayPacket       wanway_packet       = 30;
-    TeltonikaPacket    teltonika_packet    = 31;
-    ConcoxPacket       concox_packet       = 32;
-    HowenPacket        howen_packet        = 33;
-    AquilaPacket       aquila_packet       = 34;
-    IntellitracPacket  intellitrac_packet  = 35;
+    WanwayPacket       wanway_packet       = 31;
+    TeltonikaPacket    teltonika_packet    = 32;
+    ConcoxPacket       concox_packet       = 33;
+    HowenPacket        howen_packet        = 34;
+    AquilaPacket       aquila_packet       = 35;
+    IntellitracPacket  intellitrac_packet  = 36;
   }
 }
 

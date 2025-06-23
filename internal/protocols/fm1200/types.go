@@ -173,7 +173,8 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	}
 
 	info.Position.Course = float32(r.Record.GPSElement.Angle)
-	info.Position.Satellites = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
+	info.Position.Satellites = int32(r.Record.GPSElement.Satellites)
+	info.GsmNetwork = int32(r.Record.IOElement.Properties1B[TIO_GSMSignal])
 
 	if r.Record.IOElement.Properties1B[TIO_AmbientTemperature] > 0 {
 		info.Temperature = float32(r.Record.IOElement.Properties1B[TIO_AmbientTemperature] * 10)
