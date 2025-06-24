@@ -226,7 +226,7 @@ func (t *IntelliTracAProtocol) handlePositionalData(data []byte, modemID string,
 	position.GPS.Altitude = int32(binary.BigEndian.Uint32(altBytes))
 
 	// Speed and Direction (bytes 17-20)
-	position.GPS.Speed = (float32(binary.BigEndian.Uint16(data[17:19])) / 10.0) * 3.8 // 0.1 m/s units
+	position.GPS.Speed = (float32(binary.BigEndian.Uint16(data[17:19])) / 10.0) * 3.6 // 0.1 m/s units
 	position.GPS.Direction = float32(binary.BigEndian.Uint16(data[19:21])) / 10.0     // 0.1 degree units
 
 	// Odometer (bytes 21-24)
@@ -241,8 +241,8 @@ func (t *IntelliTracAProtocol) handlePositionalData(data []byte, modemID string,
 	// Vehicle Status (byte 29)
 	position.VehicleStatus = data[29]
 
-	position.AnalogInput1 = (float32(binary.BigEndian.Uint16(data[30:32])))
-	position.AnalogInput2 = (float32(binary.BigEndian.Uint16(data[32:34])))
+	position.AnalogInput1 = (float32(binary.BigEndian.Uint16(data[30:32]))) * 0.001
+	position.AnalogInput2 = (float32(binary.BigEndian.Uint16(data[32:34]))) * 0.001
 
 	// RTC Date/Time (bytes 34-39)
 	position.RTC = parseDateTime(
@@ -284,7 +284,7 @@ func (t *IntelliTracAProtocol) handlePositionalData(data []byte, modemID string,
 
 		// odometer + fix quality
 		"odometer_km", position.Odometer,
-		"hdop", float32(position.HDOP)/10.0,
+		"hdop", float32(position.HDOP),
 		"satellites", position.Satellites,
 
 		// digital I/O
