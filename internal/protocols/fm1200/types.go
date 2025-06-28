@@ -214,9 +214,14 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.VehicleStatus.Towing = r.Record.IOElement.Properties1B[TIO_Towing] > 0
 	info.VehicleStatus.UnplugBattery = r.Record.IOElement.Properties1B[TIO_Unplug] > 0
 	info.VehicleStatus.OverSpeeding = r.Record.IOElement.Properties1B[TIO_Overspeeding] > 0
-	info.VehicleStatus.RashDriving = r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus] > 0
 	info.VehicleStatus.CrashDetection = int32(r.Record.IOElement.Properties1B[TIO_CrashDetection]) > 0
 	info.VehicleStatus.ExcessiveIdling = r.Record.IOElement.Properties1B[TIO_ExcessiveIdling] > 0
+	greenDrivingStatus := r.Record.IOElement.Properties1B[TIO_GreenDrivingStatus]
+
+	info.VehicleStatus.RashDriving = greenDrivingStatus > 0
+	info.VehicleStatus.HarshAcceleration = greenDrivingStatus == 1
+	info.VehicleStatus.HarshBraking = greenDrivingStatus == 2
+	info.VehicleStatus.HarshCornering = greenDrivingStatus == 3
 
 	if r.Record.IOElement.Properties2B[TIO_RPM] > 0 {
 		info.Rpm = int32(r.Record.IOElement.Properties2B[TIO_RPM])

@@ -28,14 +28,15 @@ var (
 )
 
 type Packet struct {
-	Raw       string
-	IMEI      string
-	Timestamp time.Time
-	Position  GPSCoordinates
-	Vehicle   VehicleData
-	OBD       map[string]OBDParameter
-	Checksum  byte
-	IsValid   bool
+	Raw         string
+	IMEI        string
+	MessageCode string
+	Timestamp   time.Time
+	Position    GPSCoordinates
+	Vehicle     VehicleData
+	OBD         map[string]OBDParameter
+	Checksum    byte
+	IsValid     bool
 }
 
 type GPSCoordinates struct {
@@ -94,6 +95,50 @@ func (p *Packet) ToProtobuf() (*types.DeviceStatus, error) {
 		speed = obdSpeed
 	}
 
+	logger.Sugar().Infow("obdii2g_packet",
+		// envelope
+		"imei", p.IMEI,
+		"message_code", p.MessageCode,
+		"received_at", time.Now().Format(time.RFC3339),
+
+		// timestamp & GPS
+		"device_timestamp", p.Timestamp.Format(time.RFC3339),
+		"latitude", p.Position.Latitude,
+		"longitude", p.Position.Longitude,
+		"speed_gps_kmh", p.Position.Speed,
+		"course_deg", p.Position.Course,
+		"hdop", p.Position.HDOP,
+		"satellites", p.Position.Satellites,
+		"fix_ok", p.Position.FixStatus,
+
+		// vehicle
+		"gsm_signal", p.Vehicle.GSMSignal,
+		"odometer_km", p.Vehicle.AccumulatedDist,
+		"analog_input_mv", p.Vehicle.AnalogInput,
+		"event_flags", fmt.Sprintf("0x%08X", p.Vehicle.EventFlag),
+		"external_batt_mv", p.Vehicle.ExternalBattery,
+		"internal_batt_mv", p.Vehicle.InternalBattery,
+		"trip_time_s", p.Vehicle.TripTime,
+
+		// OBD-II PIDs (only valid ones will be non-zero)
+		"engine_rpm", p.getOBDFloatValue(pidEngineRpm),
+		"vehicle_speed_kmh", p.getOBDFloatValue(pidVehicleSpeed),
+		"engine_load_pct", p.getOBDFloatValue(pidEngineLoad),
+		"intake_air_temp_c", p.getOBDFloatValue(pidIntakeAirTemp),
+		"coolant_temp_c", p.getOBDFloatValue(pidCoolantTemp),
+		"engine_oil_temp_c", p.getOBDFloatValue(pidEngineOilTemp),
+		"run_time_s", p.getOBDFloatValue(pidRunTime),
+		"dist_mil_on_km", p.getOBDFloatValue(pidDistanceMILOn),
+		"warmups_since_clear", p.getOBDFloatValue(pidWarmupsSinceClear),
+		"dist_since_clear_km", p.getOBDFloatValue(pidDistanceSinceClear),
+		"fuel_level_pct", p.getOBDFloatValue(pidFuelLevelInput),
+		"baro_pressure_kpa", p.getOBDFloatValue(pidBarometricPressure),
+		"maf_airflow_gps", p.getOBDFloatValue(pidMafAirFlow),
+		"fuel_rail_press_kpa", p.getOBDFloatValue(pidFuelRailPressure),
+		"module_voltage_v", p.getOBDFloatValue(pidControlModuleVoltage),
+		"abs_load_value_pct", p.getOBDFloatValue(pidAbsoluteLoadValue),
+	)
+
 	proto := &types.DeviceStatus{
 		Imei:       p.IMEI,
 		DeviceType: types.DeviceType_AQUILA,
@@ -108,6 +153,7 @@ func (p *Packet) ToProtobuf() (*types.DeviceStatus, error) {
 		VehicleStatus:        p.parseVehicleStatus(),
 		BatteryLevel:         p.calculateBatteryLevel(),
 		Odometer:             p.Vehicle.AccumulatedDist,
+		GsmNetwork:           convertGSMSignalToLevel(p.Vehicle.GSMSignal),
 		FuelPct:              p.getFuelData(),
 		Rpm:                  int32(p.getOBDFloatValue(pidEngineRpm)),
 		CoolantTemperature:   p.getOBDFloatValue(pidCoolantTemp),
@@ -150,6 +196,8 @@ func (p *Packet) parseVehicleStatus() *types.VehicleStatus {
 	vs.Towing = (flags & (1 << 13)) != 0
 	vs.CrashDetection = (flags & (1 << 25)) != 0
 	vs.RashDriving = (flags & (1 << 26)) != 0
+	// vs.HarshAcceleration = (flags & (1 << 26)) != 0
+	vs.HarshBraking = (flags & (1 << 27)) != 0
 
 	return vs
 }
@@ -221,6 +269,7 @@ func ParsePacket(raw string) (*Packet, error) {
 
 	// ── Core fields ───────────────────────────────────────
 	pkt.IMEI = fields[1] // was fields[2]
+	pkt.MessageCode = fields[2]
 	// Timestamp is at index 5 (YYMMDDhhmmss)
 	if ts, err := time.Parse(timeFormat, fields[5]); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidTimestamp, err)
@@ -418,4 +467,24 @@ func clamp(value, min, max float32) float32 {
 		return max
 	}
 	return value
+}
+
+// convert raw 0–31 (+99 unknown) into a 0–5 network‐quality level
+func convertGSMSignalToLevel(raw int32) int32 {
+	const (
+		unknown = 99
+		maxRaw  = 31
+	)
+	if raw == unknown || raw <= 0 {
+		return 0
+	}
+	if raw > maxRaw {
+		raw = maxRaw
+	}
+
+	level := raw * 6 / (maxRaw + 1)
+	if level > 5 {
+		level = 5
+	}
+	return level
 }

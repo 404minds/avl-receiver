@@ -105,9 +105,9 @@ message VehicleStatus {
     bool task_status_change = 28;             // Task status changed
     bool exiting_geofence = 29;
     bool fuel_theft = 30;
-
-
-
+    bool harsh_acceleration = 31;
+    bool harsh_braking = 32;
+    bool harsh_cornering = 33;
 }
 
 message WanwayPacket {
