@@ -139,14 +139,10 @@ func (t *IntelliTracAProtocol) consumeBinaryStream(reader *bufio.Reader, writer 
 	if _, err := io.ReadFull(reader, header); err != nil {
 		return err
 	}
-	logger.Sugar().Infoln("header", header)
 
 	transactionID := binary.BigEndian.Uint16(header[0:2])
 	msgEncoding := header[2]
 	msgType := header[3]
-
-	logger.Sugar().Infoln("msgEncoding", msgEncoding)
-	logger.Sugar().Infoln("msgType", msgType)
 
 	switch {
 	case msgEncoding == MsgEncodingBinaryPos && msgType == MsgTypeAsync:
@@ -175,14 +171,19 @@ func (t *IntelliTracAProtocol) handleBinaryPosition(reader *bufio.Reader, writer
 	logger.Sugar().Infof("Position - Modem ID: %d, Message ID: 0x%04X, Data Length: %d",
 		modemID, messageID, dataLen)
 
-	// Read position data
 	data := make([]byte, dataLen)
 	if _, err := io.ReadFull(reader, data); err != nil {
 		return err
 	}
-	logger.Sugar().Infoln("data", data)
 
-	t.handlePositionalData(data, modemID, dataLen, messageID, transactionID, writer, store)
+	if messageID == 0xAB {
+		logger.Sugar().Debugw("Heartbeat received", "modem", modemID, "data_len", dataLen)
+		// Consider actually processing heartbeats
+	} else if dataLen < 46 {
+		logger.Sugar().Warnf("Positional data too short (%d < 46), dropping", dataLen)
+	} else {
+		t.handlePositionalData(data, modemID, dataLen, messageID, transactionID, store)
+	}
 
 	// Send acknowledgment
 	ack := make([]byte, BinaryAckSize)
@@ -195,7 +196,7 @@ func (t *IntelliTracAProtocol) handleBinaryPosition(reader *bufio.Reader, writer
 	return err
 }
 
-func (t *IntelliTracAProtocol) handlePositionalData(data []byte, modemID string, dataLen uint16, messageID uint16, transactionID uint16, writer io.Writer, store store.Store) error {
+func (t *IntelliTracAProtocol) handlePositionalData(data []byte, modemID string, dataLen uint16, messageID uint16, transactionID uint16, store store.Store) {
 	position := &PositionRecord{
 		TransactionID: transactionID,
 		ModemID:       modemID,
@@ -306,15 +307,6 @@ func (t *IntelliTracAProtocol) handlePositionalData(data []byte, modemID string,
 	status := position.ToDeviceStatus(t.Imei)
 	store.GetProcessChan() <- status
 
-	// Send acknowledgment
-	ack := make([]byte, BinaryAckSize)
-	binary.BigEndian.PutUint16(ack[0:2], transactionID)
-	ack[2] = 0x00                                // Message Encoding: Binary Data
-	ack[3] = 0x03                                // Message Type: Acknowledge
-	binary.BigEndian.PutUint16(ack[4:6], 0x0000) // Status Code: Success
-
-	_, err := writer.Write(ack)
-	return err
 }
 
 // func (p *PositionRecord) parseEventData() {
