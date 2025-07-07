@@ -245,8 +245,6 @@ func (t *FM1200Protocol) consumeMessage(reader *bufio.Reader, dataStore store.St
 		return errs.ErrBadCrc, false
 	}
 
-	logger.Sugar().Infoln(" Tel parsedPacket Data", parsedPacket.Data)
-
 	sort.Slice(parsedPacket.Data, func(i, j int) bool {
 		return parsedPacket.Data[i].Timestamp < parsedPacket.Data[j].Timestamp
 	})

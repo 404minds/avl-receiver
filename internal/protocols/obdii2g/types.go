@@ -18,6 +18,7 @@ const (
 	timeFormat           = "060102150405"
 	maxPacketSize        = 2048
 	defaultBatteryCutoff = 3000 // 3V minimum for Li-ion
+	msgHarshCornering    = "23"
 )
 
 var (
@@ -150,7 +151,7 @@ func (p *Packet) ToProtobuf() (*types.DeviceStatus, error) {
 			Course:     float32(p.Position.Course),
 			Satellites: p.Position.Satellites,
 		},
-		VehicleStatus:        p.parseVehicleStatus(),
+		VehicleStatus:        p.parseVehicleStatus(p.MessageCode),
 		BatteryLevel:         p.calculateBatteryLevel(),
 		Odometer:             p.Vehicle.AccumulatedDist,
 		GsmNetwork:           convertGSMSignalToLevel(p.Vehicle.GSMSignal),
@@ -181,11 +182,11 @@ func (p *Packet) ToProtobuf() (*types.DeviceStatus, error) {
 }
 
 // parseVehicleStatus decodes 32-bit event flag to 25+ status fields
-func (p *Packet) parseVehicleStatus() *types.VehicleStatus {
+func (p *Packet) parseVehicleStatus(messageCode string) *types.VehicleStatus {
 	vs := &types.VehicleStatus{}
 	flags := p.Vehicle.EventFlag
 	logger.Sugar().Infoln("flags", flags)
-	// vs.HarshBrakingEvent      = (flags & (1 << 26)) != 0 // bit 27
+	logger.Sugar().Infoln("messageCode", messageCode)
 	vs.UnplugBattery = (flags & (1 << 2)) != 0
 	vs.OverSpeeding = (flags & (1 << 3)) != 0
 
@@ -198,6 +199,7 @@ func (p *Packet) parseVehicleStatus() *types.VehicleStatus {
 	vs.RashDriving = (flags & (1 << 26)) != 0
 	// vs.HarshAcceleration = (flags & (1 << 26)) != 0
 	vs.HarshBraking = (flags & (1 << 27)) != 0
+	vs.HarshCornering = messageCode == msgHarshCornering
 
 	return vs
 }

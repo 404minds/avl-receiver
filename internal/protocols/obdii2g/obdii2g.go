@@ -99,7 +99,6 @@ func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, writer io.Wr
 			}
 		default:
 			packet, err := reader.ReadString('*')
-			logger.Sugar().Infoln("Full Packet", packet)
 			if err != nil {
 				if errors.Is(err, io.EOF) {
 					logger.Info("Connection closed gracefully")
