@@ -385,6 +385,7 @@ func (p *GT06Protocol) parsePositioningData(reader *bufio.Reader) (positionInfo 
 	// ACC
 	var b byte
 	checkErr(binary.Read(reader, binary.BigEndian, &b))
+	logger.Sugar().Infoln("[AccHIGH] ", b)
 	parsed.ACCHigh = b == 0x01 // 00 is low, 01 is high
 
 	// data reporting mode
@@ -611,6 +612,11 @@ func (p *GT06Protocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time
 
 	second, err := reader.ReadByte()
 	checkErr(err)
+
+	logger.Sugar().Infof("Read day byte: %d", day)
+	logger.Sugar().Infof("Read hour byte: %d", hour)
+	logger.Sugar().Infof("Read minute byte: %d", minute)
+	logger.Sugar().Infof("Read  p.LoginInformation.Timezone byte: %d", p.LoginInformation.Timezone)
 
 	timestamp = time.Date(yearInt, time.Month(month), int(day), int(hour), int(minute), int(second), 0, p.LoginInformation.Timezone)
 	return timestamp, nil
