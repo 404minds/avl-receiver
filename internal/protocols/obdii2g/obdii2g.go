@@ -98,7 +98,7 @@ func (a *AquilaOBDII2GProtocol) ConsumeStream(reader *bufio.Reader, writer io.Wr
 				logger.Error("Failed to refresh read deadline", zap.Error(err))
 			}
 		default:
-			packet, err := reader.ReadString('*')
+			packet, err := reader.ReadString('\n')
 			if err != nil {
 				if errors.Is(err, io.EOF) {
 					logger.Info("Connection closed gracefully")
