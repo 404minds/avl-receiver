@@ -49,11 +49,11 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		}
 	}(conn)
 
-	err := conn.SetReadDeadline(time.Now().Add(20 * time.Second))
+	err := conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 	if err != nil {
 		return
 	}
-	err = conn.SetWriteDeadline(time.Now().Add(20 * time.Second))
+	err = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	if err != nil {
 		return
 	}
@@ -142,11 +142,11 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		for {
 			select {
 			case <-ticker.C:
-				if err := conn.SetReadDeadline(time.Now().Add(20 * time.Second)); err != nil {
+				if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
 					logger.Error("failed to refresh read deadline", zap.Error(err))
 					return
 				}
-				if err := conn.SetWriteDeadline(time.Now().Add(20 * time.Second)); err != nil {
+				if err := conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
 					logger.Error("failed to refresh write deadline", zap.Error(err))
 					return
 				}
@@ -271,7 +271,6 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 			logger.Sugar().Error("Error discarding bytes: ", err)
 			return nil, nil, err
 		}
-		logger.Sugar().Infoln("protocol.GetProtocolType()", protocol.GetProtocolType())
 
 		deviceType, err := t.VerifyDevice(deviceID, protocol.GetProtocolType())
 		logger.Sugar().Info("device Type: ", deviceType, " error: ", err)
@@ -283,8 +282,8 @@ func (t *TcpHandler) attemptDeviceLogin(reader *bufio.Reader) (protocol devices.
 			logger.Sugar().Error("Error verifying device: ", err)
 			return nil, nil, err
 		}
-		protocol.SetDeviceType(deviceType)
 
+		protocol.SetDeviceType(deviceType)
 		logger.Info("Login successful", zap.String("deviceID", deviceID), zap.String("deviceType", deviceType.String()))
 		return protocol, ack, nil
 	}
