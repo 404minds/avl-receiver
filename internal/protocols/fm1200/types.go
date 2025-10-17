@@ -136,6 +136,10 @@ const (
 	TIO_VIN_CAN                         = 325
 	TIO_OdmTotalMileage                 = 389
 	TIO_FuelLevel                       = 390
+	OEM_BatteryChargeLevel              = 411
+	OEM_RemainingDistance               = 755
+	OEM_BatteryStateOfHealth            = 1151
+	OEM_BatteryTemperature              = 1152
 )
 
 func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
@@ -247,6 +251,12 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.RawData = &types.DeviceStatus_TeltonikaPacket{
 		TeltonikaPacket: &types.TeltonikaPacket{RawData: rawdata},
 	}
+
+	info.BatteryChargeLevel = int32(r.Record.IOElement.Properties1B[OEM_BatteryChargeLevel])
+	info.RemainingDistance = int32(r.Record.IOElement.Properties2B[OEM_RemainingDistance])
+	info.BatteryStateOfHealth = int32(r.Record.IOElement.Properties2B[OEM_BatteryStateOfHealth])
+	info.BatteryTemp = int32(r.Record.IOElement.Properties2B[OEM_BatteryTemperature])
+
 	return info
 }
 
