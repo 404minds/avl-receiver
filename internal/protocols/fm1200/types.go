@@ -255,7 +255,7 @@ func (r *Record) ToProtobufDeviceStatus() *types.DeviceStatus {
 	info.BatteryChargeLevel = int32(r.Record.IOElement.Properties1B[OEM_BatteryChargeLevel])
 	info.RemainingDistance = int32(r.Record.IOElement.Properties2B[OEM_RemainingDistance])
 	info.BatteryStateOfHealth = int32(r.Record.IOElement.Properties2B[OEM_BatteryStateOfHealth])
-	info.BatteryTemp = int32(r.Record.IOElement.Properties2B[OEM_BatteryTemperature])
+	info.BatteryTemp = int32(uint16(r.Record.IOElement.Properties2B[OEM_BatteryTemperature]))
 
 	return info
 }
