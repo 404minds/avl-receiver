@@ -689,10 +689,17 @@ func (p *GT06Protocol) IsValidHeader(reader *bufio.Reader) bool {
 		return false
 	}
 
-	if bytes.Equal(header, []byte{0x78, 0x78}) || bytes.Equal(header, []byte{0x79, 0x79}) {
-		return true
+	if !bytes.Equal(header, []byte{0x78, 0x78}) && !bytes.Equal(header, []byte{0x79, 0x79}) {
+		return false
 	}
-	return false
+
+	// (IMEI + terminal type + timezone). Reject the short one here so protocol
+	// detection falls through to the tr06 parser, which expects that shape.
+	// Peek only, so no bytes are consumed for the next protocol attempt.
+	if h, err := reader.Peek(4); err == nil && h[2] == 0x0D && h[3] == byte(MSG_LoginData) {
+		return false
+	}
+	return true
 }
 
 // send command to device

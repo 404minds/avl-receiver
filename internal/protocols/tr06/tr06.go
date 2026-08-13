@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"time"
 
@@ -21,6 +22,32 @@ import (
 )
 
 var logger = configuredLogger.Logger
+
+// deviceTimeZone is the timezone the terminal's Date Time field is expressed in.
+//
+// TR06 §5.2.1.4 defines only the encoding of Date Time (year+2000, month, day, hour,
+// minute, second) and never states which timezone those digits are in, and the TR06
+// login packet (§5.1.1, 18 bytes) carries no timezone field - so there is nothing in
+// the protocol to derive it from. It is a per-fleet terminal setting.
+//
+// ponytail: default stays UTC, which is the previous behaviour. Set
+// TR06_DEVICE_TZ_OFFSET (e.g. "+05:30") when the terminals are configured to report
+// local time.
+var deviceTimeZone = loadDeviceTimeZone(os.Getenv("TR06_DEVICE_TZ_OFFSET"))
+
+func loadDeviceTimeZone(offset string) *time.Location {
+	if offset == "" {
+		return time.UTC
+	}
+	t, err := time.Parse("-07:00", offset)
+	if err != nil {
+		logger.Sugar().Errorf("TR06_DEVICE_TZ_OFFSET %q is not a ±HH:MM offset, falling back to UTC: %v", offset, err)
+		return time.UTC
+	}
+	_, seconds := t.Zone()
+	logger.Sugar().Infof("TR06 device time zone offset applied: %s (%d seconds)", offset, seconds)
+	return time.FixedZone(offset, seconds)
+}
 
 type TR06Protocol struct {
 	LoginInformation *LoginData
@@ -108,12 +135,19 @@ func (p *TR06Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, dat
 			logger.Sugar().Info("Consume Stream :", err)
 			return err
 		}
-		if packet.MessageType == MSG_HeartbeatData {
+		// TR06 §5.4.2 the server responds to the status/heartbeat packet, §5.3.2 the server
+		// responds to the alarm (GPS+LBS+status) packet. §5.2 defines no response for the
+		// plain location packet, so 0x12 is deliberately not acknowledged.
+		if packet.MessageType == MSG_HeartbeatData || packet.MessageType == MSG_GPS_LBS_StatusData {
 			err = p.sendResponse(packet, writer)
 			if err != nil {
 				logger.Sugar().Info("error while sending response", err)
 				return err
 			}
+		}
+
+		if packet.Information == nil {
+			continue // unsupported protocol number, already logged and skipped
 		}
 
 		asyncStore := dataStore.GetProcessChan()
@@ -174,28 +208,21 @@ func (p *TR06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 		return nil, err
 	}
 
-	// Determine packet length based on start bit
-	if packet.StartBit == 0x7979 {
-		//var packetLength uint16
-		//err = binary.Read(reader, binary.BigEndian, &packetLength)
-		//if err != nil {
-		//	logger.Sugar().Errorf("parse packet Failed to read packet length: %v", err)
-		//	return nil, err
-		//}
-		//packet.PacketLength = (packetLength)
-		//logger.Sugar().Infof("parse packet Packet length: %d", packet.PacketLength)
-
-	} else if packet.StartBit == 0x7878 {
-		var packetLength byte
-		err = binary.Read(reader, binary.BigEndian, &packetLength)
-		if err != nil {
-			logger.Sugar().Errorf("parse packet Failed to read packet length: %v", err)
-			return nil, err
-		}
-		packet.PacketLength = packetLength
-		logger.Sugar().Infof("parse packet Packet length: %d", packet.PacketLength)
-	} else {
-		return nil, errors.Wrapf(errs.ErrGT06BadDataPacket, "from parsePacket Invalid StartBit packet.StartBit: %d", packet.StartBit) // Invalid start bit
+	// Packet length. TR06 §4.1 fixes the start bit at 0x7878 and §4.2 makes the length a
+	// single byte; there is no 0x7979 two-byte-length frame in TR06.
+	if packet.StartBit != 0x7878 {
+		return nil, errors.Wrapf(errs.ErrGT06BadDataPacket, "from parsePacket Invalid StartBit packet.StartBit: %x", packet.StartBit)
+	}
+	var packetLength byte
+	err = binary.Read(reader, binary.BigEndian, &packetLength)
+	if err != nil {
+		logger.Sugar().Errorf("parse packet Failed to read packet length: %v", err)
+		return nil, err
+	}
+	packet.PacketLength = packetLength
+	logger.Sugar().Infof("parse packet Packet length: %d", packet.PacketLength)
+	if packet.PacketLength < 5 {
+		return nil, errors.Wrapf(errs.ErrGT06BadDataPacket, "from parsePacket packet length %d below the 5 byte minimum", packet.PacketLength)
 	}
 
 	// Packet data
@@ -269,21 +296,14 @@ func (p *TR06Protocol) parsePacket(reader *bufio.Reader) (packet *Packet, err er
 func (p *TR06Protocol) parsePacketData(reader *bufio.Reader, packet *Packet) error {
 
 	protocolNumByte, err := reader.ReadByte()
+	if err != nil {
+		logger.Sugar().Errorf("parsePacketData failed to read protocol number: %v", err)
+		return err
+	}
 	logger.Sugar().Info("parsePacketData protocol number byte: ", protocolNumByte)
 
 	msgType := MessageType(protocolNumByte)
 	logger.Sugar().Info("message type ", msgType)
-
-	if msgType == MSG_Invalid {
-		logger.Sugar().Errorf("Invalid message type: %x", protocolNumByte)
-		remainingData, err := p.consumePacket(reader)
-		if err != nil {
-			return err
-		}
-		logger.Sugar().Errorln("Invalid message type: ", hex.Dump(remainingData))
-		logger.Sugar().Info("error from parsePacketData ", err)
-		return errors.Wrapf(errs.ErrGT06BadDataPacket, "from parsePacketData")
-	}
 
 	packet.MessageType = msgType
 
@@ -330,12 +350,19 @@ func (p *TR06Protocol) parsePacketInformation(reader *bufio.Reader, messageType 
 	} else if messageType == MSG_EG_HeartbeatData {
 		parsedInfo, err := p.parseHeartbeatData(reader)
 		return parsedInfo, err
+	} else if messageType == MSG_GPS_LBS_StatusData {
+		parsedInfo, err := p.parseAlarmData(reader)
+		return parsedInfo, err
 	} else if messageType == MSG_TransmissionInstruction {
 		parsedInfo, err := p.parseInformationTransmissionPacket(reader)
 		return parsedInfo, err
 	} else {
-		logger.Sugar().Info("error from parsePacketInformation")
-		return nil, errors.Wrapf(errs.ErrGT06BadDataPacket, "from parsePAcketInformation")
+		// ponytail: the frame is already fully read by packet length, so an unsupported
+		// protocol number is skipped rather than failing the packet. TR06 §iii.7 warns
+		// that dropping the connection makes the terminal reconnect in a loop, and §4.6
+		// prescribes discarding a bad packet - not the link.
+		logger.Sugar().Warnf("parsePacketInformation: unsupported protocol number %#x, packet skipped", byte(messageType))
+		return nil, nil
 	}
 }
 
@@ -402,6 +429,7 @@ func (p *TR06Protocol) parsePositioningData(reader *bufio.Reader) (positionInfo 
 	checkErr(binary.Read(reader, binary.BigEndian, &courseAndStatus))
 	logger.Sugar().Infof("parsePositioningData Course and Status: %x", courseAndStatus)
 	parsed.GpsInformation.Course = parseCourseAndStatus(courseAndStatus)
+	applyHemisphere(&parsed.GpsInformation)
 
 	// MCC
 	checkErr(binary.Read(reader, binary.BigEndian, &parsed.LBSInfo.MCC))
@@ -422,9 +450,13 @@ func (p *TR06Protocol) parsePositioningData(reader *bufio.Reader) (positionInfo 
 	return &parsed, nil
 }
 
+// parseCourseAndStatus decodes the 2 byte "Course, Status" field of TR06 §5.2.1.9.
+// BYTE_1: bit7/bit6 are 0, bit5 real-time(0)/differential(1) GPS, bit4 GPS positioned,
+// bit3 East(0)/West(1) longitude, bit2 South(0)/North(1) latitude, bit1..bit0 are the
+// two high bits of the course. BYTE_2 holds the low 8 bits of the course.
 func parseCourseAndStatus(courseAndStatus [2]byte) GPSCourse {
 	var course GPSCourse
-	course.IsRealtime = (courseAndStatus[0] & 0x40) == 0
+	course.IsRealtime = (courseAndStatus[0] & 0x20) == 0
 	course.IsDifferential = (courseAndStatus[0] & 0x20) != 0
 	course.Positioned = (courseAndStatus[0] & 0x10) != 0
 	course.Longitude = (courseAndStatus[0] & 0x08) != 0 // 0: East, 1: West
@@ -433,9 +465,28 @@ func parseCourseAndStatus(courseAndStatus [2]byte) GPSCourse {
 	return course
 }
 
-func (p *TR06Protocol) parseAlarmData(reader *bufio.Reader) (alarmInfo AlarmInformation, err error) {
+// applyHemisphere signs the coordinates from the status bits. TR06 §5.2.1.6/§5.2.1.7
+// transmit latitude and longitude as unsigned magnitudes (0-162000000 for 0-90° and
+// 0-324000000 for 0-180°); the hemisphere lives in the Course/Status bits.
+func applyHemisphere(gps *GPSInformation) {
+	if !gps.Course.Latitude { // south latitude
+		gps.Latitude = -gps.Latitude
+	}
+	if gps.Course.Longitude { // west longitude
+		gps.Longitude = -gps.Longitude
+	}
+}
+
+// parseAlarmData decodes the TR06 §5.3.1 alarm packet (0x16), the combined information
+// packet of GPS, LBS and status:
+//
+//	Date Time 6 | GPS len/satellites 1 | Latitude 4 | Longitude 4 | Speed 1 |
+//	Course,Status 2 | LBS Length 1 | MCC 2 | MNC 1 | LAC 2 | Cell ID 3 |
+//	Terminal Information 1 | Voltage Level 1 | GSM Signal Strength 1 | Alarm/Language 2
+func (p *TR06Protocol) parseAlarmData(reader *bufio.Reader) (alarmInfo *AlarmInformation, err error) {
 	defer func() {
 		if r := recover(); r != nil {
+			alarmInfo = nil
 			err = r.(error)
 			if err != io.EOF {
 				logger.Sugar().Info("error from parseAlarmData err: ", err)
@@ -444,21 +495,32 @@ func (p *TR06Protocol) parseAlarmData(reader *bufio.Reader) (alarmInfo AlarmInfo
 		}
 	}()
 
-	alarmInfo.GpsInformation, err = p.parseGPSInformation(reader)
+	var parsed AlarmInformation
+
+	parsed.GpsInformation, err = p.parseGPSInformation(reader)
 	checkErr(err)
 
-	alarmInfo.LBSInformation, err = p.parseLBSInformation(reader)
+	// LBS Length: §5.3.1 adds this byte to the LBS block and it counts itself, so its
+	// value is 1 + MCC(2) + MNC(1) + LAC(2) + Cell ID(3) = 0x09 for this layout.
+	lbsLength, err := reader.ReadByte()
+	checkErr(err)
+	logger.Sugar().Infof("parseAlarmData LBS length: %#x", lbsLength)
+
+	parsed.LBSInformation, err = p.parseLBSInformation(reader)
 	checkErr(err)
 
-	alarmInfo.StatusInformation, err = p.parseStatusInformation(reader)
+	parsed.StatusInformation, err = p.parseStatusInformation(reader)
 	checkErr(err)
 
-	return
+	return &parsed, nil
 }
 
-func (p *TR06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat HeartbeatData, err error) {
+// parseHeartbeatData decodes the TR06 §5.4.1 status information packet (0x13):
+// Terminal Information 1 | Voltage Level 1 | GSM Signal Strength 1 | Alarm/Language 2
+func (p *TR06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat *HeartbeatData, err error) {
 	defer func() {
 		if r := recover(); r != nil {
+			heartbeat = nil
 			err = r.(error)
 			if err != io.EOF {
 				logger.Sugar().Info("error from parseHeartbeatData 1 err: ", err)
@@ -467,48 +529,50 @@ func (p *TR06Protocol) parseHeartbeatData(reader *bufio.Reader) (heartbeat Heart
 		}
 	}()
 
+	var parsed HeartbeatData
+
 	var terminalInfoByte byte
 	if err := binary.Read(reader, binary.BigEndian, &terminalInfoByte); err != nil {
-		return heartbeat, err
+		return nil, err
 	}
 	logger.Sugar().Infof("parseHeartbeatData Terminal Info Byte: %x", terminalInfoByte)
-	heartbeat.TerminalInformation, err = p.parseTerminalInfoFromByte(terminalInfoByte)
+	parsed.TerminalInformation, err = p.parseTerminalInfoFromByte(terminalInfoByte)
 	if err != nil {
-		return heartbeat, err
+		return nil, err
 	}
 
 	var batteryLevelByte byte
 	if err := binary.Read(reader, binary.BigEndian, &batteryLevelByte); err != nil {
-		return heartbeat, err
+		return nil, err
 	}
 	logger.Sugar().Infof("parseHeartbeatData  Battery Level Byte: %x", batteryLevelByte)
-	heartbeat.BatteryLevel = BatteryLevel(batteryLevelByte)
-	if heartbeat.BatteryLevel == VL_Invalid {
-		return heartbeat, errs.ErrGT06InvalidVoltageLevel
+	parsed.BatteryLevel = BatteryLevel(batteryLevelByte)
+	if parsed.BatteryLevel == VL_Invalid {
+		return nil, errs.ErrGT06InvalidVoltageLevel
 	}
 
 	var gsmSignalStrengthByte byte
 	if err := binary.Read(reader, binary.BigEndian, &gsmSignalStrengthByte); err != nil {
-		return heartbeat, err
+		return nil, err
 	}
 	logger.Sugar().Infof("parseHeartbeatData GSM Signal Strength Byte: %x", gsmSignalStrengthByte)
-	heartbeat.GSMSignalStrength = GSMSignalStrength(gsmSignalStrengthByte)
-	if heartbeat.GSMSignalStrength == GSM_Invalid {
-		return heartbeat, errs.ErrGT06InvalidGSMSignalStrength
+	parsed.GSMSignalStrength = GSMSignalStrength(gsmSignalStrengthByte)
+	if parsed.GSMSignalStrength == GSM_Invalid {
+		return nil, errs.ErrGT06InvalidGSMSignalStrength
 	}
 
-	if err := binary.Read(reader, binary.BigEndian, &heartbeat.ExtendedPortStatus); err != nil {
-		return heartbeat, err
+	if err := binary.Read(reader, binary.BigEndian, &parsed.AlarmLanguage); err != nil {
+		return nil, err
 	}
-	logger.Sugar().Infof("parseHeartbeatData Extended Port Status Byte: %x", heartbeat.ExtendedPortStatus)
+	logger.Sugar().Infof("parseHeartbeatData Alarm/Language: %x", parsed.AlarmLanguage)
 
 	if _, err := reader.Peek(1); err != io.EOF {
 		logger.Sugar().Errorf("parseHeartbeatData Extra bytes detected in packet")
 		logger.Sugar().Info("error from parseHeartbeatData 2")
-		return heartbeat, errors.Wrapf(errs.ErrGT06BadDataPacket, "from parseHeartbeatData 2")
+		return nil, errors.Wrapf(errs.ErrGT06BadDataPacket, "from parseHeartbeatData 2")
 	}
 
-	return heartbeat, nil
+	return &parsed, nil
 }
 
 func (p *TR06Protocol) parseInformationTransmissionPacket(reader *bufio.Reader) (packet InformationTransmissionPacket, err error) {
@@ -588,38 +652,25 @@ func (p *TR06Protocol) parseGPSInformation(reader *bufio.Reader) (gpsInfo GPSInf
 	gpsInfo.GPSInfoLength = x >> 4
 	gpsInfo.NumberOfSatellites = x & 0x0f
 
-	var i32 int32
+	var u32 uint32
 	// latitude
-	checkErr(binary.Read(reader, binary.BigEndian, &i32))
-	gpsInfo.Latitude = float32(i32) / 1800000
+	checkErr(binary.Read(reader, binary.BigEndian, &u32))
+	gpsInfo.Latitude = float32(u32) / 1800000
 
 	// longitude
-	checkErr(binary.Read(reader, binary.BigEndian, &i32))
-	gpsInfo.Longitude = float32(i32) / 1800000
+	checkErr(binary.Read(reader, binary.BigEndian, &u32))
+	gpsInfo.Longitude = float32(u32) / 1800000
 
 	// speed
 	checkErr(binary.Read(reader, binary.BigEndian, &gpsInfo.Speed))
 	logger.Sugar().Info("speed from parseGPSInformation: ", gpsInfo.Speed)
 
-	// TODO: parse the 16-bit course to detailed fields
-	// course/heading
-	var courseValue uint16
-	checkErr(binary.Read(reader, binary.BigEndian, &courseValue))
-	gpsInfo.Course = p.parseGpsCourse(courseValue)
+	// course/status
+	var courseAndStatus [2]byte
+	checkErr(binary.Read(reader, binary.BigEndian, &courseAndStatus))
+	gpsInfo.Course = parseCourseAndStatus(courseAndStatus)
+	applyHemisphere(&gpsInfo)
 
-	return
-}
-
-func (p *TR06Protocol) parseGpsCourse(courseValue uint16) (course GPSCourse) {
-	b1 := byte(courseValue >> 8)
-
-	course.IsRealtime = b1&0x20 == 0x00     // byte 1, bit 5 is 0
-	course.IsDifferential = b1&0x20 == 0x20 // byte 1, bit 5 is 1
-	course.Positioned = b1&0x10 == 0x10     // byte 1, bit 4 is 0
-	course.Longitude = b1&0x08 == 0x08      // byte 1, bit 3 is 0
-	course.Latitude = b1&0x04 == 0x04       // byte 1, bit 2 is 0
-
-	course.Degree = courseValue & 0x03ff // byte 1 (bit 1, 0), byte 2
 	return
 }
 
@@ -644,9 +695,7 @@ func (p *TR06Protocol) parseTimestamp(reader *bufio.Reader) (timestamp time.Time
 	second, err := reader.ReadByte()
 	checkErr(err)
 
-	var timezone = time.UTC
-
-	timestamp = time.Date(yearInt, time.Month(month), int(day), int(hour), int(minute), int(second), 0, timezone)
+	timestamp = time.Date(yearInt, time.Month(month), int(day), int(hour), int(minute), int(second), 0, deviceTimeZone)
 	logger.Sugar().Info("timestamp: ", timestamp)
 	return timestamp, nil
 }
@@ -681,12 +730,12 @@ func (p *TR06Protocol) parseStatusInformation(reader *bufio.Reader) (statusInfo 
 	// GSM signal strength
 	checkErr(binary.Read(reader, binary.BigEndian, &b))
 	statusInfo.GSMSignalStrength = GSMSignalStrength(b)
-	checkErr(binary.Read(reader, binary.BigEndian, &statusInfo.GSMSignalStrength))
 	if statusInfo.GSMSignalStrength == GSM_Invalid {
 		return statusInfo, errs.ErrGT06InvalidGSMSignalStrength
 	}
 
-	// alarm status
+	// Alarm/Language, 2 bytes: former byte is the alarm status, latter byte the language
+	// (TR06 §5.3.1.17).
 	alarm, err := reader.ReadByte()
 	checkErr(err)
 	statusInfo.Alarm = AlarmValue(alarm)
@@ -697,13 +746,17 @@ func (p *TR06Protocol) parseStatusInformation(reader *bufio.Reader) (statusInfo 
 	return
 }
 
+// parseTerminalInfoFromByte decodes the Terminal Information byte of TR06 §5.3.1.14 /
+// §5.4.1.4: bit7 1 = oil and electricity disconnected / 0 = connected, bit6 1 = GPS
+// tracking on, bit5..bit3 alarm (100 SOS, 011 low battery, 010 power cut, 001 shock,
+// 000 normal), bit2 1 = charge on, bit1 1 = ACC high, bit0 1 = defense activated.
 func (p *TR06Protocol) parseTerminalInfoFromByte(terminalInfoByte byte) (TerminalInformation, error) {
 	var terminalInfo TerminalInformation
-	terminalInfo.OilElectricityConnected = terminalInfoByte&0x80 == 0x80 // bit 7
+	terminalInfo.OilElectricityConnected = terminalInfoByte&0x80 == 0x00 // bit 7, 1 means disconnected
 	terminalInfo.GPSSignalAvailable = terminalInfoByte&0x40 == 0x40      // bit 6
-	terminalInfo.AlarmType = AlarmType(terminalInfoByte & 0x38)          // bit 3, 4, 5
-	terminalInfo.Charging = terminalInfoByte&0x10 == 0x08                // bit 2
-	terminalInfo.ACCHigh = terminalInfoByte&0x20 == 0x02                 // bit 1
+	terminalInfo.AlarmType = AlarmType((terminalInfoByte >> 3) & 0x07)   // bit 5, 4, 3
+	terminalInfo.Charging = terminalInfoByte&0x04 == 0x04                // bit 2
+	terminalInfo.ACCHigh = terminalInfoByte&0x02 == 0x02                 // bit 1
 	terminalInfo.Armed = terminalInfoByte&0x01 == 0x01                   // bit 0
 
 	if terminalInfo.AlarmType == AL_Invalid {
@@ -712,16 +765,15 @@ func (p *TR06Protocol) parseTerminalInfoFromByte(terminalInfoByte byte) (Termina
 	return terminalInfo, nil
 }
 
+// IsValidHeader reports whether the stream starts with the TR06 start bit. §4.1 fixes it
+// at 0x7878; TR06 has no 0x7979 frame.
 func (p *TR06Protocol) IsValidHeader(reader *bufio.Reader) bool {
 	header, err := reader.Peek(2)
 	if err != nil {
 		return false
 	}
 
-	if bytes.Equal(header, []byte{0x78, 0x78}) || bytes.Equal(header, []byte{0x79, 0x79}) {
-		return true
-	}
-	return false
+	return bytes.Equal(header, []byte{0x78, 0x78})
 }
 
 // send command to device

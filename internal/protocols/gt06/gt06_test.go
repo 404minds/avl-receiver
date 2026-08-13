@@ -39,6 +39,10 @@ func TestHeaderDetection(t *testing.T) {
 		{[]byte{0x79, 0x79}, true},
 		{[]byte{0x78, 0x79}, false},
 		{[]byte{0x79, 0x78}, false},
+		// concox login (0x11) is ours, wanway login (0x0d) belongs to the tr06 parser
+		{[]byte{0x78, 0x78, 0x11, 0x01}, true},
+		{[]byte{0x78, 0x78, 0x0d, 0x01}, false},
+		{[]byte{0x78, 0x78, 0x0d, 0x13}, true}, // heartbeat, not a login
 	}
 
 	p := GT06Protocol{}

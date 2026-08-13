@@ -68,16 +68,17 @@ type HeartbeatData struct {
 	TerminalInformation TerminalInformation
 	BatteryLevel        BatteryLevel
 	GSMSignalStrength   GSMSignalStrength
-	ExtendedPortStatus  uint16 // 0x0001 Chinese, 0x0002 English
+	// AlarmLanguage is the 2 byte Alarm/Language field of TR06 §5.4.1.7: the former byte
+	// is the terminal alarm status, the latter the language (0x01 Chinese, 0x02 English).
+	AlarmLanguage uint16
 }
 
+// PositioningInformation is the TR06 §5.2 location data packet (0x12): a combined
+// information package of GPS and LBS only. It carries no terminal status - no ACC, no
+// upload mode, no mileage - so nothing status related may be reported from it.
 type PositioningInformation struct {
-	GpsInformation    GPSInformation
-	LBSInfo           LBSInformation
-	ACCHigh           bool
-	DataReportingMode GPSDataUploadMode // for concox, but not for gt06
-	GPSRealTime       bool              // 0x00 - realtime, 0x01 - re-upload
-	MileageStatistics uint32
+	GpsInformation GPSInformation
+	LBSInfo        LBSInformation
 }
 
 type GPSInformation struct {
@@ -152,18 +153,27 @@ func (r *ResponsePacket) ToBytes() []byte {
 type MessageType byte
 
 const (
-	MSG_LoginData               MessageType = 0x01
-	MSG_PositioningData                     = 0x12
-	MSG_HeartbeatData                       = 0x13
-	MSG_EG_HeartbeatData                    = 0x23
-	MSG_StringInformation                   = 0x21
-	MSG_AlarmData                           = 0x26
-	MSG_LBSInformation                      = 0x28 // TODO: check if this is correct
-	MSG_TimezoneInformation                 = 0x27
-	MSG_GPS_PhoneNumber                     = 0x2a
-	MSG_WifiInformation                     = 0x2c
-	MSG_TransmissionInstruction             = 0x80
-	MSG_Invalid                             = 0xff
+	MSG_LoginData       MessageType = 0x01
+	MSG_PositioningData             = 0x12
+	MSG_HeartbeatData               = 0x13
+	// MSG_GPS_LBS_StatusData is protocol number 0x16, the TR06 §5.3 alarm packet:
+	// the combined information packet of GPS, LBS and status. It is the only TR06 packet
+	// that carries terminal status (ACC, voltage level, GSM) together with a position.
+	// Deliberately kept under a name of its own rather than MSG_AlarmData below, whose
+	// "MSG_AlarmData" string the consumer discards.
+	MSG_GPS_LBS_StatusData = 0x16
+	// The values below are Concox GT06 protocol numbers that TR06 §4.3 does not define
+	// (TR06 knows only 0x01, 0x12, 0x13, 0x15, 0x16, 0x1A and 0x80). They are left in
+	// place for the existing String() mapping; no TR06 terminal sends them.
+	MSG_EG_HeartbeatData        = 0x23
+	MSG_StringInformation       = 0x21
+	MSG_AlarmData               = 0x26
+	MSG_LBSInformation          = 0x28
+	MSG_TimezoneInformation     = 0x27
+	MSG_GPS_PhoneNumber         = 0x2a
+	MSG_WifiInformation         = 0x2c
+	MSG_TransmissionInstruction = 0x80
+	MSG_Invalid                 = 0xff
 )
 
 type AlarmType uint8 // alarm type is 3 bit info, trying to encode it to 8 bit
@@ -300,28 +310,36 @@ func (packet *Packet) ToProtobufDeviceStatus(imei string, deviceType types.Devic
 		info.Position.Latitude = v.GpsInformation.Latitude
 		info.Position.Longitude = v.GpsInformation.Longitude
 		info.Position.Course = float32(v.GpsInformation.Course.Degree)
+		info.Position.Satellites = int32(v.GpsInformation.NumberOfSatellites)
 		var speed = float32(v.GpsInformation.Speed)
 		info.Position.Speed = &speed
 	case *AlarmInformation:
 		info.Timestamp = timestamppb.New(v.GpsInformation.Timestamp)
 		info.Position.Latitude = v.GpsInformation.Latitude
 		info.Position.Longitude = v.GpsInformation.Longitude
+		info.Position.Course = float32(v.GpsInformation.Course.Degree)
+		info.Position.Satellites = int32(v.GpsInformation.NumberOfSatellites)
 		var speed = float32(v.GpsInformation.Speed)
 		info.Position.Speed = &speed
 	default:
 	}
 
 	// vehicle status
+	//
+	// The location data packet (0x12) is deliberately absent here: TR06 §5.2 carries no
+	// terminal status in it, so ignition is left unset rather than reported as false.
+	// ACC comes from the Terminal Information byte of the alarm (0x16) and status (0x13)
+	// packets only.
 	switch v := packet.Information.(type) {
-	case *PositioningInformation:
-		var ignition = v.ACCHigh
-		info.VehicleStatus.Ignition = &ignition
-		info.VehicleStatus.OverSpeeding = false
 	case *AlarmInformation:
 		var ignition = v.StatusInformation.TerminalInformation.ACCHigh
 		info.VehicleStatus.Ignition = &ignition
 		info.VehicleStatus.OverSpeeding = v.StatusInformation.Alarm == ALV_OverSpeed
+		info.BatteryLevel = resolveBatteryLevel(int32(v.StatusInformation.BatteryLevel))
+		info.GsmNetwork = int32(v.StatusInformation.GSMSignalStrength)
 	case *HeartbeatData:
+		var ignition = v.TerminalInformation.ACCHigh
+		info.VehicleStatus.Ignition = &ignition
 		//Set battery and GSM signal
 		logger.Sugar().Info(v.BatteryLevel, "  ", v.GSMSignalStrength)
 		info.BatteryLevel = resolveBatteryLevel(int32(v.BatteryLevel))
@@ -346,6 +364,8 @@ func (mt MessageType) String() string {
 		return "MSG_PositioningData"
 	case MSG_HeartbeatData:
 		return "MSG_HeartbeatData"
+	case MSG_GPS_LBS_StatusData:
+		return "MSG_GPS_LBS_StatusData"
 	case MSG_EG_HeartbeatData:
 		return "MSG_EG_HeartbeatData"
 	case MSG_StringInformation:
