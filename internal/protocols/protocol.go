@@ -10,6 +10,7 @@ import (
 	"github.com/404minds/avl-receiver/internal/protocols/howen"
 	"github.com/404minds/avl-receiver/internal/protocols/intellitrac_a"
 	"github.com/404minds/avl-receiver/internal/protocols/obdii2g"
+	"github.com/404minds/avl-receiver/internal/protocols/queclink"
 	"github.com/404minds/avl-receiver/internal/protocols/tr06"
 	"github.com/404minds/avl-receiver/internal/store"
 
@@ -52,6 +53,9 @@ func MakeProtocolForType(t types.DeviceProtocolType) DeviceProtocol {
 	case types.DeviceProtocolType_HOWENWS:
 		logger.Sugar().Info("Howen called the protocol is: ", &howen.HOWENWS{DeviceType: types.DeviceType_HOWEN})
 		return &howen.HOWENWS{DeviceType: types.DeviceType_HOWEN}
+
+	case types.DeviceProtocolType_QUECLINK:
+		return &queclink.Protocol{} // GV200 or GT500: DeviceType is set from VerifyDevice
 	default:
 
 		logger.Sugar().Info("MakeProtocolForType: ", t)
@@ -74,6 +78,8 @@ func GetDeviceTypesForProtocol(t types.DeviceProtocolType) []types.DeviceType {
 		return []types.DeviceType{types.DeviceType_WANWAY, types.DeviceType_CONCOX}
 	case types.DeviceProtocolType_HOWENWS:
 		return []types.DeviceType{types.DeviceType_HOWEN}
+	case types.DeviceProtocolType_QUECLINK:
+		return []types.DeviceType{types.DeviceType_QUECLINK_GV200, types.DeviceType_QUECLINK_GT500}
 	default:
 		return []types.DeviceType{}
 	}

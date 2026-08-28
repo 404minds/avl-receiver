@@ -13,6 +13,8 @@ enum DeviceType {
     HOWEN  = 3;
     AQUILA = 4;
     INTELLITRAC = 5;
+    QUECLINK_GV200 = 6;
+    QUECLINK_GT500 = 7;
 }
 
 enum DeviceProtocolType {
@@ -22,6 +24,7 @@ enum DeviceProtocolType {
     HOWENWS =3;
     OBDII2G = 4;
     INTELLITRAC_A = 5;
+    QUECLINK = 6;
 }
 
 message DeviceStatus {
@@ -68,6 +71,7 @@ message DeviceStatus {
     HowenPacket        howen_packet        = 38;
     AquilaPacket       aquila_packet       = 39;
     IntellitracPacket  intellitrac_packet  = 40;
+    QueclinkPacket     queclink_packet     = 41;
   }
 }
 
@@ -136,6 +140,10 @@ message AquilaPacket{
 }
 
 message IntellitracPacket{
+    bytes raw_data = 1;
+}
+
+message QueclinkPacket{
     bytes raw_data = 1;
 }
 

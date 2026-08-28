@@ -25,12 +25,14 @@ const (
 type DeviceType int32
 
 const (
-	DeviceType_TELTONIKA   DeviceType = 0
-	DeviceType_WANWAY      DeviceType = 1
-	DeviceType_CONCOX      DeviceType = 2
-	DeviceType_HOWEN       DeviceType = 3
-	DeviceType_AQUILA      DeviceType = 4
-	DeviceType_INTELLITRAC DeviceType = 5
+	DeviceType_TELTONIKA      DeviceType = 0
+	DeviceType_WANWAY         DeviceType = 1
+	DeviceType_CONCOX         DeviceType = 2
+	DeviceType_HOWEN          DeviceType = 3
+	DeviceType_AQUILA         DeviceType = 4
+	DeviceType_INTELLITRAC    DeviceType = 5
+	DeviceType_QUECLINK_GV200 DeviceType = 6
+	DeviceType_QUECLINK_GT500 DeviceType = 7
 )
 
 // Enum value maps for DeviceType.
@@ -42,14 +44,18 @@ var (
 		3: "HOWEN",
 		4: "AQUILA",
 		5: "INTELLITRAC",
+		6: "QUECLINK_GV200",
+		7: "QUECLINK_GT500",
 	}
 	DeviceType_value = map[string]int32{
-		"TELTONIKA":   0,
-		"WANWAY":      1,
-		"CONCOX":      2,
-		"HOWEN":       3,
-		"AQUILA":      4,
-		"INTELLITRAC": 5,
+		"TELTONIKA":      0,
+		"WANWAY":         1,
+		"CONCOX":         2,
+		"HOWEN":          3,
+		"AQUILA":         4,
+		"INTELLITRAC":    5,
+		"QUECLINK_GV200": 6,
+		"QUECLINK_GT500": 7,
 	}
 )
 
@@ -89,6 +95,7 @@ const (
 	DeviceProtocolType_HOWENWS       DeviceProtocolType = 3
 	DeviceProtocolType_OBDII2G       DeviceProtocolType = 4
 	DeviceProtocolType_INTELLITRAC_A DeviceProtocolType = 5
+	DeviceProtocolType_QUECLINK      DeviceProtocolType = 6
 )
 
 // Enum value maps for DeviceProtocolType.
@@ -100,6 +107,7 @@ var (
 		3: "HOWENWS",
 		4: "OBDII2G",
 		5: "INTELLITRAC_A",
+		6: "QUECLINK",
 	}
 	DeviceProtocolType_value = map[string]int32{
 		"FM1200":        0,
@@ -108,6 +116,7 @@ var (
 		"HOWENWS":       3,
 		"OBDII2G":       4,
 		"INTELLITRAC_A": 5,
+		"QUECLINK":      6,
 	}
 )
 
@@ -182,6 +191,7 @@ type DeviceStatus struct {
 	//	*DeviceStatus_HowenPacket
 	//	*DeviceStatus_AquilaPacket
 	//	*DeviceStatus_IntellitracPacket
+	//	*DeviceStatus_QueclinkPacket
 	RawData       isDeviceStatus_RawData `protobuf_oneof:"raw_data"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -516,6 +526,15 @@ func (x *DeviceStatus) GetIntellitracPacket() *IntellitracPacket {
 	return nil
 }
 
+func (x *DeviceStatus) GetQueclinkPacket() *QueclinkPacket {
+	if x != nil {
+		if x, ok := x.RawData.(*DeviceStatus_QueclinkPacket); ok {
+			return x.QueclinkPacket
+		}
+	}
+	return nil
+}
+
 type isDeviceStatus_RawData interface {
 	isDeviceStatus_RawData()
 }
@@ -544,6 +563,10 @@ type DeviceStatus_IntellitracPacket struct {
 	IntellitracPacket *IntellitracPacket `protobuf:"bytes,40,opt,name=intellitrac_packet,json=intellitracPacket,proto3,oneof"`
 }
 
+type DeviceStatus_QueclinkPacket struct {
+	QueclinkPacket *QueclinkPacket `protobuf:"bytes,41,opt,name=queclink_packet,json=queclinkPacket,proto3,oneof"`
+}
+
 func (*DeviceStatus_WanwayPacket) isDeviceStatus_RawData() {}
 
 func (*DeviceStatus_TeltonikaPacket) isDeviceStatus_RawData() {}
@@ -555,6 +578,8 @@ func (*DeviceStatus_HowenPacket) isDeviceStatus_RawData() {}
 func (*DeviceStatus_AquilaPacket) isDeviceStatus_RawData() {}
 
 func (*DeviceStatus_IntellitracPacket) isDeviceStatus_RawData() {}
+
+func (*DeviceStatus_QueclinkPacket) isDeviceStatus_RawData() {}
 
 type GPSPosition struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1196,6 +1221,50 @@ func (x *IntellitracPacket) GetRawData() []byte {
 	return nil
 }
 
+type QueclinkPacket struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RawData       []byte                 `protobuf:"bytes,1,opt,name=raw_data,json=rawData,proto3" json:"raw_data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueclinkPacket) Reset() {
+	*x = QueclinkPacket{}
+	mi := &file_common_types_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueclinkPacket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueclinkPacket) ProtoMessage() {}
+
+func (x *QueclinkPacket) ProtoReflect() protoreflect.Message {
+	mi := &file_common_types_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueclinkPacket.ProtoReflect.Descriptor instead.
+func (*QueclinkPacket) Descriptor() ([]byte, []int) {
+	return file_common_types_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *QueclinkPacket) GetRawData() []byte {
+	if x != nil {
+		return x.RawData
+	}
+	return nil
+}
+
 type DeviceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Imei          string                 `protobuf:"bytes,1,opt,name=imei,proto3" json:"imei,omitempty"`
@@ -1206,7 +1275,7 @@ type DeviceResponse struct {
 
 func (x *DeviceResponse) Reset() {
 	*x = DeviceResponse{}
-	mi := &file_common_types_proto_msgTypes[9]
+	mi := &file_common_types_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1218,7 +1287,7 @@ func (x *DeviceResponse) String() string {
 func (*DeviceResponse) ProtoMessage() {}
 
 func (x *DeviceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_common_types_proto_msgTypes[9]
+	mi := &file_common_types_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1231,7 +1300,7 @@ func (x *DeviceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeviceResponse.ProtoReflect.Descriptor instead.
 func (*DeviceResponse) Descriptor() ([]byte, []int) {
-	return file_common_types_proto_rawDescGZIP(), []int{9}
+	return file_common_types_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DeviceResponse) GetImei() string {
@@ -1257,7 +1326,7 @@ type FetchDeviceModelRequest struct {
 
 func (x *FetchDeviceModelRequest) Reset() {
 	*x = FetchDeviceModelRequest{}
-	mi := &file_common_types_proto_msgTypes[10]
+	mi := &file_common_types_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1269,7 +1338,7 @@ func (x *FetchDeviceModelRequest) String() string {
 func (*FetchDeviceModelRequest) ProtoMessage() {}
 
 func (x *FetchDeviceModelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_common_types_proto_msgTypes[10]
+	mi := &file_common_types_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1282,7 +1351,7 @@ func (x *FetchDeviceModelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchDeviceModelRequest.ProtoReflect.Descriptor instead.
 func (*FetchDeviceModelRequest) Descriptor() ([]byte, []int) {
-	return file_common_types_proto_rawDescGZIP(), []int{10}
+	return file_common_types_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *FetchDeviceModelRequest) GetImei() string {
@@ -1301,7 +1370,7 @@ type FetchDeviceModelResponse struct {
 
 func (x *FetchDeviceModelResponse) Reset() {
 	*x = FetchDeviceModelResponse{}
-	mi := &file_common_types_proto_msgTypes[11]
+	mi := &file_common_types_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1313,7 +1382,7 @@ func (x *FetchDeviceModelResponse) String() string {
 func (*FetchDeviceModelResponse) ProtoMessage() {}
 
 func (x *FetchDeviceModelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_common_types_proto_msgTypes[11]
+	mi := &file_common_types_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1326,7 +1395,7 @@ func (x *FetchDeviceModelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchDeviceModelResponse.ProtoReflect.Descriptor instead.
 func (*FetchDeviceModelResponse) Descriptor() ([]byte, []int) {
-	return file_common_types_proto_rawDescGZIP(), []int{11}
+	return file_common_types_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *FetchDeviceModelResponse) GetModel() string {
@@ -1340,7 +1409,7 @@ var File_common_types_proto protoreflect.FileDescriptor
 
 const file_common_types_proto_rawDesc = "" +
 	"\n" +
-	"\x12common-types.proto\x12\x05types\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe2\r\n" +
+	"\x12common-types.proto\x12\x05types\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa4\x0e\n" +
 	"\fDeviceStatus\x12\x12\n" +
 	"\x04imei\x18\x01 \x01(\tR\x04imei\x122\n" +
 	"\vdevice_type\x18\x02 \x01(\x0e2\x11.types.DeviceTypeR\n" +
@@ -1386,7 +1455,8 @@ const file_common_types_proto_rawDesc = "" +
 	"\rconcox_packet\x18% \x01(\v2\x13.types.ConcoxPacketH\x00R\fconcoxPacket\x127\n" +
 	"\fhowen_packet\x18& \x01(\v2\x12.types.HowenPacketH\x00R\vhowenPacket\x12:\n" +
 	"\raquila_packet\x18' \x01(\v2\x13.types.AquilaPacketH\x00R\faquilaPacket\x12I\n" +
-	"\x12intellitrac_packet\x18( \x01(\v2\x18.types.IntellitracPacketH\x00R\x11intellitracPacketB\n" +
+	"\x12intellitrac_packet\x18( \x01(\v2\x18.types.IntellitracPacketH\x00R\x11intellitracPacket\x12@\n" +
+	"\x0fqueclink_packet\x18) \x01(\v2\x15.types.QueclinkPacketH\x00R\x0equeclinkPacketB\n" +
 	"\n" +
 	"\braw_data\"\xc0\x01\n" +
 	"\vGPSPosition\x12\x1a\n" +
@@ -1448,6 +1518,8 @@ const file_common_types_proto_rawDesc = "" +
 	"\fAquilaPacket\x12\x19\n" +
 	"\braw_data\x18\x01 \x01(\fR\arawData\".\n" +
 	"\x11IntellitracPacket\x12\x19\n" +
+	"\braw_data\x18\x01 \x01(\fR\arawData\"+\n" +
+	"\x0eQueclinkPacket\x12\x19\n" +
 	"\braw_data\x18\x01 \x01(\fR\arawData\"@\n" +
 	"\x0eDeviceResponse\x12\x12\n" +
 	"\x04imei\x18\x01 \x01(\tR\x04imei\x12\x1a\n" +
@@ -1455,7 +1527,7 @@ const file_common_types_proto_rawDesc = "" +
 	"\x17FetchDeviceModelRequest\x12\x12\n" +
 	"\x04imei\x18\x01 \x01(\tR\x04imei\"0\n" +
 	"\x18FetchDeviceModelResponse\x12\x14\n" +
-	"\x05model\x18\x01 \x01(\tR\x05model*[\n" +
+	"\x05model\x18\x01 \x01(\tR\x05model*\x83\x01\n" +
 	"\n" +
 	"DeviceType\x12\r\n" +
 	"\tTELTONIKA\x10\x00\x12\n" +
@@ -1466,7 +1538,9 @@ const file_common_types_proto_rawDesc = "" +
 	"\x05HOWEN\x10\x03\x12\n" +
 	"\n" +
 	"\x06AQUILA\x10\x04\x12\x0f\n" +
-	"\vINTELLITRAC\x10\x05*a\n" +
+	"\vINTELLITRAC\x10\x05\x12\x12\n" +
+	"\x0eQUECLINK_GV200\x10\x06\x12\x12\n" +
+	"\x0eQUECLINK_GT500\x10\a*o\n" +
 	"\x12DeviceProtocolType\x12\n" +
 	"\n" +
 	"\x06FM1200\x10\x00\x12\b\n" +
@@ -1474,7 +1548,8 @@ const file_common_types_proto_rawDesc = "" +
 	"\x04TR06\x10\x02\x12\v\n" +
 	"\aHOWENWS\x10\x03\x12\v\n" +
 	"\aOBDII2G\x10\x04\x12\x11\n" +
-	"\rINTELLITRAC_A\x10\x05B7Z5github.com/404minds/avl-receiver/internal/types;typesb\x06proto3"
+	"\rINTELLITRAC_A\x10\x05\x12\f\n" +
+	"\bQUECLINK\x10\x06B7Z5github.com/404minds/avl-receiver/internal/types;typesb\x06proto3"
 
 var (
 	file_common_types_proto_rawDescOnce sync.Once
@@ -1489,7 +1564,7 @@ func file_common_types_proto_rawDescGZIP() []byte {
 }
 
 var file_common_types_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_common_types_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_common_types_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_common_types_proto_goTypes = []any{
 	(DeviceType)(0),                  // 0: types.DeviceType
 	(DeviceProtocolType)(0),          // 1: types.DeviceProtocolType
@@ -1502,14 +1577,15 @@ var file_common_types_proto_goTypes = []any{
 	(*HowenPacket)(nil),              // 8: types.HowenPacket
 	(*AquilaPacket)(nil),             // 9: types.AquilaPacket
 	(*IntellitracPacket)(nil),        // 10: types.IntellitracPacket
-	(*DeviceResponse)(nil),           // 11: types.DeviceResponse
-	(*FetchDeviceModelRequest)(nil),  // 12: types.FetchDeviceModelRequest
-	(*FetchDeviceModelResponse)(nil), // 13: types.FetchDeviceModelResponse
-	(*timestamppb.Timestamp)(nil),    // 14: google.protobuf.Timestamp
+	(*QueclinkPacket)(nil),           // 11: types.QueclinkPacket
+	(*DeviceResponse)(nil),           // 12: types.DeviceResponse
+	(*FetchDeviceModelRequest)(nil),  // 13: types.FetchDeviceModelRequest
+	(*FetchDeviceModelResponse)(nil), // 14: types.FetchDeviceModelResponse
+	(*timestamppb.Timestamp)(nil),    // 15: google.protobuf.Timestamp
 }
 var file_common_types_proto_depIdxs = []int32{
 	0,  // 0: types.DeviceStatus.device_type:type_name -> types.DeviceType
-	14, // 1: types.DeviceStatus.timestamp:type_name -> google.protobuf.Timestamp
+	15, // 1: types.DeviceStatus.timestamp:type_name -> google.protobuf.Timestamp
 	3,  // 2: types.DeviceStatus.position:type_name -> types.GPSPosition
 	4,  // 3: types.DeviceStatus.vehicle_status:type_name -> types.VehicleStatus
 	5,  // 4: types.DeviceStatus.wanway_packet:type_name -> types.WanwayPacket
@@ -1518,11 +1594,12 @@ var file_common_types_proto_depIdxs = []int32{
 	8,  // 7: types.DeviceStatus.howen_packet:type_name -> types.HowenPacket
 	9,  // 8: types.DeviceStatus.aquila_packet:type_name -> types.AquilaPacket
 	10, // 9: types.DeviceStatus.intellitrac_packet:type_name -> types.IntellitracPacket
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	11, // 10: types.DeviceStatus.queclink_packet:type_name -> types.QueclinkPacket
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_common_types_proto_init() }
@@ -1537,6 +1614,7 @@ func file_common_types_proto_init() {
 		(*DeviceStatus_HowenPacket)(nil),
 		(*DeviceStatus_AquilaPacket)(nil),
 		(*DeviceStatus_IntellitracPacket)(nil),
+		(*DeviceStatus_QueclinkPacket)(nil),
 	}
 	file_common_types_proto_msgTypes[1].OneofWrappers = []any{}
 	file_common_types_proto_msgTypes[2].OneofWrappers = []any{}
@@ -1546,7 +1624,7 @@ func file_common_types_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_common_types_proto_rawDesc), len(file_common_types_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   12,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

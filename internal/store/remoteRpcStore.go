@@ -35,19 +35,36 @@ func (s *RemoteRpcStore) Process(ctx context.Context) {
 	for {
 		select {
 		case deviceStatus := <-s.ProcessChan:
-			logger.Sugar().Infoln(deviceStatus.String())
-			ctx := context.Background()
-			_, err := s.RemoteStoreClient.SaveDeviceStatus(ctx, deviceStatus)
-			if err != nil {
-				logger.Error("failed to save device status", zap.String("imei", deviceStatus.Imei), zap.Error(err))
-			}
+			s.save(deviceStatus)
 		case <-s.CloseChan:
 			logger.Sugar().Info("async remote rpc store shutting down for device")
+			s.drain()
 			return
 		case <-ctx.Done():
 			logger.Sugar().Info("context canceled, shutting down process goroutine")
+			s.drain()
 			return
 
+		}
+	}
+}
+
+func (s *RemoteRpcStore) save(deviceStatus *types.DeviceStatus) {
+	logger.Sugar().Infoln(deviceStatus.String())
+	_, err := s.RemoteStoreClient.SaveDeviceStatus(context.Background(), deviceStatus)
+	if err != nil {
+		logger.Error("failed to save device status", zap.String("imei", deviceStatus.Imei), zap.Error(err))
+	}
+}
+
+// drain flushes records the connection produced just before it closed.
+func (s *RemoteRpcStore) drain() {
+	for {
+		select {
+		case deviceStatus := <-s.ProcessChan:
+			s.save(deviceStatus)
+		default:
+			return
 		}
 	}
 }

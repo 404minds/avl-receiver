@@ -40,16 +40,28 @@ func (s *JsonLinesStore) Process(ctx context.Context) {
 	for {
 		select {
 		case data := <-s.ProcessChan:
-			b, err := json.Marshal(data)
-			if err != nil {
-				logger.Error("failed to write record to file", zap.String("deviceId", s.DeviceID), zap.Error(err))
-			}
-			fmt.Fprintln(s.File, string(b))
-			s.File.Sync()
+			s.write(data)
 		case <-s.CloseChan:
-			return
+			// the connection is gone but records it produced may still be queued; flush them
+			for {
+				select {
+				case data := <-s.ProcessChan:
+					s.write(data)
+				default:
+					return
+				}
+			}
 		}
 	}
+}
+
+func (s *JsonLinesStore) write(data *types.DeviceStatus) {
+	b, err := json.Marshal(data)
+	if err != nil {
+		logger.Error("failed to write record to file", zap.String("deviceId", s.DeviceID), zap.Error(err))
+	}
+	fmt.Fprintln(s.File, string(b))
+	s.File.Sync()
 }
 
 func (s *JsonLinesStore) Response(ctx context.Context) {

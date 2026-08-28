@@ -12,6 +12,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	errs "github.com/404minds/avl-receiver/internal/errors"
@@ -23,6 +24,24 @@ import (
 )
 
 var logger = configuredLogger.Logger
+
+// idleTimeout: a connection that has sent nothing for this long is dropped. Device heartbeats are
+// 3–10 min apart (Queclink GV200 5 min, GT500 10 min), so 30 min only reaps dead sockets.
+const idleTimeout = 30 * time.Minute
+
+// activityReader records when the device last sent bytes so idle sockets can be reaped.
+type activityReader struct {
+	io.Reader
+	last atomic.Int64 // unix nanos
+}
+
+func (r *activityReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	if n > 0 {
+		r.last.Store(time.Now().UnixNano())
+	}
+	return n, err
+}
 
 type DeviceConnectionInfo struct {
 	Conn     net.Conn
@@ -57,7 +76,9 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 	if err != nil {
 		return
 	}
-	reader := bufio.NewReader(conn)
+	activity := &activityReader{Reader: conn}
+	activity.last.Store(time.Now().UnixNano())
+	reader := bufio.NewReader(activity)
 	deviceProtocol, ack, err := t.attemptDeviceLogin(reader)
 	if err != nil {
 		logger.Error("failed to identify device", zap.String("remoteAddr", remoteAddr), zap.Error(err))
@@ -142,6 +163,10 @@ func (t *TcpHandler) HandleConnection(conn net.Conn) {
 		for {
 			select {
 			case <-ticker.C:
+				if idle := time.Since(time.Unix(0, activity.last.Load())); idle > idleTimeout {
+					logger.Warn("no data from device, letting the read deadline expire", zap.String("remoteAddr", remoteAddr), zap.Duration("idle", idle))
+					return // the last 10 s deadline is not refreshed; the blocked read fails and the connection closes
+				}
 				if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
 					logger.Error("failed to refresh read deadline", zap.Error(err))
 					return
