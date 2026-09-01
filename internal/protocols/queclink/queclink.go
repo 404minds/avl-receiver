@@ -137,7 +137,14 @@ func (p *Protocol) Login(reader *bufio.Reader) ([]byte, int, error) {
 	if len(fields[1]) >= 2 {
 		p.versionPrefix = fields[1][:2]
 	}
-	logger.Sugar().Infof("queclink: imei %s, protocol version %s (prefix %s => %s)", p.Imei, fields[1], p.versionPrefix, modelByPrefix[p.versionPrefix])
+	// An unknown prefix is not fatal — dispatch is on the registered DeviceType — but it must
+	// not be logged as a model: a map miss yields the zero DeviceType (TELTONIKA), which reads
+	// like a real answer. A GL300VC (prefix 28) connecting as a GV200 looked exactly like that.
+	if model, ok := modelByPrefix[p.versionPrefix]; ok {
+		logger.Sugar().Infof("queclink: imei %s, protocol version %s (prefix %s => %s)", p.Imei, fields[1], p.versionPrefix, model)
+	} else {
+		logger.Sugar().Warnf("queclink: imei %s, protocol version %s: prefix %q is neither GV200 (04/35) nor GT500 (07) — this is another Queclink model; parsing follows the device type registered on the platform, so tail fields (odometer, battery) may be wrong", p.Imei, fields[1], p.versionPrefix)
+	}
 	return []byte{}, 0, nil
 }
 
