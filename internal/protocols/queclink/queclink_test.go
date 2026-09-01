@@ -210,7 +210,7 @@ func TestLoginDoesNotConsume(t *testing.T) { // LG11
 	assert.Equal(t, f1, string(line))
 }
 
-func TestLoginPrefixMismatchUsesDeclaredType(t *testing.T) { // LG12
+func TestLoginPrefixMismatchFollowsWire(t *testing.T) { // LG12
 	r := bufio.NewReader(strings.NewReader(f1)) // prefix 07 = GT500
 	p := &Protocol{}
 	_, _, err := p.Login(r)
@@ -220,7 +220,9 @@ func TestLoginPrefixMismatchUsesDeclaredType(t *testing.T) { // LG12
 	require.ErrorIs(t, p.ConsumeStream(r, io.Discard, st), io.EOF)
 	recs := st.drain()
 	require.Len(t, recs, 1)
-	assert.Equal(t, gv200, recs[0].DeviceType)
+	assert.Equal(t, gv200, recs[0].DeviceType)       // the record keeps the registered type…
+	assert.Equal(t, int32(80), recs[0].BatteryLevel) // …but the fields are read as the wire's GT500
+	assert.Equal(t, int32(1000), recs[0].Odometer)
 }
 
 func TestProtocolIdentity(t *testing.T) {
@@ -635,6 +637,10 @@ func TestContractOnAllFixtures(t *testing.T) {
 
 func FuzzParseReport(f *testing.F) {
 	for _, line := range append(append(append([]string{}, allFixtures...), phase3Fixtures...), phase8Fixtures...) {
+		f.Add(line, true)
+		f.Add(line, false)
+	}
+	for _, line := range gl300Fixtures {
 		f.Add(line, true)
 		f.Add(line, false)
 	}
@@ -1346,8 +1352,8 @@ func TestScanFallback(t *testing.T) {
 		}
 		assert.Equal(t, map[string]int{"+RESP:GTALL": 1, "+RESP:GTGSM": 1, "+RESP:GTXYZ": 5}, p.ignored)
 	})
-	t.Run("tabled headers never fall back to the scan", func(t *testing.T) {
-		recs := parseLine(t, gv200, setField(gv1, 6, "0")) // Number 0 → no points, even though a block is present
+	t.Run("an explicit Number=0 on a trusted layout is honoured, no scan", func(t *testing.T) {
+		recs := parseLine(t, gv200, setField(gv1, 6, "0")) // the device said "no points", even though a block is present
 		assert.Empty(t, recs)
 	})
 }
@@ -1356,6 +1362,228 @@ func TestContractOnPhase8Fixtures(t *testing.T) {
 	for _, dt := range []types.DeviceType{gt500, gv200} {
 		for _, line := range phase8Fixtures {
 			checkContract(t, dt, line, parseLine(t, dt, line))
+		}
+	}
+}
+
+// ---- Multi-model registry + GL300 family ----
+// "doc" lines are verbatim from "GL300 @Tracker Air Interface Protocol V6.00" (TRACGL300AN008);
+// "traccar" lines are real GL300/GL300VC/GL300W traffic from Traccar's corpus (Apache-2.0,
+// © Anton Tananaev); "gw" lines are the live tstGW gateway captured on production (2026-09-01).
+
+const (
+	gl300 = types.DeviceType_QUECLINK_GL300
+
+	gl3Fri   = "+RESP:GTFRI,1A0600,135790246811220,,0,0,1,1,4.3,92,70.0,121.354335,31.222073,20090214013254,0460,0000,18d8,6141,00,,20090214093254,11F0$" // doc §3.3.1
+	gl3Igl   = "+RESP:GTIGL,1A0600,867844000125073,,,00,1,5,,,,117.201362,31.832724,20120821032037,,,,,,,,000C$"                                          // doc §3.3.1
+	gl3Btc   = "+RESP:GTBTC,1A0600,135790246811220,,0,4.3,92,70.0,121.354335,31.222073,20090214013254,0460,0000,18d8,6141,00,20100214093254,11F0$"        // doc §3.3.4
+	gl3Ign   = "+RESP:GTIGN,1A0600,135790246811220,,1200,0,4.3,92,70.0,121.354335,31.222073,20090214013254,0460,0000,18d8,6141,00,20100214093254,11F0$"   // doc §3.3.4 (tail completed like the other event examples)
+	gl3Igf   = "+RESP:GTIGF,1A0600,135790246811220,,1200,0,4.3,92,70.0,121.354335,31.222073,20090214013254,0460,0000,18d8,6141,00,20100214093254,11F0$"
+	gl3Fri4  = "+RESP:GTFRI,1A0900,860599000306845,G3-313,0,0,4,1,2.1,0,426.7,8.611466,47.681639,20181214134603,0228,0001,077F,4812,25.2,1,5.7,34,437.3,8.611600,47.681846,20181214134619,0228,0001,077F,4812,25.2,1,4.4,62,438.2,8.611893,47.681983,20181214134633,0228,0001,077F,4812,25.2,1,4.8,78,436.6,8.612236,47.682040,20181214134648,0228,0001,077F,4812,25.2,83,20181214134702,0654$" // traccar
+	gl3Fri99 = "+RESP:GTFRI,1A0401,860599000508846,,0,0,1,1,134.8,154,278.7,-76.671089,39.778885,20150623154301,0310,0260,043F,7761,,99,20150623154314,0F24$"                                                                                                                                                                                                                                   // traccar
+	gl3FriW  = "+RESP:GTFRI,2C0402,867162020000816,,0,0,1,2,0.3,337,245.7,-82.373387,34.634011,20170215003054,,,,,,63,20170215003241,3EAB$"                                                                                                                                                                                                                                                     // traccar GL300W
+	gl3Stt   = "+RESP:GTSTT,1A0401,860599000508846,,41,0,0.0,84,107.5,-76.657998,39.497203,20150623160622,0310,0260,B435,3B81,,20150623160622,0F54$"                                                                                                                                                                                                                                            // traccar
+	gl3SttVC = "+RESP:GTSTT,280100,A1000043D20139,,42,0,0.1,321,228.6,-76.660884,39.832552,20150615120628,0310,0484,00600019,0A52,,20150615085741,0320$"                                                                                                                                                                                                                                        // traccar GL300VC
+	gl3RtlVC = "+RESP:GTRTL,280100,A1000043D20139,,0,0,1,1,0.1,321,239.1,-76.661047,39.832501,20150615114455,0310,0484,00600019,0A52,,87,20150615074456,031E$"                                                                                                                                                                                                                                  // traccar GL300VC
+	gl3Bpl   = "+BUFF:GTBPL,1A0800,860599000773978,GL300,3.55,0,0.0,0,257.1,60.565437,56.818277,20161006070553,,,,,204.7,20161006071028,0C75$"                                                                                                                                                                                                                                                  // traccar
+	gl3Tem   = "+RESP:GTTEM,1A0102,860599000000448,,3,33,0,5.8,0,33.4,117.201191,31.832502,20130109061410,0460,0000,5678,2079,,20130109061517,0091$"                                                                                                                                                                                                                                            // traccar
+	gl3Tsw   = "+RESP:GTTSW,1A0100,135790246811220,,1,0,0,4.3,92,70.0,121.354335,31.222073,20090214013254,0460,0000,18d8,6141,00,20100214093254,11F0$"                                                                                                                                                                                                                                          // traccar
+	gl3Inf   = "+RESP:GTINF,1A0800,860599000773978,GL300,41,89701016426133851978,17,0,1,26.6,,3.90,1,1,0,0,0,20161003184043,69,1,44,,,20161004040811,022C$"                                                                                                                                                                                                                                     // traccar: battery 69 at len-7
+
+	gwFri = "+RESP:GTFRI,280518,863922034601352, tstGW v1.0.43.11 S25 B100% C2|G V11 H1 A141m D0 0kph 11634m|,,,,1.1,0,0,,78.021396,27.202109,20260901080800,,,,,,,11634,100,20260901180828,0004$"
+	gwStc = "+RESP:GTSTC,280518,863922038155132, tstGW v1.0.43.11 S26 B100% C2|G V10 H0.8 A15m D0 1kph 2561810m|,,0.8,0,0,,151.501029,-33.347904,20260901090510,,,,,,,,20260901190955,000B$"
+	gwBtc = "+RESP:GTBTC,280518,863922038155132, tstGW v1.0.43.11 S26 B100% C2|G V10 H0.8 A15m D0 1kph 2561810m|,0.8,0,0,,151.501029,-33.347904,20260901090515,,,,,,,,20260901190955,000C$"
+)
+
+var gl300Fixtures = []string{gl3Fri, gl3Igl, gl3Btc, gl3Ign, gl3Igf, gl3Fri4, gl3Fri99, gl3FriW,
+	gl3Stt, gl3SttVC, gl3RtlVC, gl3Bpl, gl3Tem, gl3Tsw, gl3Inf, gwFri, gwStc, gwBtc}
+
+// parseWith parses one line on a connection whose device announced the given version prefix.
+func parseWith(t *testing.T, dt types.DeviceType, prefix, line string) []*types.DeviceStatus {
+	t.Helper()
+	raw := strings.TrimSuffix(line, "$")
+	return (&Protocol{DeviceType: dt, Imei: imei, versionPrefix: prefix}).parseReport(splitFields(raw), []byte(raw))
+}
+
+func TestGL300Position(t *testing.T) { // doc §3.3.1 example, verbatim
+	recs := parseLine(t, gl300, gl3Fri)
+	require.Len(t, recs, 1)
+	r := recs[0]
+	assert.InDelta(t, 31.222073, r.Position.Latitude, 1e-5)
+	assert.InDelta(t, 121.354335, r.Position.Longitude, 1e-5)
+	assert.Equal(t, utc(2009, time.February, 14, 1, 32, 54), r.Timestamp.AsTime())
+	assert.InDelta(t, 4.3, *r.Position.Speed, 1e-5)
+	assert.InDelta(t, 92, r.Position.Course, 1e-5)
+	assert.InDelta(t, 70.0, r.Position.Altitude, 1e-5)
+	assert.Equal(t, int32(0), r.Odometer)     // per-block odo "00"
+	assert.Equal(t, int32(0), r.BatteryLevel) // battery field empty in the doc example
+	assert.Equal(t, "RESP:GTFRI", r.MessageType)
+}
+
+func TestGL300MultiPoint(t *testing.T) { // every block carries its own odo; battery once, at the end
+	recs := parseLine(t, gl300, gl3Fri4)
+	require.Len(t, recs, 4)
+	assert.Equal(t, utc(2018, time.December, 14, 13, 46, 3), recs[0].Timestamp.AsTime())
+	assert.Equal(t, utc(2018, time.December, 14, 13, 46, 48), recs[3].Timestamp.AsTime())
+	for _, r := range recs {
+		assert.Equal(t, int32(83), r.BatteryLevel)
+		assert.Equal(t, int32(25), r.Odometer) // last block's odo 25.2 km, floored
+		assert.InDelta(t, 47.68, r.Position.Latitude, 0.01)
+	}
+}
+
+func TestGL300Headers(t *testing.T) {
+	for _, tc := range []struct {
+		line     string
+		lat, lon float32
+		battery  int32
+	}{
+		{gl3Fri99, 39.778885, -76.671089, 99},
+		{gl3FriW, 34.634011, -82.373387, 63}, // GL300W: empty cell info and odo
+		{gl3RtlVC, 39.832501, -76.661047, 87},
+		{gl3Stt, 39.497203, -76.657998, 0}, // event report: no battery in the tail
+		{gl3Bpl, 56.818277, 60.565437, 0},  // +BUFF battery-low with position
+		{gl3Btc, 31.222073, 121.354335, 0}, // charging event
+		{gl3Tsw, 31.222073, 121.354335, 0}, // tamper switch
+		{gl3Igl, 31.832724, 117.201362, 0}, // ignition-on location, mostly-empty fields
+	} {
+		recs := parseLine(t, gl300, tc.line)
+		require.Len(t, recs, 1, tc.line)
+		assert.InDelta(t, tc.lat, recs[0].Position.Latitude, 1e-5, tc.line)
+		assert.InDelta(t, tc.lon, recs[0].Position.Longitude, 1e-5, tc.line)
+		assert.Equal(t, tc.battery, recs[0].BatteryLevel, tc.line)
+	}
+}
+
+func TestGL300Temperature(t *testing.T) {
+	recs := parseLine(t, gl300, gl3Tem)
+	require.Len(t, recs, 1)
+	assert.InDelta(t, 33, recs[0].Temperature, 1e-5) // <Temperature> at #5, °C
+}
+
+func TestGL300Ignition(t *testing.T) {
+	t.Run("GTSTT motion states are the ignition proxy", func(t *testing.T) {
+		p := &Protocol{DeviceType: gl300, Imei: imei}
+		recs := p.parseReport(fieldsOf(gl3SttVC), nil) // state 42 = moving
+		require.Len(t, recs, 1)
+		assert.True(t, *recs[0].VehicleStatus.Ignition)
+		recs = p.parseReport(fieldsOf(gl3Stt), nil) // state 41 = motionless
+		require.Len(t, recs, 1)
+		assert.False(t, *recs[0].VehicleStatus.Ignition)
+	})
+	t.Run("wired GTIGN/GTIGF/GTIGL win (GL300VC)", func(t *testing.T) {
+		p := &Protocol{DeviceType: gl300, Imei: imei}
+		recs := p.parseReport(fieldsOf(gl3Ign), nil)
+		require.Len(t, recs, 1)
+		assert.True(t, *recs[0].VehicleStatus.Ignition)
+		recs = p.parseReport(fieldsOf(gl3Igf), nil)
+		require.Len(t, recs, 1)
+		assert.False(t, *recs[0].VehicleStatus.Ignition)
+		recs = p.parseReport(fieldsOf(gl3Igl), nil) // report type 0 = ignition on
+		require.Len(t, recs, 1)
+		assert.True(t, *recs[0].VehicleStatus.Ignition)
+	})
+	t.Run("a GV200 keeps its ignition line for GTSTT 41/42", func(t *testing.T) {
+		p := &Protocol{DeviceType: gv200, Imei: imei}
+		p.parseReport(fieldsOf(gvStt520), nil) // state 42: motion sensor, no ignition signal
+		assert.Nil(t, p.lastIgnition)          // speed rule stays
+	})
+}
+
+func TestGL300Info(t *testing.T) { // GTINF: CSQ 17 → level 3, battery 69 at len-7, state 41
+	p := &Protocol{DeviceType: gl300, Imei: imei}
+	assert.Empty(t, p.parseReport(fieldsOf(gl3Inf), nil))
+	assert.Equal(t, int32(3), p.gsmLevel())
+	assert.Equal(t, int32(69), p.battery)
+	require.NotNil(t, p.lastIgnition)
+	assert.False(t, *p.lastIgnition)
+	recs := p.parseReport(fieldsOf(gl3Fri), nil) // battery-less position reuses the cached 69
+	require.Len(t, recs, 1)
+	assert.Equal(t, int32(69), recs[0].BatteryLevel)
+}
+
+func TestPrefixWinsOverRegistration(t *testing.T) {
+	// Registered as GV200, announces GL300 (prefix 1A): the wire's layout is used — battery 99
+	// sits where the GL300 tail says, which a GV200 parse would never read.
+	recs := parseWith(t, gv200, "1A", gl3Fri99)
+	require.Len(t, recs, 1)
+	assert.Equal(t, int32(99), recs[0].BatteryLevel)
+	assert.Equal(t, gv200, recs[0].DeviceType) // records keep the registered type
+	// And the reverse: registered as GL300, announces GV200 (prefix 04).
+	recs = parseWith(t, gl300, "04", gv1)
+	require.Len(t, recs, 1)
+	assert.Equal(t, int32(2000), recs[0].Odometer) // GV200 tail: Mileage right after the block
+}
+
+func TestGatewayLines(t *testing.T) { // live tstGW capture: prefix 28 (GL300VC), reshaped GTFRI/GTSTC
+	r := bufio.NewReader(strings.NewReader(gwFri + gwStc + gwBtc))
+	p := &Protocol{}
+	_, _, err := p.Login(r)
+	require.NoError(t, err)
+	p.SetDeviceType(gv200) // mis-registered, like production
+	st := newFakeStore()
+	require.ErrorIs(t, p.ConsumeStream(r, io.Discard, st), io.EOF)
+	recs := st.drain()
+	require.Len(t, recs, 3)
+	// GTFRI: Number field empty and two extra mid-fields → located by scan; battery still read
+	// from the end-anchored tail, odometer skipped (the gateway's unit is unverified).
+	assert.InDelta(t, 27.202109, recs[0].Position.Latitude, 1e-5)
+	assert.InDelta(t, 78.021396, recs[0].Position.Longitude, 1e-5)
+	assert.Equal(t, utc(2026, time.September, 1, 8, 8, 0), recs[0].Timestamp.AsTime())
+	assert.Equal(t, int32(100), recs[0].BatteryLevel)
+	assert.Equal(t, int32(0), recs[0].Odometer)
+	// GTSTC: one field longer than the doc's example → scan; GTBTC: doc shape, tabled parse.
+	assert.InDelta(t, -33.347904, recs[1].Position.Latitude, 1e-5)
+	assert.Equal(t, utc(2026, time.September, 1, 9, 5, 10), recs[1].Timestamp.AsTime())
+	assert.InDelta(t, -33.347904, recs[2].Position.Latitude, 1e-5)
+	assert.Equal(t, utc(2026, time.September, 1, 9, 5, 15), recs[2].Timestamp.AsTime())
+}
+
+func TestPrefixOf(t *testing.T) {
+	assert.Equal(t, "1A", prefixOf("1A0600"))
+	assert.Equal(t, "28", prefixOf("280518"))
+	assert.Equal(t, "802004", prefixOf("8020040200")) // 6-char model code
+	assert.Equal(t, "80", prefixOf("80FF"))           // 6-char lookup misses → first two
+	assert.Equal(t, "", prefixOf("X"))
+}
+
+func TestModelName(t *testing.T) {
+	assert.Equal(t, "QUECLINK_GL300", modelName("28"))
+	assert.Equal(t, "GT501 (no field layouts — positions are located by field scan)", modelName("42"))
+	assert.Equal(t, "unknown Queclink model", modelName("ZZ"))
+}
+
+func TestLayoutTrusted(t *testing.T) {
+	for prefix, want := range map[string]bool{
+		"": true, "04": true, "35": true, "07": true, "1A": true, "28": true, "2C": true,
+		"42": false, "1F": false, "ZZ": false,
+	} {
+		assert.Equal(t, want, (&Protocol{versionPrefix: prefix}).layoutTrusted(), prefix)
+	}
+}
+
+func TestUnknownModelDoesNotTrustTheNumberField(t *testing.T) {
+	// A GT501 (prefix 42, no layouts held) has other data where our tables expect Number; a "0"
+	// there must not suppress the scan. On a trusted layout an explicit 0 still means "no points".
+	line := setField(gl3Fri99, 6, "0")
+	recs := parseWith(t, gl300, "42", line)
+	require.Len(t, recs, 1)                          // rescued by scan
+	assert.Equal(t, int32(99), recs[0].BatteryLevel) // the end-anchored battery survives the scan
+	assert.Equal(t, int32(0), recs[0].Odometer)      // mid-report telemetry does not
+	assert.Empty(t, parseWith(t, gl300, "1A", line)) // trusted layout: 0 points honoured
+}
+
+func TestContractOnGL300Fixtures(t *testing.T) {
+	for _, line := range gl300Fixtures {
+		p := &Protocol{DeviceType: gl300, Imei: imei}
+		raw := strings.TrimSuffix(line, "$")
+		recs := p.parseReport(splitFields(raw), []byte(raw))
+		for _, r := range recs {
+			require.NotNil(t, r.Position, line)
+			require.NotNil(t, r.VehicleStatus.Ignition, line)
+			assert.Equal(t, gl300, r.DeviceType, line)
+			assert.Equal(t, time.UTC, r.Timestamp.AsTime().Location(), line)
+			assert.NotNil(t, r.GetQueclinkPacket(), line)
 		}
 	}
 }

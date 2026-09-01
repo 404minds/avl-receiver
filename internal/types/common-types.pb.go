@@ -33,6 +33,7 @@ const (
 	DeviceType_INTELLITRAC    DeviceType = 5
 	DeviceType_QUECLINK_GV200 DeviceType = 6
 	DeviceType_QUECLINK_GT500 DeviceType = 7
+	DeviceType_QUECLINK_GL300 DeviceType = 8
 )
 
 // Enum value maps for DeviceType.
@@ -46,6 +47,7 @@ var (
 		5: "INTELLITRAC",
 		6: "QUECLINK_GV200",
 		7: "QUECLINK_GT500",
+		8: "QUECLINK_GL300",
 	}
 	DeviceType_value = map[string]int32{
 		"TELTONIKA":      0,
@@ -56,6 +58,7 @@ var (
 		"INTELLITRAC":    5,
 		"QUECLINK_GV200": 6,
 		"QUECLINK_GT500": 7,
+		"QUECLINK_GL300": 8,
 	}
 )
 
@@ -1527,7 +1530,7 @@ const file_common_types_proto_rawDesc = "" +
 	"\x17FetchDeviceModelRequest\x12\x12\n" +
 	"\x04imei\x18\x01 \x01(\tR\x04imei\"0\n" +
 	"\x18FetchDeviceModelResponse\x12\x14\n" +
-	"\x05model\x18\x01 \x01(\tR\x05model*\x83\x01\n" +
+	"\x05model\x18\x01 \x01(\tR\x05model*\x97\x01\n" +
 	"\n" +
 	"DeviceType\x12\r\n" +
 	"\tTELTONIKA\x10\x00\x12\n" +
@@ -1540,7 +1543,8 @@ const file_common_types_proto_rawDesc = "" +
 	"\x06AQUILA\x10\x04\x12\x0f\n" +
 	"\vINTELLITRAC\x10\x05\x12\x12\n" +
 	"\x0eQUECLINK_GV200\x10\x06\x12\x12\n" +
-	"\x0eQUECLINK_GT500\x10\a*o\n" +
+	"\x0eQUECLINK_GT500\x10\a\x12\x12\n" +
+	"\x0eQUECLINK_GL300\x10\b*o\n" +
 	"\x12DeviceProtocolType\x12\n" +
 	"\n" +
 	"\x06FM1200\x10\x00\x12\b\n" +

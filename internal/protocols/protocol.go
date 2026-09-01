@@ -55,7 +55,7 @@ func MakeProtocolForType(t types.DeviceProtocolType) DeviceProtocol {
 		return &howen.HOWENWS{DeviceType: types.DeviceType_HOWEN}
 
 	case types.DeviceProtocolType_QUECLINK:
-		return &queclink.Protocol{} // GV200 or GT500: DeviceType is set from VerifyDevice
+		return &queclink.Protocol{} // GV200, GT500 or GL300: DeviceType is set from VerifyDevice
 	default:
 
 		logger.Sugar().Info("MakeProtocolForType: ", t)
@@ -79,7 +79,7 @@ func GetDeviceTypesForProtocol(t types.DeviceProtocolType) []types.DeviceType {
 	case types.DeviceProtocolType_HOWENWS:
 		return []types.DeviceType{types.DeviceType_HOWEN}
 	case types.DeviceProtocolType_QUECLINK:
-		return []types.DeviceType{types.DeviceType_QUECLINK_GV200, types.DeviceType_QUECLINK_GT500}
+		return []types.DeviceType{types.DeviceType_QUECLINK_GV200, types.DeviceType_QUECLINK_GT500, types.DeviceType_QUECLINK_GL300}
 	default:
 		return []types.DeviceType{}
 	}

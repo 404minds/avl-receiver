@@ -15,6 +15,7 @@ enum DeviceType {
     INTELLITRAC = 5;
     QUECLINK_GV200 = 6;
     QUECLINK_GT500 = 7;
+    QUECLINK_GL300 = 8;
 }
 
 enum DeviceProtocolType {

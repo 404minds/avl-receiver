@@ -1,9 +1,10 @@
 package queclink
 
-// Field layouts come from "GV200 @Track Air Interface Protocol V5.01" and "GT500 @Tracker Air
-// Interface Protocol V0.13" and were checked against real device traffic in Traccar's
-// Gl200TextProtocolDecoderTest corpus (Apache-2.0, © Anton Tananaev). The append-mask handling
-// in parsePoint follows Traccar's Gl200TextProtocolDecoder.decodeLocation.
+// Field layouts come from "GV200 @Track Air Interface Protocol V5.01", "GT500 @Tracker Air
+// Interface Protocol V0.13" and "GL300 @Tracker Air Interface Protocol V6.00" (TRACGL300AN008)
+// and were checked against real device traffic in Traccar's Gl200TextProtocolDecoderTest corpus
+// (Apache-2.0, © Anton Tananaev). The append-mask handling in parsePoint follows Traccar's
+// Gl200TextProtocolDecoder.decodeLocation.
 
 import (
 	"errors"
@@ -82,6 +83,51 @@ var gv200Layouts = map[string]layout{
 	"GTIDA": {7, 8, 7, true},
 }
 
+// gl300Layouts: every GL300/GL300VC/GL300W report that carries a GPS block (GL300 PDF V6.00
+// §3.3). Blocks are 11 GPS fields plus one per-block <Odo mileage> (blockExtra). The general
+// position reports end …,Battery%[,I/O status],SendTime,Count — with the last block's odo right
+// before that, so the end-anchored [-4] odo / [-3] battery read works for any point count. The
+// event reports carry the last known position and end …,SendTime,Count with no battery, so
+// mileage stays false there and the cached battery is reused.
+var gl300Layouts = map[string]layout{
+	// general position report: …,ReportID/AppendMask,ReportType,Number,N×(point,Odo),Batt%,SendTime,Count
+	"GTFRI": {6, 7, 3, true}, "GTGEO": {6, 7, 3, true}, "GTSPD": {6, 7, 3, true}, "GTSOS": {6, 7, 3, true},
+	"GTRTL": {6, 7, 3, true}, "GTPNL": {6, 7, 3, true}, "GTNMR": {6, 7, 3, true}, "GTDIS": {6, 7, 3, true},
+	"GTDOG": {6, 7, 3, true}, "GTPFL": {6, 7, 3, true}, "GTIGL": {6, 7, 3, true},
+	"GTLBC": {-1, 5, 3, true}, // location by call: …,CallNumber,point,…
+	// events with the last known point: …,(point,Odo),SendTime,Count
+	"GTEPN": {-1, 4, 2, false}, "GTEPF": {-1, 4, 2, false}, "GTBTC": {-1, 4, 2, false},
+	// GTSTC's Reserved field is zero-length in the PDF's example but a real empty field on some
+	// firmware — the field-scan rescue catches the long shape.
+	"GTSTC": {-1, 4, 2, false},
+	// …,State|BatteryV|GeoActivity,(point,Odo),SendTime,Count
+	"GTSTT": {-1, 5, 2, false}, "GTBPL": {-1, 5, 2, false}, "GTSWG": {-1, 5, 2, false},
+	// tamper/light switch: …,ReportID,SwitchState,(point,Odo),SendTime,Count (traccar corpus)
+	"GTTSW": {-1, 6, 2, false}, "GTLSW": {-1, 6, 2, false},
+	// jamming, ignition (GL300VC/GL300W wire), temperature alarm — variable tails
+	"GTJDR": {-1, 4, -1, false}, "GTJDS": {-1, 5, -1, false},
+	"GTIGN": {-1, 5, -1, false}, "GTIGF": {-1, 5, -1, false},
+	"GTTEM": {-1, 6, -1, false}, // …,AlarmID,Temperature(°C),point,…
+}
+
+// modelSpec ties one Queclink model family's field layouts together. wide marks the GV200
+// conventions (12-wide GPS blocks with an append mask, tail starting with Mileage); the personal
+// trackers (GT500, GL300 family) use 11-wide blocks. blockExtra counts fixed fields after each
+// GPS block: the GL300 family repeats <Odo mileage> per block (visible in the PDF's two-point
+// GTFRI example and in Traccar's GL300W corpus lines), the others put mileage in the tail.
+type modelSpec struct {
+	device     types.DeviceType
+	wide       bool
+	blockExtra int
+	layouts    map[string]layout
+}
+
+var (
+	gv200Spec = modelSpec{types.DeviceType_QUECLINK_GV200, true, 0, gv200Layouts}
+	gt500Spec = modelSpec{types.DeviceType_QUECLINK_GT500, false, 0, gt500Layouts}
+	gl300Spec = modelSpec{types.DeviceType_QUECLINK_GL300, false, 1, gl300Layouts}
+)
+
 type point struct {
 	speed, course, altitude, lon, lat float32
 	satellites                        int32
@@ -111,11 +157,12 @@ func km(s string) int32 {
 }
 
 // parsePoint reads one GPS block at fields[i]: HDOP, speed, azimuth, altitude, lon, lat, UTC,
-// MCC, MNC, LAC, CellID (11 fields, GT500) plus for the GV200 an append mask whose bit0 adds a
-// satellites field and bit1 a trigger-type field. The width is returned even when the point is
-// unusable so the caller can keep walking the message.
-func parsePoint(fields []string, i int, gv200 bool) (point, int, error) {
-	width := 11
+// MCC, MNC, LAC, CellID (11 fields, GT500/GL300) plus for the GV200 an append mask whose bit0
+// adds a satellites field and bit1 a trigger-type field. extra counts the model's fixed fields
+// after each block (GL300: per-block odo). The width is returned even when the point is unusable
+// so the caller can keep walking the message.
+func parsePoint(fields []string, i int, gv200 bool, extra int) (point, int, error) {
+	width := 11 + extra
 	if gv200 {
 		width = 12
 	}
@@ -160,7 +207,7 @@ func parsePoint(fields []string, i int, gv200 bool) (point, int, error) {
 
 // parsePoints walks the Number GPS blocks starting at fields[start] (exactly one block when
 // numIdx < 0) and returns the usable points plus the index of the first field after the blocks.
-func parsePoints(header string, fields []string, numIdx, start int, gv200 bool) ([]point, int) {
+func parsePoints(header string, fields []string, numIdx, start int, gv200 bool, extra int) ([]point, int) {
 	n := 1
 	if numIdx >= 0 {
 		n = atoi(fields[numIdx])
@@ -168,7 +215,7 @@ func parsePoints(header string, fields []string, numIdx, start int, gv200 bool) 
 	var pts []point
 	i := start
 	for k := 0; k < n; k++ {
-		pt, width, err := parsePoint(fields, i, gv200)
+		pt, width, err := parsePoint(fields, i, gv200, extra)
 		if i+width > len(fields) {
 			logger.Sugar().Warnf("queclink %s: Number=%d but only %d GPS blocks fit in %d fields", header, n, k, len(fields))
 			break
@@ -198,14 +245,15 @@ func scanPoint(fields []string, gv200 bool) (point, bool) {
 		if !coordRe.MatchString(fields[i]) || !coordRe.MatchString(fields[i+1]) || len(fields[i+2]) != 14 {
 			continue
 		}
-		pt, _, err := parsePoint(fields, i-4, gv200)
+		pt, _, err := parsePoint(fields, i-4, gv200, 0)
 		return pt, err == nil
 	}
 	return point{}, false
 }
 
-// parseReport turns one +RESP/+BUFF line into zero or more records for the registered device
-// type, updating the connection's ignition/motion state, GSM level and (GT500) battery on the way.
+// parseReport turns one +RESP/+BUFF line into zero or more records, updating the connection's
+// ignition/motion state, GSM level and (personal trackers) battery on the way. The parsing
+// profile is the announced model when we hold its layouts, else the registered device type.
 func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatus {
 	header := fields[0]
 	colon := strings.IndexByte(header, ':')
@@ -213,34 +261,42 @@ func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatu
 		return nil
 	}
 	report := header[colon+1:]
-	gv200 := p.DeviceType == types.DeviceType_QUECLINK_GV200
-	if !gv200 && p.DeviceType != types.DeviceType_QUECLINK_GT500 {
+	spec := p.spec()
+	if spec == nil {
 		logger.Sugar().Warnf("queclink %s: device type %s is not a Queclink model, ignored", header, p.DeviceType)
 		return nil
 	}
+	gv200 := spec.wide
 
 	if (report == "GTSTT" || report == "GTINF") && len(fields) > 4 { // <State> at #4
 		p.applyState(fields[4])
 	}
-	if report == "GTINF" { // device information: no position, but GSM level and (GT500) battery/odometer
-		p.readInfo(fields, gv200)
+	if report == "GTINF" { // device information: no position, but GSM level and (GT500) battery
+		p.readInfo(fields, spec)
 		return nil
 	}
 
-	layouts := gt500Layouts
-	if gv200 {
-		layouts = gv200Layouts
-	}
-	l, known := layouts[report]
+	l, known := spec.layouts[report]
 	var pts []point
 	next := -1
+	scanned := false // position located by scanPoint: the field positions of the rest are unknown
 	if known {
 		if len(fields) <= l.start {
 			logger.Sugar().Warnf("queclink %s: only %d fields, ignored", header, len(fields))
 			return nil
 		}
-		pts, next = parsePoints(header, fields, l.numIdx, l.start, gv200)
-		if l.tail >= 0 && len(fields) != next+l.tail {
+		pts, next = parsePoints(header, fields, l.numIdx, l.start, gv200, spec.blockExtra)
+		switch {
+		// The layout produced nothing. Unless the device explicitly said "0 points", its fields
+		// are not where this layout expects them — a model we mis-guessed, or a gateway that
+		// reshapes reports (the tstGW leaves the Number field empty on every GTFRI). Locate the
+		// block instead of dropping the report; Traccar's decoder never trusts the Number field.
+		case len(pts) == 0 && !(p.layoutTrusted() && saysZeroPoints(fields, l.numIdx)):
+			if pt, ok := scanPoint(fields, gv200); ok {
+				logger.Sugar().Infof("queclink %s: %s does not match the %s layout; position located by field scan", p.Imei, header, modelName(p.versionPrefix))
+				pts, scanned = []point{pt}, true
+			}
+		case l.tail >= 0 && len(fields) != next+l.tail:
 			logger.Sugar().Warnf("queclink %s: %d fields, expected %d", header, len(fields), next+l.tail)
 		}
 	} else {
@@ -249,8 +305,8 @@ func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatu
 			p.ignore(header, len(fields))
 			return nil
 		}
-		logger.Sugar().Infof("queclink %s: %s is not in the %s layout table; position taken from a field scan", p.Imei, header, p.DeviceType)
-		pts = []point{pt}
+		logger.Sugar().Infof("queclink %s: %s is not in the %s layout table; position taken from a field scan", p.Imei, header, modelName(p.versionPrefix))
+		pts, scanned = []point{pt}, true
 	}
 
 	battery, odometer := p.battery, int32(0)
@@ -259,12 +315,18 @@ func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatu
 	if known && l.mileage {
 		switch {
 		case gv200:
-			if next < len(fields) {
+			if !scanned && next < len(fields) {
 				odometer = km(fields[next])
 			}
-		case l.tail < 0 || len(fields) == next+l.tail: // …,Odo,Batt%,SendTime,Count
+		case !scanned && (l.tail < 0 || len(fields) == next+l.tail): // …,Odo,Batt%,SendTime,Count
 			odometer = km(fields[len(fields)-4]) // device ODO (km); 0 unless AT+GTCFG ODO enable
-			if n, err := strconv.Atoi(fields[len(fields)-3]); err == nil {
+			if n, err := strconv.Atoi(fields[len(fields)-3]); err == nil && n >= 0 && n <= 100 {
+				battery = int32(n)
+				p.battery = battery
+			}
+		case scanned: // the tail stays anchored at the end even when the middle is reshaped
+			// (tstGW), but the odometer unit of such a shape is unverified — battery % only
+			if n, err := strconv.Atoi(fields[len(fields)-3]); err == nil && n >= 0 && n <= 100 {
 				battery = int32(n)
 				p.battery = battery
 			}
@@ -272,7 +334,7 @@ func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatu
 			logger.Sugar().Warnf("queclink %s: tail length mismatch, odometer/battery not read", header)
 		}
 	}
-	if gv200 {
+	if gv200 && !scanned {
 		switch report {
 		case "GTFRI", "GTAIS":
 			extVoltage = atof(fields[4]) / 1000 // <Analog Input VCC>: external power, mV
@@ -292,8 +354,19 @@ func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatu
 		case "GTIGL": // report type 0 = ignition on, 1 = ignition off (GV200 PDF §3.3.1; Traccar has this inverted)
 			p.setIgnition(reportType(fields, true) == 0)
 		}
-	} else if report == "GTNMR" { // motion sensor: 0 = motion → rest, 1 = rest → motion (GT500 PDF §3.3.1)
-		p.setIgnition(reportType(fields, false) == 1)
+	} else if !gv200 && !scanned {
+		switch report {
+		case "GTNMR": // motion sensor: 0 = motion → rest, 1 = rest → motion (GT500/GL300 PDFs §3.3.1)
+			p.setIgnition(reportType(fields, false) == 1)
+		case "GTIGN": // GL300VC/GL300W wired ignition
+			p.setIgnition(true)
+		case "GTIGF":
+			p.setIgnition(false)
+		case "GTIGL": // report type 0 = ignition on, 1 = ignition off (GL300 PDF §3.3.1)
+			p.setIgnition(reportType(fields, false) == 0)
+		case "GTTEM":
+			temperature = atof(fields[5]) // <Temperature> °C at #5 (GL300 PDF §3.3.4)
+		}
 	}
 
 	out := make([]*types.DeviceStatus, 0, len(pts))
@@ -309,21 +382,33 @@ func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatu
 	return out
 }
 
-// readInfo caches what a GTINF carries for later position records: <CSQ RSSI> at #6 on both
-// models; on the GT500 also <battery percentage>, the 7th field from the end (the PDF's table and
-// its example disagree on the reserved fields before it; the tail after it is fixed).
-func (p *Protocol) readInfo(fields []string, gv200 bool) {
+// readInfo caches what a GTINF carries for later position records: <CSQ RSSI> at #6 on every
+// model; on the personal trackers (GT500, GL300 family) also <battery percentage>, the 7th field
+// from the end (the PDFs' tables and examples disagree on the reserved fields before it, but the
+// tail after it is fixed — …,Batt%,FlashType,Temperature,LockState,Reserved,SendTime,Count on
+// the GL300, verified against Traccar corpus lines). The GV200 has no battery field here.
+func (p *Protocol) readInfo(fields []string, spec *modelSpec) {
 	if len(fields) > 6 {
 		if lvl, ok := csqLevel(fields[6]); ok {
 			p.gsm, p.gsmSeen = lvl, true
 		}
 	}
-	if gv200 || len(fields) < 12 {
+	if spec.wide || len(fields) < 12 {
 		return
 	}
 	if n, err := strconv.Atoi(fields[len(fields)-7]); err == nil && n >= 0 && n <= 100 {
 		p.battery = int32(n)
 	}
+}
+
+// saysZeroPoints reports whether the device explicitly announced zero GPS points. An empty field
+// is not zero: it means the device did not say, which is why it is worth going and looking.
+func saysZeroPoints(fields []string, numIdx int) bool {
+	if numIdx < 0 || numIdx >= len(fields) || fields[numIdx] == "" {
+		return false
+	}
+	n, err := strconv.Atoi(fields[numIdx])
+	return err == nil && n == 0
 }
 
 // eriTemperature returns the first 1-wire temperature sensor reading in a GTERI tail, or 0.
@@ -469,21 +554,26 @@ func (p *Protocol) ignition(speed float32) bool {
 func (p *Protocol) setIgnition(on bool) { p.lastIgnition = &on }
 
 // applyState reads the GTSTT/GTINF <State>: 11/12 ignition off (rest/motion), 21/22 ignition on,
-// 16/1A towing. 41/42 = motion sensor rest/motion with no ignition signal: on the GT500 that is the
-// movement signal we use; on a GV200 it means the ignition line is not wired, so the speed rule
-// stays. 99 = the device switched motion detection off → forget the state, back to the speed rule.
+// 16/1A towing. 41/42 = motion sensor rest/motion with no ignition signal: on the personal
+// trackers (GT500, GL300 family) that is the movement signal we use; on a GV200 it means the
+// ignition line is not wired, so the speed rule stays. 99 = the device switched motion detection
+// off → forget the state, back to the speed rule.
 func (p *Protocol) applyState(state string) {
+	personal := false
+	if s := p.spec(); s != nil {
+		personal = !s.wide
+	}
 	switch state {
 	case "11", "12":
 		p.setIgnition(false)
 	case "21", "22":
 		p.setIgnition(true)
 	case "41", "42":
-		if p.DeviceType == types.DeviceType_QUECLINK_GT500 {
+		if personal {
 			p.setIgnition(state == "42")
 		}
 	case "99":
-		if p.DeviceType == types.DeviceType_QUECLINK_GT500 {
+		if personal {
 			p.lastIgnition = nil
 		}
 	}

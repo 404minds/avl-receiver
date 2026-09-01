@@ -4,7 +4,7 @@
 //
 // Usage:
 //
-//	go run ./docs/scripts/queclink-verify [-type gv200|gt500|auto] [file...]   2>/dev/null
+//	go run ./docs/scripts/queclink-verify [-type gv200|gt500|gl300|auto] [file...]   2>/dev/null
 //	cat lines.txt | go run ./docs/scripts/queclink-verify 2>/dev/null
 //
 // Capture lines from a live device on the server (ASCII protocol, so tcpdump is enough):
@@ -43,7 +43,7 @@ func (s *memStore) GetCloseChan() chan bool                     { return nil }
 func (s *memStore) GetCloseResponseChan() chan bool             { return nil }
 
 func main() {
-	kind := flag.String("type", "auto", "device type: gv200, gt500, or auto (from the protocol version prefix)")
+	kind := flag.String("type", "auto", "registered device type: gv200, gt500, gl300, or auto (from the protocol version prefix)")
 	flag.Parse()
 
 	lines, err := readLines(flag.Args())
@@ -145,17 +145,25 @@ func alarms(v *types.VehicleStatus) []string {
 	return out
 }
 
-// deviceType honours -type, else reads the model from the protocol version prefix
-// (04/35 = GV200, 07 = GT500) the way the receiver logs it.
+// deviceType honours -type, else reads the model from the protocol version prefix (04/35 =
+// GV200, 07 = GT500, 1A/30/28/2C = GL300 family). This only simulates the type registered on
+// the platform: since the announced prefix wins, parsing follows the wire either way.
 func deviceType(kind, first string) types.DeviceType {
 	switch strings.ToLower(kind) {
 	case "gv200":
 		return types.DeviceType_QUECLINK_GV200
 	case "gt500":
 		return types.DeviceType_QUECLINK_GT500
+	case "gl300":
+		return types.DeviceType_QUECLINK_GL300
 	}
-	if f := strings.Split(first, ","); len(f) > 1 && len(f[1]) >= 2 && f[1][:2] == "07" {
-		return types.DeviceType_QUECLINK_GT500
+	if f := strings.Split(first, ","); len(f) > 1 && len(f[1]) >= 2 {
+		switch f[1][:2] {
+		case "07":
+			return types.DeviceType_QUECLINK_GT500
+		case "1A", "30", "28", "2C":
+			return types.DeviceType_QUECLINK_GL300
+		}
 	}
 	return types.DeviceType_QUECLINK_GV200
 }

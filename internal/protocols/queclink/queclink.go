@@ -1,6 +1,7 @@
-// Package queclink receives Queclink @Track ASCII reports (GV200 vehicle tracker, GT500
-// personal tracker): every position-carrying report, alarms, heartbeat replies, +BUFF replays and
-// AT commands with their +ACK. HEX mode, SMS and UDP are out of scope.
+// Package queclink receives Queclink @Track ASCII reports: every position-carrying report,
+// alarms, heartbeat replies, +BUFF replays and AT commands with their +ACK. The GV200 (vehicle
+// tracker), GT500 and GL300/GL300VC/GL300W (personal trackers) have full field layouts; every
+// other @Track model is parsed by field scan. HEX mode, SMS and UDP are out of scope.
 package queclink
 
 import (
@@ -20,13 +21,84 @@ import (
 
 var logger = configuredLogger.Logger
 
-// modelByPrefix maps the first two characters of the protocol-version field to a model.
-// Informational only: dispatch is on the DeviceType the operator registered, because the prefix
-// drifts with firmware (GV200 units ship as both 04 and 35).
-var modelByPrefix = map[string]types.DeviceType{
-	"04": types.DeviceType_QUECLINK_GV200,
-	"35": types.DeviceType_QUECLINK_GV200,
-	"07": types.DeviceType_QUECLINK_GT500,
+// specByPrefix picks the parsing profile from the model prefix of the protocol-version field.
+// What the device announces on the wire wins over what the operator registered: a mis-registered
+// device would otherwise be parsed with the wrong field layout (both live gateway units announce
+// GL300VC while being registered as GV200). Prefixes come from the model PDFs, cross-checked
+// against Traccar's Gl200TextProtocolDecoder PROTOCOL_MODELS (Apache-2.0, © Anton Tananaev).
+var specByPrefix = map[string]*modelSpec{
+	"04": &gv200Spec, "35": &gv200Spec, // GV200 (prefix drifts with firmware)
+	"07": &gt500Spec, // GT500
+	"1A": &gl300Spec, "30": &gl300Spec, // GL300
+	"28": &gl300Spec, // GL300VC
+	"2C": &gl300Spec, // GL300W
+}
+
+// nameByPrefix names the Queclink models we hold no field layouts for — logging only; their
+// reports are parsed by scanPoint. From Traccar's PROTOCOL_MODELS (Apache-2.0, © Anton Tananaev).
+var nameByPrefix = map[string]string{
+	"02": "GL200", "06": "GV300", "08": "GMT100", "09": "GV50P", "0F": "GV55",
+	"10": "GV55LITE", "11": "GL500", "1F": "GV500", "21": "GL200", "25": "GV300",
+	"27": "GV300W", "2D": "GV500VC", "2F": "GV55", "3F": "GMT100", "40": "GL500",
+	"41": "GV75W", "42": "GT501", "44": "GL530", "45": "GB100", "4F": "GV56",
+	"50": "GV55W", "52": "GL50", "55": "GL50B", "5E": "GV500MAP", "6E": "GV310LAU",
+	"BD": "CV200", "C2": "GV600M", "C3": "GL320M", "DC": "GV600MG", "DE": "GL500M",
+	"DF": "CV100LG", "F1": "GV350M", "F8": "GV800W", "FC": "GV600W",
+	"802004": "GV58LAU", "802005": "GV355CEU", "80201E": "GV30CEU",
+}
+
+// prefixOf extracts the model prefix from a protocol-version field: newer models carry a 6-char
+// model code (10-char version), everything else the first two characters.
+func prefixOf(version string) string {
+	if len(version) >= 6 {
+		if _, ok := nameByPrefix[version[:6]]; ok {
+			return version[:6]
+		}
+	}
+	if len(version) >= 2 {
+		return version[:2]
+	}
+	return ""
+}
+
+// spec is the parsing profile of this connection: the announced model when we hold its field
+// layouts, else the DeviceType the operator registered, else nil (not a Queclink DeviceType).
+func (p *Protocol) spec() *modelSpec {
+	if s, ok := specByPrefix[p.versionPrefix]; ok {
+		return s
+	}
+	switch p.DeviceType {
+	case types.DeviceType_QUECLINK_GV200:
+		return &gv200Spec
+	case types.DeviceType_QUECLINK_GT500:
+		return &gt500Spec
+	case types.DeviceType_QUECLINK_GL300:
+		return &gl300Spec
+	}
+	return nil
+}
+
+// layoutTrusted reports whether this connection's field positions are the ones our layout tables
+// describe: the device announced a model we hold layouts for, or announced nothing and we fall
+// back to the registered type. A known-but-unlayouted model (GT501, GV500, …) is not trusted —
+// its Number field is not necessarily where our tables expect it.
+func (p *Protocol) layoutTrusted() bool {
+	if p.versionPrefix == "" {
+		return true
+	}
+	_, ok := specByPrefix[p.versionPrefix]
+	return ok
+}
+
+// modelName names a prefix for logs.
+func modelName(prefix string) string {
+	if s, ok := specByPrefix[prefix]; ok {
+		return s.device.String()
+	}
+	if n, ok := nameByPrefix[prefix]; ok {
+		return n + " (no field layouts — positions are located by field scan)"
+	}
+	return "unknown Queclink model"
 }
 
 // sendGenericSack: reply "+SACK:<count>$" to every report. Only flip when devices are provisioned
@@ -78,7 +150,7 @@ func (p *Protocol) SendCommandToDevice(writer io.Writer, command string) error {
 	cmd := strings.TrimSpace(command)
 	switch cmd {
 	case "ignition_off", "ignition_on":
-		if p.DeviceType != types.DeviceType_QUECLINK_GV200 {
+		if s := p.spec(); s == nil || s.device != types.DeviceType_QUECLINK_GV200 {
 			return fmt.Errorf("queclink: %s has no controllable output for %q", p.DeviceType, cmd)
 		}
 		level := immobiliserActive
@@ -134,16 +206,11 @@ func (p *Protocol) Login(reader *bufio.Reader) ([]byte, int, error) {
 		return nil, 0, fmt.Errorf("%w: queclink header %q", errs.ErrBadPacket, peeked)
 	}
 	p.Imei = fields[2]
-	if len(fields[1]) >= 2 {
-		p.versionPrefix = fields[1][:2]
-	}
-	// An unknown prefix is not fatal — dispatch is on the registered DeviceType — but it must
-	// not be logged as a model: a map miss yields the zero DeviceType (TELTONIKA), which reads
-	// like a real answer. A GL300VC (prefix 28) connecting as a GV200 looked exactly like that.
-	if model, ok := modelByPrefix[p.versionPrefix]; ok {
-		logger.Sugar().Infof("queclink: imei %s, protocol version %s (prefix %s => %s)", p.Imei, fields[1], p.versionPrefix, model)
+	p.versionPrefix = prefixOf(fields[1])
+	if _, ok := specByPrefix[p.versionPrefix]; ok {
+		logger.Sugar().Infof("queclink: imei %s, protocol version %s (prefix %s => %s)", p.Imei, fields[1], p.versionPrefix, modelName(p.versionPrefix))
 	} else {
-		logger.Sugar().Warnf("queclink: imei %s, protocol version %s: prefix %q is neither GV200 (04/35) nor GT500 (07) — this is another Queclink model; parsing follows the device type registered on the platform, so tail fields (odometer, battery) may be wrong", p.Imei, fields[1], p.versionPrefix)
+		logger.Sugar().Warnf("queclink: imei %s, protocol version %s: prefix %q => %s; we hold no field layouts for it, so positions are recovered by field scan and tail fields (odometer, battery) are not read", p.Imei, fields[1], p.versionPrefix, modelName(p.versionPrefix))
 	}
 	return []byte{}, 0, nil
 }
@@ -169,10 +236,10 @@ func (p *Protocol) ConsumeStream(reader *bufio.Reader, writer io.Writer, st stor
 		}
 	}()
 	if p.versionPrefix != "" {
-		if want, ok := modelByPrefix[p.versionPrefix]; !ok {
-			logger.Sugar().Warnf("queclink %s: unknown version prefix %q, parsing as %s", p.Imei, p.versionPrefix, p.DeviceType)
-		} else if want != p.DeviceType {
-			logger.Sugar().Warnf("queclink %s: version prefix %q suggests %s but device is registered as %s; using the registered type", p.Imei, p.versionPrefix, want, p.DeviceType)
+		if want, ok := specByPrefix[p.versionPrefix]; !ok {
+			logger.Sugar().Warnf("queclink %s: no field layouts for prefix %q (%s), positions recovered by field scan", p.Imei, p.versionPrefix, modelName(p.versionPrefix))
+		} else if want.device != p.DeviceType {
+			logger.Sugar().Warnf("queclink %s: version prefix %q says %s but the device is registered as %s; parsing follows the wire", p.Imei, p.versionPrefix, want.device, p.DeviceType)
 		}
 	}
 	for {
