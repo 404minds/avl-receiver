@@ -325,10 +325,14 @@ func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatu
 				p.battery = battery
 			}
 		case scanned: // the tail stays anchored at the end even when the middle is reshaped
-			// (tstGW), but the odometer unit of such a shape is unverified — battery % only
+			// (tstGW). The odometer position is trustworthy but its unit is not, so it is only
+			// read when the sender states the unit itself — see selfDescribedOdometerKm.
 			if n, err := strconv.Atoi(fields[len(fields)-3]); err == nil && n >= 0 && n <= 100 {
 				battery = int32(n)
 				p.battery = battery
+			}
+			if v, ok := selfDescribedOdometerKm(fields); ok {
+				odometer = v
 			}
 		default:
 			logger.Sugar().Warnf("queclink %s: tail length mismatch, odometer/battery not read", header)
@@ -399,6 +403,23 @@ func (p *Protocol) readInfo(fields []string, spec *modelSpec) {
 	if n, err := strconv.Atoi(fields[len(fields)-7]); err == nil && n >= 0 && n <= 100 {
 		p.battery = int32(n)
 	}
+}
+
+var gatewayOdometerRe = regexp.MustCompile(`\b(\d+)m\|`)
+
+func selfDescribedOdometerKm(fields []string) (int32, bool) {
+	if len(fields) < 4 {
+		return 0, false
+	}
+	m := gatewayOdometerRe.FindStringSubmatch(fields[3])
+	if m == nil {
+		return 0, false
+	}
+	metres, err := strconv.ParseFloat(m[1], 64)
+	if err != nil || metres < 0 || metres/1000 > math.MaxInt32 {
+		return 0, false
+	}
+	return int32(metres / 1000), true
 }
 
 // saysZeroPoints reports whether the device explicitly announced zero GPS points. An empty field

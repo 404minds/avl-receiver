@@ -1526,12 +1526,12 @@ func TestGatewayLines(t *testing.T) { // live tstGW capture: prefix 28 (GL300VC)
 	recs := st.drain()
 	require.Len(t, recs, 3)
 	// GTFRI: Number field empty and two extra mid-fields → located by scan; battery still read
-	// from the end-anchored tail, odometer skipped (the gateway's unit is unverified).
+	// from the end-anchored tail, odometer from the gateway's own "11634m" (metres → 11 km).
 	assert.InDelta(t, 27.202109, recs[0].Position.Latitude, 1e-5)
 	assert.InDelta(t, 78.021396, recs[0].Position.Longitude, 1e-5)
 	assert.Equal(t, utc(2026, time.September, 1, 8, 8, 0), recs[0].Timestamp.AsTime())
 	assert.Equal(t, int32(100), recs[0].BatteryLevel)
-	assert.Equal(t, int32(0), recs[0].Odometer)
+	assert.Equal(t, int32(11), recs[0].Odometer)
 	// GTSTC: one field longer than the doc's example → scan; GTBTC: doc shape, tabled parse.
 	assert.InDelta(t, -33.347904, recs[1].Position.Latitude, 1e-5)
 	assert.Equal(t, utc(2026, time.September, 1, 9, 5, 10), recs[1].Timestamp.AsTime())
@@ -1586,4 +1586,29 @@ func TestContractOnGL300Fixtures(t *testing.T) {
 			assert.NotNil(t, r.GetQueclinkPacket(), line)
 		}
 	}
+}
+
+func TestSelfDescribedOdometer(t *testing.T) {
+	// The gateway writes the odometer with its unit in the device-name field, alongside an
+	// altitude spelled the same way ("A141m") and a speed ("0kph"); the bare copy in the tail
+	// would be kilometres by the specification, which is why only the labelled one is read.
+	for _, tc := range []struct {
+		name string
+		want int32
+		ok   bool
+	}{
+		{" tstGW v1.0.43.11 S25 B100% C2|G V11 H1 A141m D0 0kph 11634m|", 11, true},
+		{" tstGW v1.0.43.11 S24 B100% C2|G V11 H0.7 A25m D0 0kph 2561810m|", 2561, true},
+		{" tstGW v1.0.43.11 S26 B100% C2|OG |", 0, false}, // buffered: no fix, no odometer
+		{"GL300", 0, false}, // a plain device name states nothing
+		{"", 0, false},
+	} {
+		got, ok := selfDescribedOdometerKm([]string{"+RESP:GTFRI", "280518", imei, tc.name})
+		assert.Equal(t, tc.ok, ok, tc.name)
+		assert.Equal(t, tc.want, got, tc.name)
+	}
+	// A spec-conformant report has no such string, so its tail odometer is untouched.
+	recs := parseLine(t, gl300, gl3Fri4)
+	require.NotEmpty(t, recs)
+	assert.Equal(t, int32(25), recs[0].Odometer) // 25.2 km from the layout, not metres
 }
