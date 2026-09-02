@@ -122,9 +122,26 @@ The consumer dials the receiver as `avl-receiver:15000` — that hostname must r
 - GT500 has no ignition: its motion sensor (`GTSTT 41/42`, `GTNMR 0/1`) is the moving/stopped signal, GPS speed > 3 km/h only
   until the first state arrives (or after state `99`); `ignition_on/off` events are suppressed and `idling` is mapped to
   `moving` in the consumer for `QUECLINK_GT500`.
-- GT500 odometer is not mapped (consumer computes distance); GT500 `GTBPL` (low battery, volts) and `GTMSA` (fall) produce no event.
+- GT500 `GTBPL` (low battery, volts) and `GTMSA` (fall) produce no event.
 - Device-side geofence flags are stored but not turned into platform geofence events.
 - GTERI: the **first 1-wire temperature sensor** is stored as `temperature` (°C); further sensors, the digital fuel-sensor field
   (no documented unit), cell IDs, Wi-Fi MAC/RSSI, GSM level, analog inputs and DI/DO bitmasks survive only in `raw_data`.
   To get temperatures the GV200 must be provisioned with ERI mask bit1 (`AT+GTFRI … ,00000002,`) and an AC100 on the UART.
 - Records queued at the instant a socket closes are now flushed (store drain); idle sockets are dropped after 30 min without data.
+
+## 9. The client's tstGW units (platform model "GL300", protocol id 280518)
+
+Source of truth: the client's `Tracker data.xlsx` (2021 sample + field map) — copied into
+`internal/protocols/queclink/testdata/` with a production capture; `TestClientSampleAndProductionLines` replays both.
+
+- Prefix `28` is Traccar's GL300VC, but these units send the **GT500** report shapes (`GTFRI/GTSOS`: …,MAC,RSSI,Odo,Batt%,SendTime,Count;
+  `GTSTC/GTBTC`: …,Reserved,MAC,RSSI,SendTime,Count) with the `Number` field blank, and a **GV300W**-shaped `GTDIS`
+  (…,Reserved,ReportID/Type,Number,point,Reserved,Mileage,SendTime,Count). `specByPrefix["28"]` therefore points at `gwSpec`.
+- `<Device name>` carries the status: `<method> S<gsm 0-31> V<sats> B<batt%> C<charging> H<accuracy> v<fw>` (2021 firmware) or
+  ` tstGW v<fw> S<gsm> B<batt>% C<n>|<method> V<sats> H<acc> A<alt>m D<heading> <speed>kph <odo>m|` (2026). S/V/B are mapped to
+  `gsm_network`, `satellites`, `battery_level`; method (G/B/W/D, `O` prefix = old fix) and charging state stay in `raw_data`.
+- Odometer is in **metres** (the 2026 name says `11634m`; the 2021 sample's deltas equal the GPS distance in metres) → stored as km.
+- Every report arrives on its own TCP connection, so nothing cached per connection (motion state, battery, GSM) carries over.
+- `GTDIS` ReportID/Type per the client: 90 check-out (bottom button), 91 check-in (top button), 93 welfare-timer timeout, 51 fall alert;
+  production also sends 71 (undocumented). All raise `inputs_triggering` only — mapping them to platform events is a product decision.
+- Send time in these reports is the client's server-local time, not UTC; the record timestamp is the GPS UTC field.

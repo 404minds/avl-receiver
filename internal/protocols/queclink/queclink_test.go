@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -1393,10 +1395,18 @@ const (
 	gwFri = "+RESP:GTFRI,280518,863922034601352, tstGW v1.0.43.11 S25 B100% C2|G V11 H1 A141m D0 0kph 11634m|,,,,1.1,0,0,,78.021396,27.202109,20260901080800,,,,,,,11634,100,20260901180828,0004$"
 	gwStc = "+RESP:GTSTC,280518,863922038155132, tstGW v1.0.43.11 S26 B100% C2|G V10 H0.8 A15m D0 1kph 2561810m|,,0.8,0,0,,151.501029,-33.347904,20260901090510,,,,,,,,20260901190955,000B$"
 	gwBtc = "+RESP:GTBTC,280518,863922038155132, tstGW v1.0.43.11 S26 B100% C2|G V10 H0.8 A15m D0 1kph 2561810m|,0.8,0,0,,151.501029,-33.347904,20260901090515,,,,,,,,20260901190955,000C$"
+	gwDis = "+RESP:GTDIS,280518,863922034601352, tstGW v1.0.43.11 S25 B100% C2|G V13 H1.1 A109m D70 2kph 11634m|,,71,,1.1,0,70,,78.021260,27.202053,20260901183359,,,,,,11634,20260902043610,0021$"
+
+	// "cli" lines are the client's 2021 sample ("Tracker data.xlsx"), older firmware of the same units.
+	cliFri = "+RESP:GTFRI,280518,863922032566912,G S21 V10 B100 C0 H14.6 v1.0.29.3,,,,14.6,21,250,,151.196116,-33.793433,20210930033650,,,,,,,3711484,100,20210930133655,0023$"
+	cliSos = "+RESP:GTSOS,280518,863922032566912,G S22 V8 B100 C0 H20.2 v1.0.29.3,,,,19.9,1,0,,151.198821,-33.791755,20210930033245,,,,,,,3711160,,20210930133257,001A$"
+	cliDis = "+BUFF:GTDIS,280518,863921033970289,OB S17 V0 B99 C0 H0 v1.0.29.3,,91,,0,0,0,,151.190258,-33.785535,20210930030952,,,,,,0,20210930130957,001B$"
+	cliStc = "+RESP:GTSTC,280518,863921033970289,B S27 V0 B99 C0 H1 v1.0.29.3,,1,0,0,,151.190258,-33.785535,20210930030515,,,,,,,,20210930130523,0019$"
+	cliBtc = "+RESP:GTBTC,280518,863922032566235,B S24 V0 B40 C1 H1 v1.0.29.3,1,0,0,,151.190367,-33.785525,20210930041319,,,,,,,,20210930141330,0003$"
 )
 
 var gl300Fixtures = []string{gl3Fri, gl3Igl, gl3Btc, gl3Ign, gl3Igf, gl3Fri4, gl3Fri99, gl3FriW,
-	gl3Stt, gl3SttVC, gl3RtlVC, gl3Bpl, gl3Tem, gl3Tsw, gl3Inf, gwFri, gwStc, gwBtc}
+	gl3Stt, gl3SttVC, gl3RtlVC, gl3Bpl, gl3Tem, gl3Tsw, gl3Inf, gwFri, gwStc, gwBtc, gwDis, cliFri, cliSos, cliDis, cliStc, cliBtc}
 
 // parseWith parses one line on a connection whose device announced the given version prefix.
 func parseWith(t *testing.T, dt types.DeviceType, prefix, line string) []*types.DeviceStatus {
@@ -1515,8 +1525,8 @@ func TestPrefixWinsOverRegistration(t *testing.T) {
 	assert.Equal(t, int32(2000), recs[0].Odometer) // GV200 tail: Mileage right after the block
 }
 
-func TestGatewayLines(t *testing.T) { // live tstGW capture: prefix 28 (GL300VC), reshaped GTFRI/GTSTC
-	r := bufio.NewReader(strings.NewReader(gwFri + gwStc + gwBtc))
+func TestGatewayLines(t *testing.T) { // live tstGW capture: prefix 28 → gwSpec (GT500 layouts + GV300W GTDIS)
+	r := bufio.NewReader(strings.NewReader(gwFri + gwStc + gwBtc + gwDis))
 	p := &Protocol{}
 	_, _, err := p.Login(r)
 	require.NoError(t, err)
@@ -1524,19 +1534,33 @@ func TestGatewayLines(t *testing.T) { // live tstGW capture: prefix 28 (GL300VC)
 	st := newFakeStore()
 	require.ErrorIs(t, p.ConsumeStream(r, io.Discard, st), io.EOF)
 	recs := st.drain()
-	require.Len(t, recs, 3)
-	// GTFRI: Number field empty and two extra mid-fields → located by scan; battery still read
-	// from the end-anchored tail, odometer from the gateway's own "11634m" (metres → 11 km).
+	require.Len(t, recs, 4)
+	// GTFRI: blank Number = one block at the GT500 position; tail Odo (metres → 11 km), Batt%;
+	// satellites and GSM level from the device-name status ("S25 … V11").
 	assert.InDelta(t, 27.202109, recs[0].Position.Latitude, 1e-5)
 	assert.InDelta(t, 78.021396, recs[0].Position.Longitude, 1e-5)
 	assert.Equal(t, utc(2026, time.September, 1, 8, 8, 0), recs[0].Timestamp.AsTime())
 	assert.Equal(t, int32(100), recs[0].BatteryLevel)
 	assert.Equal(t, int32(11), recs[0].Odometer)
-	// GTSTC: one field longer than the doc's example → scan; GTBTC: doc shape, tabled parse.
+	assert.Equal(t, int32(11), recs[0].Position.Satellites)
+	assert.Equal(t, int32(5), recs[0].GsmNetwork)
+	// GTSTC / GTBTC: GT500 event shape (Reserved,MAC,RSSI,SendTime,Count tail); no battery field,
+	// the name's "B100%" fills it.
 	assert.InDelta(t, -33.347904, recs[1].Position.Latitude, 1e-5)
 	assert.Equal(t, utc(2026, time.September, 1, 9, 5, 10), recs[1].Timestamp.AsTime())
+	assert.Equal(t, int32(100), recs[1].BatteryLevel)
+	assert.Equal(t, int32(10), recs[1].Position.Satellites)
 	assert.InDelta(t, -33.347904, recs[2].Position.Latitude, 1e-5)
 	assert.Equal(t, utc(2026, time.September, 1, 9, 5, 15), recs[2].Timestamp.AsTime())
+	assert.Equal(t, int32(100), recs[2].BatteryLevel)
+	// GTDIS: GV300W shape; the tail Mileage (11634) must not be mistaken for a battery, and the
+	// odometer is left to GTFRI.
+	assert.InDelta(t, 27.202053, recs[3].Position.Latitude, 1e-5)
+	assert.Equal(t, float32(70), recs[3].Position.Course)
+	assert.True(t, recs[3].VehicleStatus.InputsTriggering)
+	assert.Equal(t, int32(100), recs[3].BatteryLevel)
+	assert.Equal(t, int32(0), recs[3].Odometer)
+	assert.Equal(t, int32(13), recs[3].Position.Satellites)
 }
 
 func TestPrefixOf(t *testing.T) {
@@ -1588,27 +1612,126 @@ func TestContractOnGL300Fixtures(t *testing.T) {
 	}
 }
 
-func TestSelfDescribedOdometer(t *testing.T) {
-	// The gateway writes the odometer with its unit in the device-name field, alongside an
-	// altitude spelled the same way ("A141m") and a speed ("0kph"); the bare copy in the tail
-	// would be kilometres by the specification, which is why only the labelled one is read.
+func TestGatewayNameStatus(t *testing.T) {
+	// Both firmware generations pack the status into <Device name>; only S/V/B are mapped.
 	for _, tc := range []struct {
-		name string
-		want int32
-		ok   bool
+		name            string
+		gsm, batt, sats int32
 	}{
-		{" tstGW v1.0.43.11 S25 B100% C2|G V11 H1 A141m D0 0kph 11634m|", 11, true},
-		{" tstGW v1.0.43.11 S24 B100% C2|G V11 H0.7 A25m D0 0kph 2561810m|", 2561, true},
-		{" tstGW v1.0.43.11 S26 B100% C2|OG |", 0, false}, // buffered: no fix, no odometer
-		{"GL300", 0, false}, // a plain device name states nothing
-		{"", 0, false},
+		{" tstGW v1.0.43.11 S25 B100% C2|G V11 H1 A141m D0 0kph 11634m|", 5, 100, 11},
+		{" tstGW v1.0.43.11 S26 B100% C2|OG |", 5, 100, -1}, // buffered with an old fix: no satellite count
+		{"B S30 V0 B100 C1 H1 v1.0.29.3", 5, 100, 0},        // 2021 firmware, Bluetooth fix
+		{"OB S17 V0 B99 C0 H0 v1.0.29.3", 3, 99, 0},         // the method letters never match as B<n>
+		{"G S15 V11 B12 C0 H10.4 v1.0.29.2", 3, 12, 11},
 	} {
-		got, ok := selfDescribedOdometerKm([]string{"+RESP:GTFRI", "280518", imei, tc.name})
-		assert.Equal(t, tc.ok, ok, tc.name)
-		assert.Equal(t, tc.want, got, tc.name)
+		p := &Protocol{}
+		assert.Equal(t, tc.sats, p.readNameStatus(tc.name), tc.name)
+		assert.Equal(t, tc.gsm, p.gsmLevel(), tc.name)
+		assert.Equal(t, tc.batt, p.battery, tc.name)
 	}
-	// A spec-conformant report has no such string, so its tail odometer is untouched.
-	recs := parseLine(t, gl300, gl3Fri4)
+	p := &Protocol{}
+	assert.Equal(t, int32(-1), p.readNameStatus("GL300")) // a plain device name states nothing
+	assert.Equal(t, int32(-1), p.gsmLevel())
+	assert.Equal(t, int32(0), p.battery)
+	// Only the gateway spec reads the name: a GT500 whose name happens to look like it is untouched.
+	recs := parseLine(t, gt500, setField(f1, 3, "S30 V9 B55"))
+	require.Len(t, recs, 1)
+	assert.Equal(t, int32(80), recs[0].BatteryLevel)
+	assert.Equal(t, int32(0), recs[0].Position.Satellites)
+	assert.Equal(t, int32(-1), recs[0].GsmNetwork)
+}
+
+func TestGatewayOdometerAndBattery(t *testing.T) {
+	// GTFRI: GT500 tail, odometer in metres → km, battery from the tail; V5 → satellites.
+	recs := parseWith(t, gl300, "28", cliFri)
+	require.Len(t, recs, 1)
+	assert.Equal(t, int32(3711), recs[0].Odometer) // 3711484 m
+	assert.Equal(t, int32(100), recs[0].BatteryLevel)
+	assert.Equal(t, int32(10), recs[0].Position.Satellites)
+	assert.InDelta(t, 21, *recs[0].Position.Speed, 1e-5) // #7 is HDOP (14.6), #8 speed, #9 course
+	assert.Equal(t, float32(250), recs[0].Position.Course)
+	assert.True(t, *recs[0].VehicleStatus.Ignition) // moving: speed rule, no motion-sensor report yet
+	// GTSOS: same shape with the tail battery empty → the name's B100 stands in.
+	recs = parseWith(t, gl300, "28", cliSos)
+	require.Len(t, recs, 1)
+	assert.True(t, recs[0].VehicleStatus.SosButtonPressed)
+	assert.Equal(t, int32(100), recs[0].BatteryLevel)
+	assert.Equal(t, int32(3711), recs[0].Odometer)
+	// GTDIS with Mileage 0: previously read as battery 0 by the end-anchored scan path.
+	recs = parseWith(t, gl300, "28", cliDis)
+	require.Len(t, recs, 1)
+	assert.True(t, recs[0].VehicleStatus.InputsTriggering)
+	assert.Equal(t, int32(99), recs[0].BatteryLevel)
+	assert.Equal(t, int32(0), recs[0].Odometer)
+	assert.InDelta(t, -33.785535, recs[0].Position.Latitude, 1e-5)
+	assert.Equal(t, utc(2021, time.September, 30, 3, 9, 52), recs[0].Timestamp.AsTime())
+	// GTSTC/GTBTC: battery 99 / 40 from the name (no battery field in these reports).
+	assert.Equal(t, int32(99), parseWith(t, gl300, "28", cliStc)[0].BatteryLevel)
+	assert.Equal(t, int32(40), parseWith(t, gl300, "28", cliBtc)[0].BatteryLevel)
+	// The spec-conformant GL300 layouts are untouched: kilometres stay kilometres.
+	recs = parseLine(t, gl300, gl3Fri4)
 	require.NotEmpty(t, recs)
-	assert.Equal(t, int32(25), recs[0].Odometer) // 25.2 km from the layout, not metres
+	assert.Equal(t, int32(25), recs[0].Odometer)
+	// And a real GL300VC line on prefix 28 still yields its position (block at the same index).
+	recs = parseWith(t, gl300, "28", gl3RtlVC)
+	require.Len(t, recs, 1)
+	assert.InDelta(t, 39.832501, recs[0].Position.Latitude, 1e-5)
+}
+
+// TestClientSampleAndProductionLines replays the client's 2021 sample and every production line
+// of 2026-09-01/02 (testdata/) and checks each record against the client's own field map
+// ("Tracker data.xlsx"): exactly one record per line; position, speed and course from the
+// fields the map names; battery, satellites and GSM level from the device-name status;
+// odometer = tail metres / 1000 on GTFRI/GTSOS and unset elsewhere; GTDIS → inputs_triggering,
+// GTSOS → SOS. GTFRI/GTSOS/GTDIS have the block at #7, GTSTC at #5, GTBTC at #4.
+func TestClientSampleAndProductionLines(t *testing.T) {
+	statusRe := regexp.MustCompile(`\b([SVB])(\d+)\b`)
+	for file, wantLines := range map[string]int{"testdata/client-tracker-data-2021.txt": 80, "testdata/bobcat-2026-09-01.txt": 47} {
+		data, err := os.ReadFile(file)
+		require.NoError(t, err)
+		n := 0
+		for _, line := range strings.Split(string(data), "\n") {
+			if line = strings.TrimSpace(line); line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			n++
+			f := fieldsOf(line)
+			report := f[0][6:]
+			lon := map[string]int{"GTFRI": 11, "GTSOS": 11, "GTDIS": 11, "GTSTC": 9, "GTBTC": 8}[report]
+			require.NotZero(t, lon, "unexpected header in %s", line)
+			recs := parseWith(t, gl300, "28", line)
+			require.Len(t, recs, 1, line)
+			r := recs[0]
+			assert.InDelta(t, atof(f[lon]), r.Position.Longitude, 1e-5, line)
+			assert.InDelta(t, atof(f[lon+1]), r.Position.Latitude, 1e-5, line)
+			ts, err := time.Parse("20060102150405", f[lon+2])
+			require.NoError(t, err, line)
+			assert.Equal(t, ts, r.Timestamp.AsTime(), line)
+			assert.InDelta(t, atof(f[lon-3]), *r.Position.Speed, 1e-5, line)
+			assert.InDelta(t, atof(f[lon-2]), r.Position.Course, 1e-5, line)
+			sats, batt, gsm := int32(0), int32(0), int32(-1)
+			for _, m := range statusRe.FindAllStringSubmatch(f[3], -1) {
+				switch m[1] {
+				case "S":
+					gsm, _ = csqLevel(m[2])
+				case "V":
+					sats = int32(atoi(m[2]))
+				case "B":
+					batt = int32(atoi(m[2]))
+				}
+			}
+			assert.Equal(t, batt, r.BatteryLevel, line)
+			assert.Equal(t, sats, r.Position.Satellites, line)
+			assert.Equal(t, gsm, r.GsmNetwork, line)
+			odo := int32(0)
+			if report == "GTFRI" || report == "GTSOS" {
+				odo = int32(atoi(f[len(f)-4]) / 1000)
+			}
+			assert.Equal(t, odo, r.Odometer, line)
+			assert.Equal(t, report == "GTDIS", r.VehicleStatus.InputsTriggering, line)
+			assert.Equal(t, report == "GTSOS", r.VehicleStatus.SosButtonPressed, line)
+			assert.Equal(t, strings.TrimSuffix(line, "$"), string(r.GetQueclinkPacket().GetRawData()), line)
+		}
+		assert.Equal(t, wantLines, n, file)
+	}
 }

@@ -1,9 +1,11 @@
 package queclink
 
 // Field layouts come from "GV200 @Track Air Interface Protocol V5.01", "GT500 @Tracker Air
-// Interface Protocol V0.13" and "GL300 @Tracker Air Interface Protocol V6.00" (TRACGL300AN008)
-// and were checked against real device traffic in Traccar's Gl200TextProtocolDecoderTest corpus
-// (Apache-2.0, © Anton Tananaev). The append-mask handling in parsePoint follows Traccar's
+// Interface Protocol V0.13/V1.06", "GL300 @Tracker Air Interface Protocol V6.00" (TRACGL300AN008)
+// and, for the prefix-28 units, the client's own field map ("Tracker data.xlsx", which cites the
+// GT500 V1.06 and GV300W V5.01 PDFs). They were checked against real device traffic in Traccar's
+// Gl200TextProtocolDecoderTest corpus (Apache-2.0, © Anton Tananaev), the client's 2021 sample
+// and production captures. The append-mask handling in parsePoint follows Traccar's
 // Gl200TextProtocolDecoder.decodeLocation.
 
 import (
@@ -110,6 +112,24 @@ var gl300Layouts = map[string]layout{
 	"GTTEM": {-1, 6, -1, false}, // …,AlarmID,Temperature(°C),point,…
 }
 
+// gwLayouts: the prefix-28 personal-safety units behind the client's tstGW gateway — registered on
+// the platform as "GL300". Their wire format is documented field by field in the client's
+// "Tracker data.xlsx" (sheets "general location updates" and "GTDIS") and is the GT500 one:
+// position and charging reports end …,MAC,RSSI,Odo,Batt%,SendTime,Count with the Number field
+// left blank; GTDIS has the GV300W shape …,Reserved,ReportID/Type,Number,point,Reserved,Mileage,
+// SendTime,Count (GV300W PDF V5.01 §3.3). Verified on all 80 client sample lines (2021, firmware
+// v1.0.27–v1.0.29) and every production line since 2026-09-01 (v1.0.43.11) — testdata/.
+var gwLayouts = func() map[string]layout {
+	m := make(map[string]layout, len(gt500Layouts)+1)
+	for k, v := range gt500Layouts {
+		m[k] = v
+	}
+	// tail Reserved,Mileage,SendTime,Count: no battery field, and the mileage is not read — GTFRI
+	// carries the same value and the consumer keeps the last odometer when a record has none.
+	m["GTDIS"] = layout{6, 7, 4, false}
+	return m
+}()
+
 // modelSpec ties one Queclink model family's field layouts together. wide marks the GV200
 // conventions (12-wide GPS blocks with an append mask, tail starting with Mileage); the personal
 // trackers (GT500, GL300 family) use 11-wide blocks. blockExtra counts fixed fields after each
@@ -119,13 +139,18 @@ type modelSpec struct {
 	device     types.DeviceType
 	wide       bool
 	blockExtra int
-	layouts    map[string]layout
+	// gateway marks the tstGW units: the odometer is in metres (the gateway itself labels it
+	// "11634m" in the device name, and the client sample's odometer deltas equal the GPS distance
+	// in metres) and the device status is packed into <Device name> — see readNameStatus.
+	gateway bool
+	layouts map[string]layout
 }
 
 var (
-	gv200Spec = modelSpec{types.DeviceType_QUECLINK_GV200, true, 0, gv200Layouts}
-	gt500Spec = modelSpec{types.DeviceType_QUECLINK_GT500, false, 0, gt500Layouts}
-	gl300Spec = modelSpec{types.DeviceType_QUECLINK_GL300, false, 1, gl300Layouts}
+	gv200Spec = modelSpec{types.DeviceType_QUECLINK_GV200, true, 0, false, gv200Layouts}
+	gt500Spec = modelSpec{types.DeviceType_QUECLINK_GT500, false, 0, false, gt500Layouts}
+	gl300Spec = modelSpec{types.DeviceType_QUECLINK_GL300, false, 1, false, gl300Layouts}
+	gwSpec    = modelSpec{types.DeviceType_QUECLINK_GL300, false, 0, true, gwLayouts}
 )
 
 type point struct {
@@ -209,7 +234,7 @@ func parsePoint(fields []string, i int, gv200 bool, extra int) (point, int, erro
 // numIdx < 0) and returns the usable points plus the index of the first field after the blocks.
 func parsePoints(header string, fields []string, numIdx, start int, gv200 bool, extra int) ([]point, int) {
 	n := 1
-	if numIdx >= 0 {
+	if numIdx >= 0 && fields[numIdx] != "" { // blank (tstGW, every report) = one block; a fixed tail still checks the length
 		n = atoi(fields[numIdx])
 	}
 	var pts []point
@@ -267,6 +292,10 @@ func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatu
 		return nil
 	}
 	gv200 := spec.wide
+	sats := int32(-1)
+	if spec.gateway && len(fields) > 3 {
+		sats = p.readNameStatus(fields[3])
+	}
 
 	if (report == "GTSTT" || report == "GTINF") && len(fields) > 4 { // <State> at #4
 		p.applyState(fields[4])
@@ -320,19 +349,19 @@ func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatu
 			}
 		case !scanned && (l.tail < 0 || len(fields) == next+l.tail): // …,Odo,Batt%,SendTime,Count
 			odometer = km(fields[len(fields)-4]) // device ODO (km); 0 unless AT+GTCFG ODO enable
+			if spec.gateway {
+				odometer /= 1000 // the tstGW writes metres
+			}
 			if n, err := strconv.Atoi(fields[len(fields)-3]); err == nil && n >= 0 && n <= 100 {
 				battery = int32(n)
 				p.battery = battery
 			}
-		case scanned: // the tail stays anchored at the end even when the middle is reshaped
-			// (tstGW). The odometer position is trustworthy but its unit is not, so it is only
-			// read when the sender states the unit itself — see selfDescribedOdometerKm.
+		case scanned: // the tail stays anchored at the end even when the middle is reshaped, so the
+			// battery is still read; the odometer is not — a report that does not match its model's
+			// layout has not shown which unit its odometer is in.
 			if n, err := strconv.Atoi(fields[len(fields)-3]); err == nil && n >= 0 && n <= 100 {
 				battery = int32(n)
 				p.battery = battery
-			}
-			if v, ok := selfDescribedOdometerKm(fields); ok {
-				odometer = v
 			}
 		default:
 			logger.Sugar().Warnf("queclink %s: tail length mismatch, odometer/battery not read", header)
@@ -380,6 +409,9 @@ func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatu
 		rec.ControlModuleVoltage = extVoltage // vehicle supply voltage; the consumer has no column for it yet
 		rec.IdentificationId = driverID
 		rec.GsmNetwork = p.gsmLevel()
+		if sats >= 0 {
+			rec.Position.Satellites = sats
+		}
 		setAlarms(rec.VehicleStatus, report, reportType(fields, gv200))
 		out = append(out, rec)
 	}
@@ -405,21 +437,36 @@ func (p *Protocol) readInfo(fields []string, spec *modelSpec) {
 	}
 }
 
-var gatewayOdometerRe = regexp.MustCompile(`\b(\d+)m\|`)
+// nameStatusRe picks the status tokens the tstGW packs into <Device name>, in both firmware
+// generations seen: "B S30 V0 B100 C1 H1 v1.0.29.3" (2021) and
+// " tstGW v1.0.43.11 S24 B100% C1|G V9 H1.1 A170m D0 1kph 11634m|" (2026). Client's sheet "general
+// location updates": S = GSM level 0–31, V = satellites used, B = battery %, C = charging state,
+// H = horizontal accuracy; the leading letter is the location method (G GPS, B Bluetooth, W Wi-Fi,
+// D dock; O- prefix = old fix). Charging state and location method have no DeviceStatus field
+// and stay in raw_data; accuracy is also a report field.
+var nameStatusRe = regexp.MustCompile(`\b([SVB])(\d+)\b`)
 
-func selfDescribedOdometerKm(fields []string) (int32, bool) {
-	if len(fields) < 4 {
-		return 0, false
+// readNameStatus caches the GSM level and battery from <Device name> and returns the satellite
+// count (-1 when absent). These units open a new TCP connection for every report, so nothing
+// cached on the connection survives to the next report — the name field is what keeps battery and
+// GSM level filled on every record, including GTSTC/GTBTC/GTDIS, which carry no battery field.
+func (p *Protocol) readNameStatus(name string) int32 {
+	sats := int32(-1)
+	for _, m := range nameStatusRe.FindAllStringSubmatch(name, -1) {
+		switch m[1] {
+		case "S":
+			if lvl, ok := csqLevel(m[2]); ok {
+				p.gsm, p.gsmSeen = lvl, true
+			}
+		case "V":
+			sats = int32(atoi(m[2]))
+		case "B":
+			if n := atoi(m[2]); n <= 100 {
+				p.battery = int32(n)
+			}
+		}
 	}
-	m := gatewayOdometerRe.FindStringSubmatch(fields[3])
-	if m == nil {
-		return 0, false
-	}
-	metres, err := strconv.ParseFloat(m[1], 64)
-	if err != nil || metres < 0 || metres/1000 > math.MaxInt32 {
-		return 0, false
-	}
-	return int32(metres / 1000), true
+	return sats
 }
 
 // saysZeroPoints reports whether the device explicitly announced zero GPS points. An empty field

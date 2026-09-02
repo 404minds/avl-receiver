@@ -1,7 +1,8 @@
 // Package queclink receives Queclink @Track ASCII reports: every position-carrying report,
 // alarms, heartbeat replies, +BUFF replays and AT commands with their +ACK. The GV200 (vehicle
-// tracker), GT500 and GL300/GL300VC/GL300W (personal trackers) have full field layouts; every
-// other @Track model is parsed by field scan. HEX mode, SMS and UDP are out of scope.
+// tracker), GT500 and GL300/GL300W (personal trackers) and the client's prefix-28 tstGW units
+// (personal-safety trackers registered as "GL300", GT500 wire format) have full field layouts;
+// every other @Track model is parsed by field scan. HEX mode, SMS and UDP are out of scope.
 package queclink
 
 import (
@@ -28,10 +29,14 @@ var logger = configuredLogger.Logger
 // against Traccar's Gl200TextProtocolDecoder PROTOCOL_MODELS (Apache-2.0, © Anton Tananaev).
 var specByPrefix = map[string]*modelSpec{
 	"04": &gv200Spec, "35": &gv200Spec, // GV200 (prefix drifts with firmware)
-	"07": &gt500Spec, // GT500
+	"07": &gt500Spec,                   // GT500
 	"1A": &gl300Spec, "30": &gl300Spec, // GL300
-	"28": &gl300Spec, // GL300VC
 	"2C": &gl300Spec, // GL300W
+	// Traccar lists 28 as GL300VC. The only prefix-28 senders this platform has ever seen are the
+	// client's tstGW units (protocol id fixed at 280518), whose reports have the GT500 shape, not
+	// the GL300 one — see gwLayouts. A spec-conformant GL300VC would still get its position
+	// (the block sits at the same index) with a tail-length warning and no battery/odometer.
+	"28": &gwSpec,
 }
 
 // nameByPrefix names the Queclink models we hold no field layouts for — logging only; their
