@@ -137,6 +137,11 @@ func alarms(v *types.VehicleStatus) []string {
 		{"unplug_battery", v.UnplugBattery}, {"excessive_idling", v.ExcessiveIdling}, {"excessive_parking", v.ExcessiveParking},
 		{"inputs_triggering", v.InputsTriggering}, {"outputs_triggering", v.OutputsTriggering}, {"fuel_theft", v.FuelTheft},
 		{"entering_geofence", v.EntringGeofence}, {"exiting_geofence", v.ExitingGeofence},
+		{"battery_low", v.BatteryLow}, {"charging_started", v.ChargingStarted}, {"charging_stopped", v.ChargingStopped},
+		{"motion_alert", v.MotionAlert}, {"monitoring_on", v.MonitoringOn}, {"monitoring_off", v.MonitoringOff},
+		{"tilt_alert", v.TiltAlert}, {"fall_detected", v.FallDetected}, {"no_motion_alert", v.NoMotionAlert},
+		{"self_test", v.SelfTest}, {"welfare_alarm", v.WelfareAlarm}, {"check_in_reminder", v.CheckInReminder},
+		{"check_out", v.CheckOut}, {"check_in", v.CheckIn}, {"leave_home", v.LeaveHome}, {"arrive_home", v.ArriveHome},
 	} {
 		if f.on {
 			out = append(out, f.name)

@@ -702,8 +702,26 @@ type VehicleStatus struct {
 	HarshAcceleration      bool                   `protobuf:"varint,31,opt,name=harsh_acceleration,json=harshAcceleration,proto3" json:"harsh_acceleration,omitempty"`
 	HarshBraking           bool                   `protobuf:"varint,32,opt,name=harsh_braking,json=harshBraking,proto3" json:"harsh_braking,omitempty"`
 	HarshCornering         bool                   `protobuf:"varint,33,opt,name=harsh_cornering,json=harshCornering,proto3" json:"harsh_cornering,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// NEVERalone personal-safety events (client's "NA4GGW-EC01 To Queklink - Events-Sept2026.xlsx"):
+	// Queclink GTBPL / GTBTC / GTSTC / GTSTT and the GTDIS input codes 40-A1.
+	BatteryLow      bool `protobuf:"varint,34,opt,name=battery_low,json=batteryLow,proto3" json:"battery_low,omitempty"`
+	ChargingStarted bool `protobuf:"varint,35,opt,name=charging_started,json=chargingStarted,proto3" json:"charging_started,omitempty"`
+	ChargingStopped bool `protobuf:"varint,36,opt,name=charging_stopped,json=chargingStopped,proto3" json:"charging_stopped,omitempty"`
+	MotionAlert     bool `protobuf:"varint,37,opt,name=motion_alert,json=motionAlert,proto3" json:"motion_alert,omitempty"`
+	MonitoringOn    bool `protobuf:"varint,38,opt,name=monitoring_on,json=monitoringOn,proto3" json:"monitoring_on,omitempty"`            // worker app: start work (GTDIS 41)
+	MonitoringOff   bool `protobuf:"varint,39,opt,name=monitoring_off,json=monitoringOff,proto3" json:"monitoring_off,omitempty"`         // worker app: finish work (GTDIS 40)
+	TiltAlert       bool `protobuf:"varint,40,opt,name=tilt_alert,json=tiltAlert,proto3" json:"tilt_alert,omitempty"`                     // GTDIS 50
+	FallDetected    bool `protobuf:"varint,41,opt,name=fall_detected,json=fallDetected,proto3" json:"fall_detected,omitempty"`            // GTDIS 51
+	NoMotionAlert   bool `protobuf:"varint,42,opt,name=no_motion_alert,json=noMotionAlert,proto3" json:"no_motion_alert,omitempty"`       // GTDIS 70
+	SelfTest        bool `protobuf:"varint,43,opt,name=self_test,json=selfTest,proto3" json:"self_test,omitempty"`                        // GTDIS 71
+	WelfareAlarm    bool `protobuf:"varint,44,opt,name=welfare_alarm,json=welfareAlarm,proto3" json:"welfare_alarm,omitempty"`            // check-in overdue (GTDIS 80)
+	CheckInReminder bool `protobuf:"varint,45,opt,name=check_in_reminder,json=checkInReminder,proto3" json:"check_in_reminder,omitempty"` // GTDIS 81
+	CheckOut        bool `protobuf:"varint,46,opt,name=check_out,json=checkOut,proto3" json:"check_out,omitempty"`                        // GTDIS 90
+	CheckIn         bool `protobuf:"varint,47,opt,name=check_in,json=checkIn,proto3" json:"check_in,omitempty"`                           // GTDIS 91
+	LeaveHome       bool `protobuf:"varint,48,opt,name=leave_home,json=leaveHome,proto3" json:"leave_home,omitempty"`                     // GTDIS A0
+	ArriveHome      bool `protobuf:"varint,49,opt,name=arrive_home,json=arriveHome,proto3" json:"arrive_home,omitempty"`                  // GTDIS A1
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *VehicleStatus) Reset() {
@@ -956,6 +974,118 @@ func (x *VehicleStatus) GetHarshBraking() bool {
 func (x *VehicleStatus) GetHarshCornering() bool {
 	if x != nil {
 		return x.HarshCornering
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetBatteryLow() bool {
+	if x != nil {
+		return x.BatteryLow
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetChargingStarted() bool {
+	if x != nil {
+		return x.ChargingStarted
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetChargingStopped() bool {
+	if x != nil {
+		return x.ChargingStopped
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetMotionAlert() bool {
+	if x != nil {
+		return x.MotionAlert
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetMonitoringOn() bool {
+	if x != nil {
+		return x.MonitoringOn
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetMonitoringOff() bool {
+	if x != nil {
+		return x.MonitoringOff
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetTiltAlert() bool {
+	if x != nil {
+		return x.TiltAlert
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetFallDetected() bool {
+	if x != nil {
+		return x.FallDetected
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetNoMotionAlert() bool {
+	if x != nil {
+		return x.NoMotionAlert
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetSelfTest() bool {
+	if x != nil {
+		return x.SelfTest
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetWelfareAlarm() bool {
+	if x != nil {
+		return x.WelfareAlarm
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetCheckInReminder() bool {
+	if x != nil {
+		return x.CheckInReminder
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetCheckOut() bool {
+	if x != nil {
+		return x.CheckOut
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetCheckIn() bool {
+	if x != nil {
+		return x.CheckIn
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetLeaveHome() bool {
+	if x != nil {
+		return x.LeaveHome
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetArriveHome() bool {
+	if x != nil {
+		return x.ArriveHome
 	}
 	return false
 }
@@ -1471,8 +1601,7 @@ const file_common_types_proto_rawDesc = "" +
 	"\n" +
 	"satellites\x18\x06 \x01(\x05R\n" +
 	"satellitesB\b\n" +
-	"\x06_speed\"\xcd\n" +
-	"\n" +
+	"\x06_speed\"\x85\x0f\n" +
 	"\rVehicleStatus\x12\x1f\n" +
 	"\bignition\x18\x01 \x01(\bH\x00R\bignition\x88\x01\x01\x12#\n" +
 	"\rover_speeding\x18\x02 \x01(\bR\foverSpeeding\x12!\n" +
@@ -1508,7 +1637,27 @@ const file_common_types_proto_rawDesc = "" +
 	"fuel_theft\x18\x1e \x01(\bR\tfuelTheft\x12-\n" +
 	"\x12harsh_acceleration\x18\x1f \x01(\bR\x11harshAcceleration\x12#\n" +
 	"\rharsh_braking\x18  \x01(\bR\fharshBraking\x12'\n" +
-	"\x0fharsh_cornering\x18! \x01(\bR\x0eharshCorneringB\v\n" +
+	"\x0fharsh_cornering\x18! \x01(\bR\x0eharshCornering\x12\x1f\n" +
+	"\vbattery_low\x18\" \x01(\bR\n" +
+	"batteryLow\x12)\n" +
+	"\x10charging_started\x18# \x01(\bR\x0fchargingStarted\x12)\n" +
+	"\x10charging_stopped\x18$ \x01(\bR\x0fchargingStopped\x12!\n" +
+	"\fmotion_alert\x18% \x01(\bR\vmotionAlert\x12#\n" +
+	"\rmonitoring_on\x18& \x01(\bR\fmonitoringOn\x12%\n" +
+	"\x0emonitoring_off\x18' \x01(\bR\rmonitoringOff\x12\x1d\n" +
+	"\n" +
+	"tilt_alert\x18( \x01(\bR\ttiltAlert\x12#\n" +
+	"\rfall_detected\x18) \x01(\bR\ffallDetected\x12&\n" +
+	"\x0fno_motion_alert\x18* \x01(\bR\rnoMotionAlert\x12\x1b\n" +
+	"\tself_test\x18+ \x01(\bR\bselfTest\x12#\n" +
+	"\rwelfare_alarm\x18, \x01(\bR\fwelfareAlarm\x12*\n" +
+	"\x11check_in_reminder\x18- \x01(\bR\x0fcheckInReminder\x12\x1b\n" +
+	"\tcheck_out\x18. \x01(\bR\bcheckOut\x12\x19\n" +
+	"\bcheck_in\x18/ \x01(\bR\acheckIn\x12\x1d\n" +
+	"\n" +
+	"leave_home\x180 \x01(\bR\tleaveHome\x12\x1f\n" +
+	"\varrive_home\x181 \x01(\bR\n" +
+	"arriveHomeB\v\n" +
 	"\t_ignition\")\n" +
 	"\fWanwayPacket\x12\x19\n" +
 	"\braw_data\x18\x01 \x01(\fR\arawData\",\n" +

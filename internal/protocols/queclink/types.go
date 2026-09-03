@@ -412,7 +412,11 @@ func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatu
 		if sats >= 0 {
 			rec.Position.Satellites = sats
 		}
-		setAlarms(rec.VehicleStatus, report, reportType(fields, gv200))
+		if spec.gateway {
+			gwAlarms(rec.VehicleStatus, report, fields)
+		} else {
+			setAlarms(rec.VehicleStatus, report, reportType(fields, gv200))
+		}
 		out = append(out, rec)
 	}
 	return out
@@ -573,6 +577,63 @@ func setAlarms(vs *types.VehicleStatus, report string, reportType int) {
 		vs.EntringGeofence = true
 	case "GTGOT": // left a polygon geo-fence
 		vs.ExitingGeofence = true
+	}
+}
+
+// gwAlarms maps the tstGW units' event reports onto the NEVERalone flags, per the client's
+// "NA4GGW-EC01 To Queklink - Events-Sept2026.xlsx" (sheet "NEVERalone event mapping"). The GTDIS
+// <ReportID/Type> is two hex digits — input number, then state — so "A0"/"A1" are real codes;
+// codes the sheet marks "reference only, not sent by EC01" (10-31, 60, 61) and anything unknown
+// fall back to the generic input flag. GTSTT: the sheet's MotionAlert; raised on the motion
+// states only (x2 = moving) so the rest states do not alert. Everything else (GTSOS, GTSPD,
+// GTGEO, GTMPF, …) keeps the shared mapping.
+func gwAlarms(vs *types.VehicleStatus, report string, fields []string) {
+	switch report {
+	case "GTDIS":
+		code, err := strconv.ParseUint(fields[5], 16, 8)
+		if err != nil {
+			code = 0
+		}
+		switch code {
+		case 0x40:
+			vs.MonitoringOff = true
+		case 0x41:
+			vs.MonitoringOn = true
+		case 0x50:
+			vs.TiltAlert = true
+		case 0x51:
+			vs.FallDetected = true
+		case 0x70:
+			vs.NoMotionAlert = true
+		case 0x71:
+			vs.SelfTest = true
+		case 0x80:
+			vs.WelfareAlarm = true
+		case 0x81:
+			vs.CheckInReminder = true
+		case 0x90:
+			vs.CheckOut = true
+		case 0x91:
+			vs.CheckIn = true
+		case 0xA0:
+			vs.LeaveHome = true
+		case 0xA1:
+			vs.ArriveHome = true
+		default:
+			vs.InputsTriggering = true
+		}
+	case "GTBPL":
+		vs.BatteryLow = true
+	case "GTBTC":
+		vs.ChargingStarted = true
+	case "GTSTC":
+		vs.ChargingStopped = true
+	case "GTSTT":
+		if len(fields) > 4 && strings.HasSuffix(fields[4], "2") { // 12/22/42: motion
+			vs.MotionAlert = true
+		}
+	default:
+		setAlarms(vs, report, reportType(fields, false))
 	}
 }
 

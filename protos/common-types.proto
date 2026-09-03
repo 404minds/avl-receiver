@@ -118,6 +118,24 @@ message VehicleStatus {
     bool harsh_acceleration = 31;
     bool harsh_braking = 32;
     bool harsh_cornering = 33;
+    // NEVERalone personal-safety events (client's "NA4GGW-EC01 To Queklink - Events-Sept2026.xlsx"):
+    // Queclink GTBPL / GTBTC / GTSTC / GTSTT and the GTDIS input codes 40-A1.
+    bool battery_low = 34;
+    bool charging_started = 35;
+    bool charging_stopped = 36;
+    bool motion_alert = 37;
+    bool monitoring_on = 38;                  // worker app: start work (GTDIS 41)
+    bool monitoring_off = 39;                 // worker app: finish work (GTDIS 40)
+    bool tilt_alert = 40;                     // GTDIS 50
+    bool fall_detected = 41;                  // GTDIS 51
+    bool no_motion_alert = 42;                // GTDIS 70
+    bool self_test = 43;                      // GTDIS 71
+    bool welfare_alarm = 44;                  // check-in overdue (GTDIS 80)
+    bool check_in_reminder = 45;              // GTDIS 81
+    bool check_out = 46;                      // GTDIS 90
+    bool check_in = 47;                       // GTDIS 91
+    bool leave_home = 48;                     // GTDIS A0
+    bool arrive_home = 49;                    // GTDIS A1
 }
 
 message WanwayPacket {

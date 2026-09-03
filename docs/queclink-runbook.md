@@ -142,6 +142,12 @@ Source of truth: the client's `Tracker data.xlsx` (2021 sample + field map) — 
   `gsm_network`, `satellites`, `battery_level`; method (G/B/W/D, `O` prefix = old fix) and charging state stay in `raw_data`.
 - Odometer is in **metres** (the 2026 name says `11634m`; the 2021 sample's deltas equal the GPS distance in metres) → stored as km.
 - Every report arrives on its own TCP connection, so nothing cached per connection (motion state, battery, GSM) carries over.
-- `GTDIS` ReportID/Type per the client: 90 check-out (bottom button), 91 check-in (top button), 93 welfare-timer timeout, 51 fall alert;
-  production also sends 71 (undocumented). All raise `inputs_triggering` only — mapping them to platform events is a product decision.
+- Events (client's "NA4GGW-EC01 To Queklink - Events-Sept2026.xlsx", 3 Sep 2026 — supersedes the 90/91/93/51 table in Tracker data.xlsx;
+  implemented in `gwAlarms`, consumer `neverAloneEvents`, prisma `NotificationEventType`, web labels): `GTDIS` ReportID/Type is two hex
+  digits (input, state): 40/41 monitoring_off/on, 50 tilt_alert, 51 fall_detected, 70 no_motion_alert, 71 self_test, 80 welfare_alarm,
+  81 check_in_reminder, 90 check_out, 91 check_in, A0 leave_home, A1 arrive_home; any other code (10-31, 60/61 are "reference only")
+  → `inputs_triggering`. GTBPL → battery_low, GTBTC/GTSTC → charging_started/stopped, GTSTT state x2 → motion_alert; GTSOS/GTSPD/GTGEO
+  keep the shared mapping. Not mapped: GTPFA/GTPNA (power off/on carry no position; the consumer needs one), GTMPN (rebooted).
+  New event types need `Notification` rows (sms/whatsapp/email, in `notfication/constants`) inserted in the DB — the seeding hook is
+  commented out, so run it by hand after the migration.
 - Send time in these reports is the client's server-local time, not UTC; the record timestamp is the GPS UTC field.

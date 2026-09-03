@@ -1554,10 +1554,11 @@ func TestGatewayLines(t *testing.T) { // live tstGW capture: prefix 28 → gwSpe
 	assert.Equal(t, utc(2026, time.September, 1, 9, 5, 15), recs[2].Timestamp.AsTime())
 	assert.Equal(t, int32(100), recs[2].BatteryLevel)
 	// GTDIS: GV300W shape; the tail Mileage (11634) must not be mistaken for a battery, and the
-	// odometer is left to GTFRI.
+	// odometer is left to GTFRI. Code 71 = self-test report (client's event sheet).
 	assert.InDelta(t, 27.202053, recs[3].Position.Latitude, 1e-5)
 	assert.Equal(t, float32(70), recs[3].Position.Course)
-	assert.True(t, recs[3].VehicleStatus.InputsTriggering)
+	assert.True(t, recs[3].VehicleStatus.SelfTest)
+	assert.False(t, recs[3].VehicleStatus.InputsTriggering)
 	assert.Equal(t, int32(100), recs[3].BatteryLevel)
 	assert.Equal(t, int32(0), recs[3].Odometer)
 	assert.Equal(t, int32(13), recs[3].Position.Satellites)
@@ -1657,10 +1658,10 @@ func TestGatewayOdometerAndBattery(t *testing.T) {
 	assert.True(t, recs[0].VehicleStatus.SosButtonPressed)
 	assert.Equal(t, int32(100), recs[0].BatteryLevel)
 	assert.Equal(t, int32(3711), recs[0].Odometer)
-	// GTDIS with Mileage 0: previously read as battery 0 by the end-anchored scan path.
+	// GTDIS with Mileage 0: previously read as battery 0 by the end-anchored scan path. Code 91 = check-in.
 	recs = parseWith(t, gl300, "28", cliDis)
 	require.Len(t, recs, 1)
-	assert.True(t, recs[0].VehicleStatus.InputsTriggering)
+	assert.True(t, recs[0].VehicleStatus.CheckIn)
 	assert.Equal(t, int32(99), recs[0].BatteryLevel)
 	assert.Equal(t, int32(0), recs[0].Odometer)
 	assert.InDelta(t, -33.785535, recs[0].Position.Latitude, 1e-5)
@@ -1676,6 +1677,58 @@ func TestGatewayOdometerAndBattery(t *testing.T) {
 	recs = parseWith(t, gl300, "28", gl3RtlVC)
 	require.Len(t, recs, 1)
 	assert.InDelta(t, 39.832501, recs[0].Position.Latitude, 1e-5)
+}
+
+// TestGatewayEvents: every row of the client's event sheet that the EC01 sends, one flag each.
+func TestGatewayEvents(t *testing.T) {
+	flags := func(vs *types.VehicleStatus) []string {
+		var out []string
+		for _, f := range []struct {
+			name string
+			on   bool
+		}{
+			{"monitoring_off", vs.MonitoringOff}, {"monitoring_on", vs.MonitoringOn}, {"tilt_alert", vs.TiltAlert},
+			{"fall_detected", vs.FallDetected}, {"no_motion_alert", vs.NoMotionAlert}, {"self_test", vs.SelfTest},
+			{"welfare_alarm", vs.WelfareAlarm}, {"check_in_reminder", vs.CheckInReminder}, {"check_out", vs.CheckOut},
+			{"check_in", vs.CheckIn}, {"leave_home", vs.LeaveHome}, {"arrive_home", vs.ArriveHome},
+			{"inputs_triggering", vs.InputsTriggering}, {"battery_low", vs.BatteryLow}, {"charging_started", vs.ChargingStarted},
+			{"charging_stopped", vs.ChargingStopped}, {"motion_alert", vs.MotionAlert}, {"sos_button_pressed", vs.SosButtonPressed},
+			{"over_speeding", vs.OverSpeeding}, {"entering_geofence", vs.EntringGeofence}, {"exiting_geofence", vs.ExitingGeofence},
+		} {
+			if f.on {
+				out = append(out, f.name)
+			}
+		}
+		return out
+	}
+	// GTDIS <ReportID/Type> is hex: input nibble then state nibble.
+	for code, want := range map[string]string{
+		"40": "monitoring_off", "41": "monitoring_on", "50": "tilt_alert", "51": "fall_detected",
+		"70": "no_motion_alert", "71": "self_test", "80": "welfare_alarm", "81": "check_in_reminder",
+		"90": "check_out", "91": "check_in", "A0": "leave_home", "A1": "arrive_home",
+		// reference-only / undocumented codes stay generic
+		"10": "inputs_triggering", "21": "inputs_triggering", "61": "inputs_triggering", "FF": "inputs_triggering", "": "inputs_triggering",
+	} {
+		recs := parseWith(t, gl300, "28", setField(cliDis, 5, code))
+		require.Len(t, recs, 1, code)
+		assert.Equal(t, []string{want}, flags(recs[0].VehicleStatus), "code %q", code)
+	}
+	// Other event reports in the GT500 shape (block at #5 after one leading field, or #4).
+	assert.Equal(t, []string{"charging_started"}, flags(parseWith(t, gl300, "28", cliBtc)[0].VehicleStatus))
+	assert.Equal(t, []string{"charging_stopped"}, flags(parseWith(t, gl300, "28", cliStc)[0].VehicleStatus))
+	assert.Equal(t, []string{"battery_low"}, flags(parseWith(t, gl300, "28", setField(withHeader(cliStc, "+RESP:GTBPL"), 4, "3.53"))[0].VehicleStatus))
+	// GTSTT: <State> at #4; x2 = moving → motion alert, x1 = at rest → nothing.
+	assert.Equal(t, []string{"motion_alert"}, flags(parseWith(t, gl300, "28", setField(withHeader(cliStc, "+RESP:GTSTT"), 4, "42"))[0].VehicleStatus))
+	assert.Empty(t, flags(parseWith(t, gl300, "28", setField(withHeader(cliStc, "+RESP:GTSTT"), 4, "41"))[0].VehicleStatus))
+	// The shared mapping still applies to the rest.
+	assert.Equal(t, []string{"sos_button_pressed"}, flags(parseWith(t, gl300, "28", cliSos)[0].VehicleStatus))
+	assert.Equal(t, []string{"over_speeding"}, flags(parseWith(t, gl300, "28", withHeader(cliFri, "+RESP:GTSPD"))[0].VehicleStatus))
+	assert.Equal(t, []string{"exiting_geofence"}, flags(parseWith(t, gl300, "28", withHeader(cliFri, "+RESP:GTGEO"))[0].VehicleStatus))
+	assert.Equal(t, []string{"entering_geofence"}, flags(parseWith(t, gl300, "28", setField(withHeader(cliFri, "+RESP:GTGEO"), 5, "1"))[0].VehicleStatus))
+	// Non-gateway models are untouched: a GL300 GTDIS keeps the generic flag.
+	recs := parseLine(t, gl300, withHeader(gl3Fri99, "+RESP:GTDIS"))
+	require.Len(t, recs, 1)
+	assert.Equal(t, []string{"inputs_triggering"}, flags(recs[0].VehicleStatus))
 }
 
 // TestClientSampleAndProductionLines replays the client's 2021 sample and every production line
@@ -1728,8 +1781,19 @@ func TestClientSampleAndProductionLines(t *testing.T) {
 				odo = int32(atoi(f[len(f)-4]) / 1000)
 			}
 			assert.Equal(t, odo, r.Odometer, line)
-			assert.Equal(t, report == "GTDIS", r.VehicleStatus.InputsTriggering, line)
-			assert.Equal(t, report == "GTSOS", r.VehicleStatus.SosButtonPressed, line)
+			// events: the client's sheet maps each report / GTDIS code to one flag; the sample's codes
+			// are 90 (check-out), 91 (check-in), 80 (welfare alarm) and, in production, 71 (self-test).
+			want := map[string]bool{"GTSOS": true}[report]
+			assert.Equal(t, want, r.VehicleStatus.SosButtonPressed, line)
+			assert.Equal(t, report == "GTBTC", r.VehicleStatus.ChargingStarted, line)
+			assert.Equal(t, report == "GTSTC", r.VehicleStatus.ChargingStopped, line)
+			if report == "GTDIS" {
+				flag := map[string]bool{"90": r.VehicleStatus.CheckOut, "91": r.VehicleStatus.CheckIn, "80": r.VehicleStatus.WelfareAlarm, "71": r.VehicleStatus.SelfTest}[f[5]]
+				assert.True(t, flag, "GTDIS code %s not mapped: %s", f[5], line)
+				assert.False(t, r.VehicleStatus.InputsTriggering, line)
+			} else {
+				assert.False(t, r.VehicleStatus.InputsTriggering, line)
+			}
 			assert.Equal(t, strings.TrimSuffix(line, "$"), string(r.GetQueclinkPacket().GetRawData()), line)
 		}
 		assert.Equal(t, wantLines, n, file)
