@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/404minds/avl-receiver/internal/types"
@@ -296,6 +297,9 @@ func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatu
 	if spec.gateway && len(fields) > 3 {
 		sats = p.readNameStatus(fields[3])
 	}
+	if spec.gateway && (report == "GTPFA" || report == "GTPNA") { // power off/on: no GPS block at all
+		return p.powerEvent(header, report, fields, raw)
+	}
 
 	if (report == "GTSTT" || report == "GTINF") && len(fields) > 4 { // <State> at #4
 		p.applyState(fields[4])
@@ -414,6 +418,7 @@ func (p *Protocol) parseReport(fields []string, raw []byte) []*types.DeviceStatu
 		}
 		if spec.gateway {
 			gwAlarms(rec.VehicleStatus, report, fields)
+			rememberFix(p.Imei, pt, fields[len(fields)-2]) // every gateway report ends …,SendTime,Count
 		} else {
 			setAlarms(rec.VehicleStatus, report, reportType(fields, gv200))
 		}
@@ -635,6 +640,60 @@ func gwAlarms(vs *types.VehicleStatus, report string, fields []string) {
 	default:
 		setAlarms(vs, report, reportType(fields, false))
 	}
+}
+
+// lastFix remembers, per IMEI, the last position a tstGW unit reported and the offset between its
+// <SendTime> (the client's server-local clock, +10 h in the data so far) and GPS UTC. The power
+// off/on reports (GTPFA/GTPNA) carry neither position nor UTC — only header, version, IMEI, name,
+// SendTime, Count — and every report arrives on its own TCP connection, so this must outlive the
+// connection. ponytail: in-memory only; after a receiver restart a power report that arrives
+// before the unit's next position report is dropped (logged). Persist it if that ever matters.
+var lastFix = struct {
+	sync.Mutex
+	m map[string]fix
+}{m: map[string]fix{}}
+
+type fix struct {
+	pt     point
+	offset time.Duration // SendTime − UTC, rounded to 15 min; kept from the last report that had both
+}
+
+func rememberFix(imei string, pt point, sendTime string) {
+	lastFix.Lock()
+	defer lastFix.Unlock()
+	f := fix{pt: pt, offset: lastFix.m[imei].offset}
+	if t, err := time.Parse("20060102150405", sendTime); err == nil {
+		f.offset = t.Sub(pt.time).Round(15 * time.Minute)
+	}
+	lastFix.m[imei] = f
+}
+
+// powerEvent turns a tstGW GTPFA/GTPNA into one record at the last known position, timed by its
+// SendTime converted back to UTC (GT500 PDF §3.3.5 shape; client's sheet: PowerOffAlert /
+// PowerOnAlert). A power-off is usually sent as +BUFF on the next power-on, so the receive time
+// would be hours late — SendTime is the only clock the message has.
+func (p *Protocol) powerEvent(header, report string, fields []string, raw []byte) []*types.DeviceStatus {
+	lastFix.Lock()
+	f, ok := lastFix.m[p.Imei]
+	lastFix.Unlock()
+	if !ok || len(fields) < 6 {
+		logger.Sugar().Warnf("queclink %s: %s carries no position and none is cached for this unit yet, dropped", p.Imei, header)
+		return nil
+	}
+	pt := f.pt
+	pt.speed = 0
+	pt.time = time.Now().UTC()
+	if t, err := time.Parse("20060102150405", fields[len(fields)-2]); err == nil {
+		pt.time = t.Add(-f.offset)
+	}
+	rec := toDeviceStatus(p.Imei, p.DeviceType, header, pt, p.ignition(0), p.battery, 0, raw)
+	rec.GsmNetwork = p.gsmLevel()
+	if report == "GTPFA" {
+		rec.VehicleStatus.PowerOff = true
+	} else {
+		rec.VehicleStatus.PowerOn = true
+	}
+	return []*types.DeviceStatus{rec}
 }
 
 // gsmLevel returns the platform's 0–5 signal scale (UI: 0 No Network … 5 Excellent) from the last

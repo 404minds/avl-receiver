@@ -1731,6 +1731,49 @@ func TestGatewayEvents(t *testing.T) {
 	assert.Equal(t, []string{"inputs_triggering"}, flags(recs[0].VehicleStatus))
 }
 
+// TestGatewayPowerEvents: GTPFA/GTPNA have no GPS block; the record uses the unit's last known
+// position (cached across connections — each report is its own TCP connection) and SendTime
+// converted from the client's server-local clock (+10 h in the data) back to UTC.
+func TestGatewayPowerEvents(t *testing.T) {
+	const unit = "863922030000001" // unique IMEI: the fix cache is package-level
+	pfa := "+RESP:GTPFA,280518," + unit + ", tstGW v1.0.43.11 S27 B99% C0|OG |,20260907170800,0031$"
+	pna := "+BUFF:GTPNA,280518," + unit + ", tstGW v1.0.43.11 S27 B98% C0|OG |,20260907171205,0032$"
+	parse := func(line string) []*types.DeviceStatus {
+		raw := strings.TrimSuffix(line, "$")
+		return (&Protocol{DeviceType: gl300, Imei: unit, versionPrefix: "28"}).parseReport(splitFields(raw), []byte(raw))
+	}
+	// Nothing cached yet: dropped, not sent with a zero position.
+	assert.Empty(t, parse(pfa))
+	// A position report on another connection primes the cache: UTC 07:03:28, SendTime 17:03:44 → +10 h.
+	fri := strings.Replace(gwFri, "863922034601352", unit, 1)
+	fri = setField(setField(fri, 13, "20260907070328"), 22, "20260907170344")
+	require.Len(t, parse(fri), 1)
+	recs := parse(pfa)
+	require.Len(t, recs, 1)
+	assert.True(t, recs[0].VehicleStatus.PowerOff)
+	assert.False(t, recs[0].VehicleStatus.PowerOn)
+	assert.InDelta(t, 27.202109, recs[0].Position.Latitude, 1e-5) // last known position
+	assert.Equal(t, float32(0), *recs[0].Position.Speed)
+	assert.Equal(t, utc(2026, time.September, 7, 7, 8, 0), recs[0].Timestamp.AsTime()) // 17:08:00 − 10 h
+	assert.Equal(t, int32(99), recs[0].BatteryLevel)                                   // from the name, B99%
+	assert.Equal(t, int32(5), recs[0].GsmNetwork)                                      // S27
+	assert.False(t, *recs[0].VehicleStatus.Ignition)
+	recs = parse(pna)
+	require.Len(t, recs, 1)
+	assert.True(t, recs[0].VehicleStatus.PowerOn)
+	assert.Equal(t, utc(2026, time.September, 7, 7, 12, 5), recs[0].Timestamp.AsTime())
+	assert.Equal(t, int32(98), recs[0].BatteryLevel)
+	// A scanned report without a SendTime (GTMPN) refreshes the position but keeps the offset.
+	mpn := "+RESP:GTMPN,280518," + unit + ", tstGW v1.0.43.11 S27 B99% C0|G V12 H1.4 A160m D0 0kph 11634m|,1.4,2,0,,78.021368,27.202066,20260907070328,,,,,,0161$"
+	require.Len(t, parse(mpn), 1)
+	recs = parse(pfa)
+	require.Len(t, recs, 1)
+	assert.InDelta(t, 27.202066, recs[0].Position.Latitude, 1e-5)
+	assert.Equal(t, utc(2026, time.September, 7, 7, 8, 0), recs[0].Timestamp.AsTime())
+	// Other models never reach this path: a GT500 GTPFA stays ignored.
+	assert.Empty(t, parseLine(t, gt500, "+RESP:GTPFA,070002,135790246811220,,20100214093254,11F0$"))
+}
+
 // TestClientSampleAndProductionLines replays the client's 2021 sample and every production line
 // of 2026-09-01/02 (testdata/) and checks each record against the client's own field map
 // ("Tracker data.xlsx"): exactly one record per line; position, speed and course from the

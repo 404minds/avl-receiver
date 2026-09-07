@@ -136,6 +136,8 @@ message VehicleStatus {
     bool check_in = 47;                       // GTDIS 91
     bool leave_home = 48;                     // GTDIS A0
     bool arrive_home = 49;                    // GTDIS A1
+    bool power_off = 50;                      // GTPFA
+    bool power_on = 51;                       // GTPNA
 }
 
 message WanwayPacket {

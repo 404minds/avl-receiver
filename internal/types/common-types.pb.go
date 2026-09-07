@@ -720,6 +720,8 @@ type VehicleStatus struct {
 	CheckIn         bool `protobuf:"varint,47,opt,name=check_in,json=checkIn,proto3" json:"check_in,omitempty"`                           // GTDIS 91
 	LeaveHome       bool `protobuf:"varint,48,opt,name=leave_home,json=leaveHome,proto3" json:"leave_home,omitempty"`                     // GTDIS A0
 	ArriveHome      bool `protobuf:"varint,49,opt,name=arrive_home,json=arriveHome,proto3" json:"arrive_home,omitempty"`                  // GTDIS A1
+	PowerOff        bool `protobuf:"varint,50,opt,name=power_off,json=powerOff,proto3" json:"power_off,omitempty"`                        // GTPFA
+	PowerOn         bool `protobuf:"varint,51,opt,name=power_on,json=powerOn,proto3" json:"power_on,omitempty"`                           // GTPNA
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1086,6 +1088,20 @@ func (x *VehicleStatus) GetLeaveHome() bool {
 func (x *VehicleStatus) GetArriveHome() bool {
 	if x != nil {
 		return x.ArriveHome
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetPowerOff() bool {
+	if x != nil {
+		return x.PowerOff
+	}
+	return false
+}
+
+func (x *VehicleStatus) GetPowerOn() bool {
+	if x != nil {
+		return x.PowerOn
 	}
 	return false
 }
@@ -1601,7 +1617,7 @@ const file_common_types_proto_rawDesc = "" +
 	"\n" +
 	"satellites\x18\x06 \x01(\x05R\n" +
 	"satellitesB\b\n" +
-	"\x06_speed\"\x85\x0f\n" +
+	"\x06_speed\"\xbd\x0f\n" +
 	"\rVehicleStatus\x12\x1f\n" +
 	"\bignition\x18\x01 \x01(\bH\x00R\bignition\x88\x01\x01\x12#\n" +
 	"\rover_speeding\x18\x02 \x01(\bR\foverSpeeding\x12!\n" +
@@ -1657,7 +1673,9 @@ const file_common_types_proto_rawDesc = "" +
 	"\n" +
 	"leave_home\x180 \x01(\bR\tleaveHome\x12\x1f\n" +
 	"\varrive_home\x181 \x01(\bR\n" +
-	"arriveHomeB\v\n" +
+	"arriveHome\x12\x1b\n" +
+	"\tpower_off\x182 \x01(\bR\bpowerOff\x12\x19\n" +
+	"\bpower_on\x183 \x01(\bR\apowerOnB\v\n" +
 	"\t_ignition\")\n" +
 	"\fWanwayPacket\x12\x19\n" +
 	"\braw_data\x18\x01 \x01(\fR\arawData\",\n" +
